@@ -28,7 +28,7 @@ test:
         coverage_format: cobertura
         path: coverage.xml
 
-static-analysis:
+check:
   script:
     - pip install tox ruff  # you can also use tox
     - tox -e lint,type,style # run linter, type checker and style checks
