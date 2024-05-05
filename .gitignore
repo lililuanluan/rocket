@@ -4,7 +4,6 @@
 docs/_build/**
 docs/_static/**
 docs/_templates/**
-!docs/_build/.gitkeep
 !docs/_static/.gitkeep
 !docs/_templates/.gitkeep
 
