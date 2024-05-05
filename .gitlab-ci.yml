@@ -11,6 +11,11 @@ cache:
   paths:
     - .cache/pip
 
+stages:
+  - test
+  - check
+  - docs
+
 before_script:
   - python --version ; pip --version  # For debugging
   - pip install virtualenv
@@ -18,6 +23,7 @@ before_script:
   - source venv/bin/activate
 
 test:
+  stage: test
   script:
     - pip install tox
     - tox -e py # run unit tests
@@ -29,11 +35,13 @@ test:
         path: coverage.xml
 
 check:
+  stage: check
   script:
     - pip install tox ruff  # you can also use tox
     - tox -e lint,type,style # run linter, type checker and style checks
 
 pages:
+  stage: docs
   script:
     - pip install sphinx sphinx-rtd-theme
     - cd docs
