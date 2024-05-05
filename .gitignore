@@ -1,5 +1,12 @@
 .gitlab-ci-local
-docs/_*
+
+# Sphinx
+docs/_build/**
+docs/_static/**
+docs/_templates/**
+!docs/_build/.gitkeep
+!docs/_static/.gitkeep
+!docs/_templates/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -70,9 +77,6 @@ instance/
 
 # Scrapy stuff:
 .scrapy
-
-# Sphinx documentation
-docs/_build/
 
 # PyBuilder
 .pybuilder/
