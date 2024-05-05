@@ -1,11 +1,7 @@
 .gitlab-ci-local
 
 # Sphinx
-docs/_build/**
-docs/_static/**
-docs/_templates/**
-!docs/_static/.gitkeep
-!docs/_templates/.gitkeep
+docs/_build
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
