@@ -12,8 +12,8 @@ cache:
     - .cache/pip
 
 stages:
+  - static_analysis
   - test
-  - check
   - docs
 
 before_script:
@@ -23,24 +23,43 @@ before_script:
   - source venv/bin/activate
 
 test:
+  needs: ["lint", "type", "style"]
   stage: test
   script:
     - pip install tox
     - tox -e py # run unit tests
   coverage: '/TOTAL.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
   artifacts:
+    when: always
     reports:
+      junit: junit-report.xml
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
 
-check:
-  stage: check
+lint:
+  needs: []
+  stage: static_analysis
   script:
     - pip install tox ruff  # you can also use tox
-    - tox -e lint,type,style # run linter, type checker and style checks
+    - tox -e lint # run linter
+
+type:
+  needs: []
+  stage: static_analysis
+  script:
+    - pip install tox ruff  # you can also use tox
+    - tox -e type # run type checker
+
+style:
+  needs: []
+  stage: static_analysis
+  script:
+    - pip install tox ruff  # you can also use tox
+    - tox -e style # run style checks
 
 pages:
+  needs: ["test"]
   stage: docs
   script:
     - pip install sphinx sphinx-rtd-theme
