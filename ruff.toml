@@ -1,0 +1,9 @@
+extend-exclude = ["docs/*"]
+
+[lint]
+# Enable enforcing docstring comments
+select = ["D"]
+ignore = ["D211", "D212", "D400"]
+
+[lint.pydocstyle]
+convention = "google"
