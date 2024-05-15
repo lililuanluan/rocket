@@ -13,3 +13,11 @@ Core
     .. automodule:: xrpl_controller.core
         :members:
 
+
+--------------------
+Validator Node Info
+--------------------
+
+    .. automodule:: xrpl_controller.validator_node_info
+        :members:
+
