@@ -1,4 +1,4 @@
-extend-exclude = ["docs/*"]
+extend-exclude = ["docs/*", "protos/*"]
 
 [lint]
 # Enable enforcing docstring comments
