@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13protos/packet.proto\x12\x06packet\"\x16\n\x06Packet\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\"\x1c\n\tPacketAck\x12\x0f\n\x07message\x18\x01 \x01(\t2@\n\rPacketService\x12/\n\nSendPacket\x12\x0e.packet.Packet\x1a\x11.packet.PacketAckb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13protos/packet.proto\x12\x06packet\"$\n\x06Packet\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x0c\n\x04port\x18\x02 \x01(\r\"7\n\tPacketAck\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x0c\n\x04port\x18\x02 \x01(\r\x12\x0e\n\x06\x61\x63tion\x18\x03 \x01(\r2@\n\rPacketService\x12/\n\nSendPacket\x12\x0e.packet.Packet\x1a\x11.packet.PacketAckb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -22,9 +22,9 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'protos.packet_pb2', _global
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_PACKET']._serialized_start=31
-  _globals['_PACKET']._serialized_end=53
-  _globals['_PACKETACK']._serialized_start=55
-  _globals['_PACKETACK']._serialized_end=83
-  _globals['_PACKETSERVICE']._serialized_start=85
-  _globals['_PACKETSERVICE']._serialized_end=149
+  _globals['_PACKET']._serialized_end=67
+  _globals['_PACKETACK']._serialized_start=69
+  _globals['_PACKETACK']._serialized_end=124
+  _globals['_PACKETSERVICE']._serialized_start=126
+  _globals['_PACKETSERVICE']._serialized_end=190
 # @@protoc_insertion_point(module_scope)

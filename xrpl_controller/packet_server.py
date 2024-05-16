@@ -18,11 +18,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             request: intercepted sslstream
             context: grpc context
 
-        Returns: acknoldgement message (This needs to be changed to a more meaningful response)
+        Returns: acknowledgement message (This needs to be changed to a more meaningful response)
 
         """
         controller.handle_packet(request.data)
-        return packet_pb2.PacketAck(message="Packet received successfully")
+        return packet_pb2.PacketAck(action=1, data=request.data, port=request.port)
 
 
 def serve():
