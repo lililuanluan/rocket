@@ -40,3 +40,5 @@ typing_extensions==4.11.0
 urllib3==2.2.1
 virtualenv==20.26.1
 xrpl-py==2.5.0
+grpcio==1.63.0
+gprcio-tools==1.63.0

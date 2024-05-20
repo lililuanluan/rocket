@@ -18,11 +18,14 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             request: intercepted sslstream
             context: grpc context
 
-        Returns: acknowledgement message (This needs to be changed to a more meaningful response)
+        Returns: the possibly modified packet and an action
+            action 0: send immediately without delay
+            action MAX: drop the packet
+            action 0<x<MAX: delay the packet x ms
 
         """
         controller.handle_packet(request.data)
-        return packet_pb2.PacketAck(action=1, data=request.data, port=request.port)
+        return packet_pb2.PacketAck(data=request.data, action=0)
 
 
 def serve():
