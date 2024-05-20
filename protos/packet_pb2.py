@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13protos/packet.proto\x12\x06packet\":\n\x06Packet\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x11\n\tfrom_port\x18\x02 \x01(\r\x12\x0f\n\x07to_port\x18\x03 \x01(\r\")\n\tPacketAck\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x0e\n\x06\x61\x63tion\x18\x03 \x01(\r2@\n\rPacketService\x12/\n\nSendPacket\x12\x0e.packet.Packet\x1a\x11.packet.PacketAckb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13protos/packet.proto\x12\x06packet\":\n\x06Packet\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x11\n\tfrom_port\x18\x02 \x01(\r\x12\x0f\n\x07to_port\x18\x03 \x01(\r\")\n\tPacketAck\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x0e\n\x06\x61\x63tion\x18\x02 \x01(\r2@\n\rPacketService\x12/\n\nSendPacket\x12\x0e.packet.Packet\x1a\x11.packet.PacketAckb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
