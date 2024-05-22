@@ -4,11 +4,20 @@ from concurrent import futures
 
 import grpc
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller import controller
+from xrpl_controller.strategy import Strategy
 
 
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
     """This class is responsible for receiving the incoming packets from the interceptor and returning a response."""
+
+    def __init__(self, strategy: Strategy):
+        """
+        Constructor for the PacketService class.
+
+        Args:
+            strategy: the strategy to use while serving packets
+        """
+        self.strategy = strategy
 
     def SendPacket(self, request, context):
         """
@@ -24,11 +33,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             action 0<x<MAX: delay the packet x ms
 
         """
-        controller.handle_packet(request.data)
-        return packet_pb2.PacketAck(data=request.data, action=0)
+        (data, action) = self.strategy.handle_packet(request.data)
+        return packet_pb2.PacketAck(data=data, action=action)
 
 
-def serve():
+def serve(strategy: Strategy):
     """
     This function starts the server and listens for incoming packets.
 
@@ -36,7 +45,7 @@ def serve():
 
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(), server)
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
