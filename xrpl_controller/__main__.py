@@ -7,5 +7,5 @@ from .packet_server import serve
 
 if __name__ == "__main__":
     print_hi("PyCharm")
-    strategy: Strategy = RandomFuzzer()
+    strategy: Strategy = RandomFuzzer(0.01, 0.95, 0.04, 1, 150)
     serve(strategy)
