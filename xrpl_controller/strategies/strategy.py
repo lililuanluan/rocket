@@ -17,5 +17,8 @@ class Strategy(ABC):
 
         Returns:
         Tuple[bytes, int]: the new packet and the action.
+            action 0: send immediately without delay
+            action MAX: drop the packet
+            action 0<x<MAX: delay the packet x ms
         """
         pass

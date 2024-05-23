@@ -12,7 +12,7 @@ from xrpl_controller.validator_node_info import (
     ValidatorKeyData,
     SocketAddress,
 )
-from xrpl_controller.strategy import Strategy
+from xrpl_controller.strategies.strategy import Strategy
 
 HOST = "localhost"
 
@@ -38,9 +38,6 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             context: grpc context
 
         Returns: the possibly modified packet and an action
-            action 0: send immediately without delay
-            action MAX: drop the packet
-            action 0<x<MAX: delay the packet x ms
 
         """
         (data, action) = self.strategy.handle_packet(request.data)

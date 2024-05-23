@@ -1,6 +1,8 @@
 # XRPL controller module
 
 ## Getting Started
+See the related repository [xrpl-packet- interceptor](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor) for the interceptor module.
+
 ### Pre-Requisites
 - Install Python 3.12
 
@@ -61,3 +63,20 @@ PS > ./make.bat html
 ```
 
 The documentation website files should now be in `docs/_build/html`. Then, inside this folder, you can open `index.html` with your browser.
+
+## How to contribute
+1. Create a new branch from `main`
+2. Make your changes
+3. Push your branch to the repository
+4. Create a merge request to `main`
+
+### gRPC
+If you want to make changes to a .proto file it is important that you make the exact same changes in the corresponding file in the interceptor and regenerate the necessary files both in the controller and interceptor. 
+- For the controller run:
+```
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. protos/packet.proto
+```
+- For the interceptor you can just rebuild.
+
+### Adding new strategies
+To add a new strategy, you need to create a new file in the `strategies` folder with a class that inherits from the `Strategy` class. This class should implement the `handle_packet` method.

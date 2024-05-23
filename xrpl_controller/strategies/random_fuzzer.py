@@ -3,7 +3,7 @@
 import random
 from typing import Tuple
 
-from xrpl_controller.strategy import Strategy
+from xrpl_controller.strategies.strategy import Strategy
 
 
 MAX_U32 = 2**32 - 1
@@ -28,8 +28,10 @@ class RandomFuzzer(Strategy):
             min_delay_ms: minimum number of milliseconds that will be delayed.
             max_delay_ms: maximum number of milliseconds that will be delayed.
         """
-        if (drop_probability + delay_probability) <= 1:
-            raise ValueError("drop and delay probabilities must sum to less than 1.0")
+        if (drop_probability + delay_probability) > 1.0:
+            raise ValueError(
+                f"drop and delay probabilities must sum to less than or equal to 1.0, but was {drop_probability + delay_probability}"
+            )
 
         self.drop_probability = drop_probability
         self.delay_probability = delay_probability
