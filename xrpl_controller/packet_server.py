@@ -58,7 +58,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 if action == 0
                 else "Drop"
                 if action == MAX_U32
-                else "Delay: " + str(action) + "ms",
+                else "Delay:" + str(action) + "ms",
                 request.from_port,
                 request.to_port,
                 data.hex(),
