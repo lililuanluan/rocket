@@ -41,7 +41,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
     def send_packet(self, request, context):
         """
         This function receives the packet from the interceptor and passes it to the controller.
-        Every action taken by the defined strategy will be logged in ../execution_logs
+
+        Every action taken by the defined strategy will be logged in ../execution_logs.
 
         Args:
             request: packet containing intercepted data
