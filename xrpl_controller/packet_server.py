@@ -5,6 +5,7 @@ from concurrent import futures
 import csv
 from datetime import datetime
 import grpc
+import os
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.strategy import Strategy
 
@@ -22,9 +23,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             strategy: the strategy to use while serving packets
         """
         self.strategy = strategy
-        self.file_path = "execution_log"
-        self.csv_file = open(self.file_path, mode="w", newline="")
-        self.writer = csv.writer(self.csv_file)
+        file_path = "../execution_logs/execution_log.csv"
+        csv_file = open(file_path, mode="w", newline="")
+        self.writer = csv.writer(csv_file)
         self.writer.writerow(["timestamp", "action", "from_port", "to_port", "data"])
 
     def SendPacket(self, request, context):
