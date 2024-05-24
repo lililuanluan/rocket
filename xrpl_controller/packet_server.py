@@ -8,7 +8,7 @@ import grpc
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.strategy import Strategy
 
-MAX_U32 = 2 ** 32 - 1
+MAX_U32 = 2**32 - 1
 
 
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
@@ -23,9 +23,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
         self.file_path = "execution_log"
-        self.csv_file = open(self.file_path, mode='w', newline='')
+        self.csv_file = open(self.file_path, mode="w", newline="")
         self.writer = csv.writer(self.csv_file)
-        self.writer.writerow(['timestamp', 'action', 'from_port', 'to_port', 'data'])
+        self.writer.writerow(["timestamp", "action", "from_port", "to_port", "data"])
 
     def SendPacket(self, request, context):
         """
@@ -43,11 +43,19 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         (data, action) = self.strategy.handle_packet(request.data)
 
-        self.writer.writerow([datetime.now(),
-                              "Send" if action == 0 else "Drop" if action == MAX_U32 else "Delay: "+str(action)+"ms",
-                              request.from_port,
-                              request.to_port,
-                              data.hex()])
+        self.writer.writerow(
+            [
+                datetime.now(),
+                "Send"
+                if action == 0
+                else "Drop"
+                if action == MAX_U32
+                else "Delay: " + str(action) + "ms",
+                request.from_port,
+                request.to_port,
+                data.hex(),
+            ]
+        )
 
         return packet_pb2.PacketAck(data=data, action=action)
 
