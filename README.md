@@ -29,7 +29,7 @@ PS > tox                                # Runs pipeline locally (without documen
 PS > python3 -m xrpl_controller         # Runs the application
 ```
 
-I recommend creating a Virtual Environment using the command (executed in the root of the repository): `python -m venv .venv` This command will create a virtual environment in a subfolder `.venv`, pyCharm should automatically pick this up and use it by default.
+It is recommended to create a Virtual Environment using the command (executed in the root of the repository): `python -m venv .venv` This command will create a virtual environment in a subfolder `.venv`, pyCharm should automatically pick this up and use it by default.
 
 ## The pipeline
 Current included stages:
