@@ -3,6 +3,8 @@
 from concurrent import futures
 from typing import List
 
+import csv
+from datetime import datetime
 import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
@@ -16,6 +18,8 @@ from xrpl_controller.strategies.strategy import Strategy
 
 HOST = "localhost"
 
+MAX_U32 = 2 ** 32 - 1
+
 
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
     """This class is responsible for receiving the incoming packets from the interceptor and returning a response."""
@@ -28,6 +32,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             strategy: the strategy to use while serving packets
         """
         self.strategy = strategy
+        self.file_path = "execution_log"
+        self.csv_file = open(self.file_path, mode='w', newline='')
+        self.writer = csv.writer(self.csv_file)
+        self.writer.writerow(['timestamp', 'action', 'from_port', 'to_port', 'data'])
 
     def send_packet(self, request, context):
         """
@@ -41,6 +49,13 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         """
         (data, action) = self.strategy.handle_packet(request.data)
+
+        self.writer.writerow([datetime.now(),
+                              "Send" if action == 0 else "Drop" if action == MAX_U32 else "Delay: "+str(action)+"ms",
+                              request.from_port,
+                              request.to_port,
+                              data.hex()])
+
         return packet_pb2.PacketAck(data=data, action=action)
 
     def send_validator_node_info(self, request_iterator, context):
