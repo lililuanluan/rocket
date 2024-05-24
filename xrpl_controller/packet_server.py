@@ -1,10 +1,20 @@
 """This module is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
 from concurrent import futures
+from typing import List
 
 import grpc
+
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.strategy import Strategy
+from xrpl_controller.request_ledger_data import store_validator_node_info
+from xrpl_controller.validator_node_info import (
+    ValidatorNode,
+    ValidatorKeyData,
+    SocketAddress,
+)
+from xrpl_controller.strategies.strategy import Strategy
+
+HOST = "localhost"
 
 
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
@@ -19,22 +29,58 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
 
-    def SendPacket(self, request, context):
+    def send_packet(self, request, context):
         """
         This function receives the packet from the interceptor and passes it to the controller.
 
         Args:
-            request: intercepted sslstream
+            request: packet containing intercepted data
             context: grpc context
 
         Returns: the possibly modified packet and an action
-            action 0: send immediately without delay
-            action MAX: drop the packet
-            action 0<x<MAX: delay the packet x ms
 
         """
         (data, action) = self.strategy.handle_packet(request.data)
         return packet_pb2.PacketAck(data=data, action=action)
+
+    def send_validator_node_info(self, request_iterator, context):
+        """
+        This function receives the validator node info from the interceptor and passes it to the controller.
+
+        Args:
+            request_iterator: iterator of validator node info
+            context: grpc context
+
+        Returns: an acknowledgement
+
+        """
+        validator_node_list: List[ValidatorNode] = []
+        for request in request_iterator:
+            validator_node_list.append(
+                ValidatorNode(
+                    ws_public=SocketAddress(
+                        host=HOST,
+                        port=request.ws_public_port,
+                    ),
+                    ws_admin=SocketAddress(
+                        host=HOST,
+                        port=request.ws_admin_port,
+                    ),
+                    rpc=SocketAddress(
+                        host=HOST,
+                        port=request.rpc_port,
+                    ),
+                    validator_key_data=ValidatorKeyData(
+                        status=request.status,
+                        validation_key=request.validation_key,
+                        validation_private_key=request.validation_private_key,
+                        validation_public_key=request.validation_public_key,
+                        validation_seed=request.validation_seed,
+                    ),
+                )
+            )
+        store_validator_node_info(validator_node_list)
+        return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 
 def serve(strategy: Strategy):

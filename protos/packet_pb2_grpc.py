@@ -39,17 +39,28 @@ class PacketServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.SendPacket = channel.unary_unary(
-                '/packet.PacketService/SendPacket',
+        self.send_packet = channel.unary_unary(
+                '/packet.PacketService/send_packet',
                 request_serializer=protos_dot_packet__pb2.Packet.SerializeToString,
                 response_deserializer=protos_dot_packet__pb2.PacketAck.FromString,
+                _registered_method=True)
+        self.send_validator_node_info = channel.stream_unary(
+                '/packet.PacketService/send_validator_node_info',
+                request_serializer=protos_dot_packet__pb2.ValidatorNodeInfo.SerializeToString,
+                response_deserializer=protos_dot_packet__pb2.ValidatorNodeInfoAck.FromString,
                 _registered_method=True)
 
 
 class PacketServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def SendPacket(self, request, context):
+    def send_packet(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def send_validator_node_info(self, request_iterator, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -58,10 +69,15 @@ class PacketServiceServicer(object):
 
 def add_PacketServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'SendPacket': grpc.unary_unary_rpc_method_handler(
-                    servicer.SendPacket,
+            'send_packet': grpc.unary_unary_rpc_method_handler(
+                    servicer.send_packet,
                     request_deserializer=protos_dot_packet__pb2.Packet.FromString,
                     response_serializer=protos_dot_packet__pb2.PacketAck.SerializeToString,
+            ),
+            'send_validator_node_info': grpc.stream_unary_rpc_method_handler(
+                    servicer.send_validator_node_info,
+                    request_deserializer=protos_dot_packet__pb2.ValidatorNodeInfo.FromString,
+                    response_serializer=protos_dot_packet__pb2.ValidatorNodeInfoAck.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -74,7 +90,7 @@ class PacketService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def SendPacket(request,
+    def send_packet(request,
             target,
             options=(),
             channel_credentials=None,
@@ -87,9 +103,36 @@ class PacketService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/packet.PacketService/SendPacket',
+            '/packet.PacketService/send_packet',
             protos_dot_packet__pb2.Packet.SerializeToString,
             protos_dot_packet__pb2.PacketAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def send_validator_node_info(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_unary(
+            request_iterator,
+            target,
+            '/packet.PacketService/send_validator_node_info',
+            protos_dot_packet__pb2.ValidatorNodeInfo.SerializeToString,
+            protos_dot_packet__pb2.ValidatorNodeInfoAck.FromString,
             options,
             channel_credentials,
             insecure,
