@@ -2,7 +2,6 @@
 
 from concurrent import futures
 
-import xrpl_controller.request_ledger_data
 from typing import List
 
 import grpc
@@ -43,6 +42,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         """
         (data, action) = self.strategy.handle_packet(request.data)
+        # TODO: uncomment when node.peer.port functionality gets implemented (see update_network in Strategy class)
         # action = self.strategy.apply_network_partition(
         #     action, request.from_port, request.to_port
         # )
@@ -85,10 +85,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 )
             )
         store_validator_node_info(validator_node_list)
+        self.strategy.update_network(validator_node_list)
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 
-def serve(strategy: Strategy) -> PacketService:
+def serve(strategy: Strategy):
     """
     This function starts the server and listens for incoming packets.
 
@@ -96,9 +97,7 @@ def serve(strategy: Strategy) -> PacketService:
 
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_service = PacketService(strategy)
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(packet_service, server)
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
-    return packet_service

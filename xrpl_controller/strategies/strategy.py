@@ -1,31 +1,23 @@
 """This module is responsible for defining the Strategy interface."""
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 from xrpl_controller.core import flatten
 from xrpl_controller.validator_node_info import ValidatorNode
 
 MAX_U32 = 2**32 - 1
-validator_node_list_store: List[ValidatorNode] = []
 
 
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
     def __init__(self):
-        """Initialize the Strategy interface with a default network partition."""
-        # TODO: node.rpc.port should become node.peer.port when functionality for this becomes available
-        self.validator_node_list = validator_node_list_store.copy()
-        self.node_amount = len(self.validator_node_list)
-        self.network_partitions: list[list[int]] = [
-            [node.rpc.port for node in self.validator_node_list]
-        ]
-        self.port_dict = {
-            port: index for index, port in enumerate(self.network_partitions[0])
-        }
-        self.communication_matrix = [
-            [True for _ in range(self.node_amount)] for _ in range(self.node_amount)
-        ]
+        """Initialize the Strategy interface with needed attributes."""
+        self.validator_node_list: List[ValidatorNode] = []
+        self.node_amount: int = 0
+        self.network_partitions: list[list[int]] = [[]]
+        self.port_dict: Dict[int, int] = {}
+        self.communication_matrix: list[list[bool]] = []
 
     def set_network_partition(self, partitions: list[list[int]]):
         """
@@ -64,6 +56,21 @@ class Strategy(ABC):
             ]
             else MAX_U32
         )
+
+    def update_network(self, validator_node_list: List[ValidatorNode]):
+        """Update the strategy's attributes."""
+        print("Updating the strategy's network information")
+        self.validator_node_list = validator_node_list
+        self.node_amount = len(validator_node_list)
+
+        # TODO: node.rpc.port should become node.peer.port when functionality for this becomes available
+        self.network_partitions = [[node.rpc.port for node in validator_node_list]]
+        self.port_dict = {
+            port: index for index, port in enumerate(self.network_partitions[0])
+        }
+        self.communication_matrix = [
+            [True for _ in range(self.node_amount)] for _ in range(self.node_amount)
+        ]
 
     @abstractmethod
     def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
