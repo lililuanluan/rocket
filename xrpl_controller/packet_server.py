@@ -45,7 +45,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         # TODO: uncomment when node.peer.port functionality gets implemented (see update_network in Strategy class)
         # action = self.strategy.apply_network_partition(
         #     action, request.from_port, request.to_port
-        # )
+        # ) if self.strategy.auto_partition else action
         return packet_pb2.PacketAck(data=data, action=action)
 
     def send_validator_node_info(self, request_iterator, context):
