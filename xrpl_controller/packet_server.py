@@ -1,6 +1,8 @@
 """This module is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
 from concurrent import futures
+
+import xrpl_controller.request_ledger_data
 from typing import List
 
 import grpc
@@ -41,6 +43,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         """
         (data, action) = self.strategy.handle_packet(request.data)
+        # action = self.strategy.apply_network_partition(
+        #     action, request.from_port, request.to_port
+        # )
         return packet_pb2.PacketAck(data=data, action=action)
 
     def send_validator_node_info(self, request_iterator, context):
@@ -83,7 +88,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 
-def serve(strategy: Strategy):
+def serve(strategy: Strategy) -> PacketService:
     """
     This function starts the server and listens for incoming packets.
 
@@ -91,7 +96,9 @@ def serve(strategy: Strategy):
 
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
+    packet_service = PacketService(strategy)
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(packet_service, server)
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
+    return packet_service

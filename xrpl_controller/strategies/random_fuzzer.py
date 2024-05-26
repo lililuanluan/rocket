@@ -27,7 +27,10 @@ class RandomFuzzer(Strategy):
             delay_probability: percent of packages that will be delayed.
             min_delay_ms: minimum number of milliseconds that will be delayed.
             max_delay_ms: maximum number of milliseconds that will be delayed.
+
         """
+        super().__init__()
+
         if (drop_probability + delay_probability) > 1.0:
             raise ValueError(
                 f"drop and delay probabilities must sum to less than or equal to 1.0, but was {drop_probability + delay_probability}"
