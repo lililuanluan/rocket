@@ -1,5 +1,8 @@
 """Core module."""
 
+# The delay value which indicated a drop. This is the max value of an u32 datatype in Rust.
+MAX_U32 = 2**32 - 1
+
 
 def add(x: int, y: int) -> int:
     """

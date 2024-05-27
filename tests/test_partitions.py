@@ -4,8 +4,7 @@ from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
 from xrpl_controller.validator_node_info import ValidatorNode
 from xrpl_controller.validator_node_info import SocketAddress
 from xrpl_controller.validator_node_info import ValidatorKeyData
-
-MAX_U32 = 2**32 - 1
+from xrpl_controller.core import MAX_U32
 
 node_0 = ValidatorNode(
     SocketAddress("test", 10),

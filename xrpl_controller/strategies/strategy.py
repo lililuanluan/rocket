@@ -4,8 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List, Dict
 from xrpl_controller.core import flatten
 from xrpl_controller.validator_node_info import ValidatorNode
-
-MAX_U32 = 2**32 - 1
+from xrpl_controller.core import MAX_U32
 
 
 class Strategy(ABC):

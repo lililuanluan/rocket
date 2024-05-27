@@ -5,9 +5,7 @@ import sys
 from typing import Tuple
 
 from xrpl_controller.strategies.strategy import Strategy
-
-
-MAX_U32 = 2**32 - 1
+from xrpl_controller.core import MAX_U32
 
 
 class RandomFuzzer(Strategy):
