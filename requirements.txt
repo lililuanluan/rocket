@@ -42,3 +42,5 @@ virtualenv==20.26.1
 xrpl-py==2.5.0
 grpcio==1.63.0
 grpcio-tools==1.63.0
+GitPython==3.1.43
+docker==7.1.0
