@@ -1,6 +1,7 @@
 """This module contains the class that implements a random fuzzer."""
 
 import random
+import sys
 from typing import Tuple
 
 from xrpl_controller.strategies.strategy import Strategy
@@ -18,6 +19,7 @@ class RandomFuzzer(Strategy):
         delay_probability: float,
         min_delay_ms: int,
         max_delay_ms: int,
+        seed: int = -sys.maxsize,
     ):
         """
         Initializes the random fuzzer.
@@ -27,13 +29,34 @@ class RandomFuzzer(Strategy):
             delay_probability: percent of packages that will be delayed.
             min_delay_ms: minimum number of milliseconds that will be delayed.
             max_delay_ms: maximum number of milliseconds that will be delayed.
-
+            seed: seed for random number generator. Defaults to -sys.maxsize to indicate no seeding.
         """
         super().__init__()
 
+        if seed != -sys.maxsize:
+            random.seed(seed)
+
+        if drop_probability < 0 or delay_probability < 0:
+            raise ValueError(
+                f"drop and delay probabilities must be non-negative, drop_probability: {drop_probability}, \
+                delay_probability: {delay_probability}"
+            )
+
         if (drop_probability + delay_probability) > 1.0:
             raise ValueError(
-                f"drop and delay probabilities must sum to less than or equal to 1.0, but was {drop_probability + delay_probability}"
+                f"drop and delay probabilities must sum to less than or equal to 1.0, but was \
+                {drop_probability + delay_probability}"
+            )
+
+        if min_delay_ms < 0 or max_delay_ms < 0:
+            raise ValueError(
+                f"delay values must both be non-negative, min_delay_ms: {min_delay_ms}, max_delay_ms: {max_delay_ms}"
+            )
+
+        if min_delay_ms > max_delay_ms:
+            raise ValueError(
+                f"min_delay_ms must be smaller or equal to max_delay_ms, min_delay_ms: {min_delay_ms}, \
+                max_delay_ms: {max_delay_ms}"
             )
 
         self.drop_probability = drop_probability

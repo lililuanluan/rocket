@@ -20,7 +20,7 @@ class Strategy(ABC):
         """
         self.validator_node_list: List[ValidatorNode] = []
         self.node_amount: int = 0
-        self.network_partitions: list[list[int]] = [[]]
+        self.network_partitions: list[list[int]] = []
         self.port_dict: Dict[int, int] = {}
         self.communication_matrix: list[list[bool]] = []
         self.auto_partition = auto_partition
