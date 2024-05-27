@@ -105,5 +105,5 @@ Example usage with a network of 3 nodes with peer ports `0`, `1`, and `2` respec
 The user has the choice to set automatic network partition application using the boolean field `self.auto_partition`, this defaults to `True`.
 The user can apply partitions manually by using 
 `self.apply_network_partition(action: int, peer_from_port: int, peer_to_port: int)` which will transform an arbitrary action to a `drop` action when `peer_from_port` is not in the same partition as `peer_to_port`.
-Any other network partition-related field should not be modified by the user themselves.
+Any other network partition-related field should not be modified by the user themselves. Custom partitions can be realized by modifying the boolean matrix `self.communication_matrix`, although it is not recommended to do so manually.
 
