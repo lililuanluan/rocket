@@ -34,7 +34,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
         if keep_log:
-            file_path = f"../execution_logs/execution_log_{datetime.now().strftime('%m_%d_%H_%M')}.csv"
+            # File name format is: execution_log_[year]_[month]_[day]_[hour (24hr clock)]:[minute].csv
+            file_path = f"../execution_logs/execution_log_{datetime.now().strftime('%Y_%m_%d_%H:%M')}.csv"
             csv_file = open(file_path, mode="w", newline="")
             self.writer = csv.writer(csv_file)
             self.writer.writerow(["timestamp", "action", "from_port", "to_port", "data"])
