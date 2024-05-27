@@ -25,7 +25,7 @@ MAX_U32 = 2**32 - 1
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
     """This class is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
-    def __init__(self, strategy: Strategy):
+    def __init__(self, strategy: Strategy, keep_log: bool = True):
         """
         Constructor for the PacketService class.
 
@@ -33,10 +33,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             strategy: the strategy to use while serving packets
         """
         self.strategy = strategy
-        file_path = "../execution_logs/execution_log.csv"
-        csv_file = open(file_path, mode="w", newline="")
-        self.writer = csv.writer(csv_file)
-        self.writer.writerow(["timestamp", "action", "from_port", "to_port", "data"])
+        if keep_log:
+            file_path = f"../execution_logs/execution_log_{datetime.now().strftime('%Y_%m_%d')}.csv"
+            csv_file = open(file_path, mode="w", newline="")
+            self.writer = csv.writer(csv_file)
+            self.writer.writerow(["timestamp", "action", "from_port", "to_port", "data"])
 
     def send_packet(self, request, context):
         """
@@ -109,7 +110,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 
-def serve(strategy: Strategy):
+def serve(strategy: Strategy, keep_log: bool = True):
     """
     This function starts the server and listens for incoming packets.
 
@@ -117,7 +118,7 @@ def serve(strategy: Strategy):
 
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy, keep_log), server)
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
