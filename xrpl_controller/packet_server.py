@@ -7,7 +7,6 @@ import csv
 from datetime import datetime
 import grpc
 import os
-
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.validator_node_info import (
@@ -51,6 +50,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             context: grpc context
 
         Returns: the possibly modified packet and an action
+            action 0: send immediately without delay
+            action MAX: drop the packet
+            action 0<x<MAX: delay the packet x ms
 
         """
         (data, action) = self.strategy.handle_packet(request.data)
