@@ -30,6 +30,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         Args:
             strategy: the strategy to use while serving packets
+            keep_log: whether to keep track of a log containing all actions taken
         """
         self.strategy = strategy
         if keep_log:
@@ -37,7 +38,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             file_path = f"../execution_logs/execution_log_{datetime.now().strftime('%Y_%m_%d_%H:%M')}.csv"
             csv_file = open(file_path, mode="w", newline="")
             self.writer = csv.writer(csv_file)
-            self.writer.writerow(["timestamp", "action", "from_port", "to_port", "data"])
+            self.writer.writerow(
+                ["timestamp", "action", "from_port", "to_port", "data"]
+            )
 
     def send_packet(self, request, context):
         """
@@ -121,7 +124,9 @@ def serve(strategy: Strategy, keep_log: bool = True):
 
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy, keep_log), server)
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(
+        PacketService(strategy, keep_log), server
+    )
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
