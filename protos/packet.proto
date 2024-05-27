@@ -26,7 +26,6 @@ message ValidatorNodeInfo {
     string validation_private_key = 6;
     string validation_public_key = 7;
     string validation_seed = 8;
-    uint32 peer_ports = 9;
 }
 
 message ValidatorNodeInfoAck {

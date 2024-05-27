@@ -40,7 +40,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Returns: the possibly modified packet and an action
 
         """
-        (data, action) = self.strategy.handle_packet(request.data)
+        (data, action) = self.strategy.handle_packet(
+            request.data,
+        )
         return packet_pb2.PacketAck(data=data, action=action)
 
     def send_validator_node_info(self, request_iterator, context):
@@ -80,6 +82,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 )
             )
         store_validator_node_info(validator_node_list)
+        self.strategy.getKey(validator_node_list)
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 

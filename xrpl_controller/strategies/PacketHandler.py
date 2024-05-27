@@ -1,16 +1,22 @@
 """This module contains the class that implements a random fuzzer."""
 
-
 import struct
 from typing import Tuple
-
+from typing import List
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from google.protobuf import message
+
+from xrpl_controller.validator_node_info import ValidatorNode
+
 
 from protos import packet_pb2
 from xrpl_controller.strategies.strategy import Strategy
 
 
 MAX_U32 = 2**32 - 1
+validator_node_list_store: List[ValidatorNode] = []
+private_key_from = None
 
 
 class PacketHandler(Strategy):
@@ -33,6 +39,32 @@ class PacketHandler(Strategy):
         self.min_delay_ms = min_delay_ms
         self.max_delay_ms = max_delay_ms
 
+    def getKey(self, validator_node_list: List[ValidatorNode]) -> str:
+        """
+        Implements a method to get the private key.
+
+        Args:
+            validator_node_list: List[ValidatorNode] List of validator nodes.
+
+        Returns:
+            str: this is the string of the private key
+
+        """
+        validator_node_list_store = validator_node_list
+
+        print(f"Stored validator info: {validator_node_list_store}")
+
+        for node in validator_node_list_store:
+            print(f"Stored validator: {node}")
+            if node.ws_public.port == 6100:
+                private_key = node.validator_key_data.validation_private_key
+                private_key_from = private_key
+                print(f"Private key: {private_key}")
+                return private_key
+            private_key = "no_key"
+
+        return private_key
+
     def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
         """
         Implements the handle_packet method with a random action.
@@ -43,14 +75,15 @@ class PacketHandler(Strategy):
         Returns:
         Tuple[bytes, int]: the new packet and the random action.
         """
-        length = struct.unpack('!I', packet[:4])[0]
+        length = struct.unpack("!I", packet[:4])[0]
         print(f"Message length: {length}")
 
-        message_type = struct.unpack('!H', packet[4:6])[0]
+        message_type = struct.unpack("!H", packet[4:6])[0]
         print(f"Message type: {message_type}")
         message_payload = packet[6:]
         print(f"Message data: {message_payload}")
 
+        # Define message type mappings
         message_type_map = {
             2: packet_pb2.TMManifests,
             3: packet_pb2.TMPing,
@@ -66,18 +99,78 @@ class PacketHandler(Strategy):
             42: packet_pb2.TMGetObjectByHash,
         }
 
+        # Define reverse lookup for message type names
+        self.message_type_name_map = {
+            v: k
+            for k, v in {
+                2: "TMManifests",
+                3: "TMPing",
+                5: "TMCluster",
+                15: "TMEndpoints",
+                30: "TMTransaction",
+                31: "TMGetLedger",
+                32: "TMLedgerData",
+                33: "TMProposeSet",
+                34: "TMStatusChange",
+                35: "TMHaveTransactionSet",
+                41: "TMValidation",
+                42: "TMGetObjectByHash",
+            }.items()
+        }
+
         if message_type in message_type_map:
             message_class = message_type_map[message_type]
+
             message = message_class()
             message.ParseFromString(message_payload)
+            print(f"Message type: {message_class}")
             print(f"Deserialized message: {message}")
+
+            if message_type == 31:  # TMGetLedger
+                message.ledgerSeq = 123456
+                print(f"Ledger seq: {message.ledgerSeq}")
+
+            modified_payload = message.SerializeToString()
+            modified_packet = (
+                struct.pack("!I", length)
+                + struct.pack("!H", message_type)
+                + modified_payload
+            )
+
         else:
             print(f"Unknown message type: {message_type}")
+            modified_packet = packet
+
+        # Example of modifying binary data
+
+        binary_data = bytearray(modified_packet)
+        print(
+            f"This is the original bytes with arbitary parts for type 31: {binary_data}"
+        )
+        binary_data[1] ^= 0xFF  # Example: XOR byte at index 10 with 0xFF
+        print(
+            f"This is the modified bytes with arbitary parts for type 31: {binary_data}"
+        )
+
+        # signature = self.getKey(validator_node_list_store).sign(bytes(binary_data),
+        #                                             padding.PSS(
+        #                                                 mgf=padding.MGF1(hashes.SHA256()),
+        #                                                 salt_length=padding.PSS.MAX_LENGTH
+        #                                             ),
+        #                                             hashes.SHA256()
+        #                                             )
+        #
+        # modified_packet_with_signature = modified_packet + signature
+        # print(f"This is the Packet with signature modified with arbitary parts, binary date for type 31: {modified_packet_with_signature}")
+        # print(f"This is the original packet {packet}")
+        # return bytes(modified_packet_with_signature), 0
+        return bytes(packet), 0
 
         #  ripple_message = self.deserialize_message(message_type, message_payload)
-        return packet,0
 
-    def deserialize_message(self, message_type: int, message_data: bytes) -> message.Message:
+    def deserialize_message(
+        self, message_type: int, message_data: bytes
+    ) -> message.Message:
         """
         Implements the DeserializeMessage method with a random action.
 
