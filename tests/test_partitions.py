@@ -7,23 +7,26 @@ from xrpl_controller.validator_node_info import ValidatorKeyData
 from xrpl_controller.core import MAX_U32
 
 node_0 = ValidatorNode(
-    SocketAddress("test", 10),
-    SocketAddress("test-ws", 10),
-    SocketAddress("test-rpc", 10),
+    SocketAddress("test_peer", 10),
+    SocketAddress("test-ws-pub", 20),
+    SocketAddress("test-ws-adm", 30),
+    SocketAddress("test-rpc", 40),
     ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
 )
 
 node_1 = ValidatorNode(
-    SocketAddress("test", 11),
-    SocketAddress("test-ws", 11),
-    SocketAddress("test-rpc", 11),
+    SocketAddress("test_peer", 11),
+    SocketAddress("test-ws-pub", 21),
+    SocketAddress("test-ws-adm", 31),
+    SocketAddress("test-rpc", 41),
     ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
 )
 
 node_2 = ValidatorNode(
-    SocketAddress("test", 12),
-    SocketAddress("test-ws", 12),
-    SocketAddress("test-rpc", 12),
+    SocketAddress("test_peer", 12),
+    SocketAddress("test-ws-pub", 22),
+    SocketAddress("test-ws-adm", 32),
+    SocketAddress("test-rpc", 42),
     ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
 )
 

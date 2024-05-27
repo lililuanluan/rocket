@@ -22,12 +22,18 @@ def test_flatten_3():
 
 
 def test_flatten_4():
+    """Test whether flatten function works. No numbers, nested list."""
+    lst = [[]]
+    assert flatten(lst) == []
+
+
+def test_flatten_5():
     """Test whether flatten function works. All numbers in one list."""
     lst = [[1, 2, 3, 4]]
     assert flatten(lst) == [1, 2, 3, 4]
 
 
-def test_flatten_5():
+def test_flatten_6():
     """Test whether flatten function works. One number."""
     lst = [[1]]
     assert flatten(lst) == [1]

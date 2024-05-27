@@ -82,8 +82,7 @@ class Strategy(ABC):
         self.validator_node_list = validator_node_list
         self.node_amount = len(validator_node_list)
 
-        # TODO: node.rpc.port should become node.peer.port when functionality for this becomes available
-        self.network_partitions = [[node.rpc.port for node in validator_node_list]]
+        self.network_partitions = [[node.peer.port for node in validator_node_list]]
         self.port_dict = {
             port: index for index, port in enumerate(self.network_partitions[0])
         }

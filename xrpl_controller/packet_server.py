@@ -42,10 +42,13 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         """
         (data, action) = self.strategy.handle_packet(request.data)
-        # TODO: uncomment when node.peer.port functionality gets implemented (see update_network in Strategy class)
-        # action = self.strategy.apply_network_partition(
-        #     action, request.from_port, request.to_port
-        # ) if self.strategy.auto_partition else action
+        action = (
+            self.strategy.apply_network_partition(
+                action, request.from_port, request.to_port
+            )
+            if self.strategy.auto_partition
+            else action
+        )
         return packet_pb2.PacketAck(data=data, action=action)
 
     def send_validator_node_info(self, request_iterator, context):
@@ -63,6 +66,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         for request in request_iterator:
             validator_node_list.append(
                 ValidatorNode(
+                    peer=SocketAddress(
+                        host=HOST,
+                        port=request.peer_port,
+                    ),
                     ws_public=SocketAddress(
                         host=HOST,
                         port=request.ws_public_port,
