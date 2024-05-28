@@ -1,7 +1,7 @@
 """Entry point of the system-level test suite, run with `python -m tests.system_level`."""
 
 import asyncio
-from time import sleep
+from asyncio import sleep
 
 from xrpl_controller.strategies import Strategy, RandomFuzzer
 from xrpl_controller.packet_server import serve
@@ -35,33 +35,35 @@ async def main():
     t = Thread(target=serve, args=(strategy,))
     t.start()
 
-    Repo.clone_from("git@gitlab.ewi.tudelft.nl:cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet"
-                    "-interceptor.git", ".temp-interceptor")
+    # Repo.clone_from("git@gitlab.ewi.tudelft.nl:cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet"
+    #                 "-interceptor.git", ".temp-interceptor")
 
-    build_process = subprocess.run(
-        "cargo build",
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=".temp-interceptor",
-    )
-    build_process.check_returncode()
-
-    print("build succeeded")
-
-    run_process = subprocess.Popen(
-        "cargo run",
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=".temp-interceptor",
-    )
+    # build_process = subprocess.run(
+    #     "cargo build",
+    #     shell=True,
+    #     stdout=subprocess.PIPE,
+    #     stderr=subprocess.PIPE,
+    #     cwd=".temp-interceptor",
+    # )
+    # build_process.check_returncode()
+    #
+    # print("build succeeded")
+    #
+    # run_process = subprocess.Popen(
+    #     "cargo run",
+    #     shell=True,
+    #     stdout=subprocess.PIPE,
+    #     stderr=subprocess.PIPE,
+    #     cwd=".temp-interceptor",
+    # )
 
     while len(request_ledger_data.validator_node_list_store) != 2:
         print(
             f"waiting for nodes to come online... {len(request_ledger_data.validator_node_list_store)}"
         )
-        sleep(1)
+        await sleep(1)
+
+    await sleep(3)
 
     it = 0
     while it < 50:
@@ -74,12 +76,12 @@ async def main():
             if node_hash != temp:
                 print(f"HASHES DIFFER {temp} {node_hash}")
         it += 1
-        sleep(1)
+        await sleep(1)
 
     print("test complete")
-    (out, err) = run_process.communicate()
-    print(out)
-    print(err)
+    # (out, err) = run_process.communicate()
+    # print(out)
+    # print(err)
 
     # rmtree(".temp-interceptor")
     t.join()
