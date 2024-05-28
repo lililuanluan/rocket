@@ -98,6 +98,6 @@ class ValidatorNode:
     @override
     def __str__(self):
         return (
-            f"ValidatorNode(ws_public={self.ws_public}, ws_private={self.ws_private}, "
+            f"ValidatorNode(peer={self.peer}, ws_public={self.ws_public}, ws_private={self.ws_private}, "
             f"rpc={self.rpc}, validator_key_data={self.validator_key_data})"
         )
