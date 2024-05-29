@@ -2,7 +2,7 @@ extend-exclude = ["docs/*", "protos/*"]
 
 [lint]
 # Enable enforcing docstring comments
-select = ["D"]
+extend-select = ["D"]
 ignore = ["D211", "D212", "D400"]
 
 [lint.pydocstyle]
