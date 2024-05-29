@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from xrpl_controller.validator_node_info import ValidatorNode
 import csv
 from typing import Any
 import atexit
@@ -17,11 +18,10 @@ class CSVLogger:
     def __init__(self, filename: str, columns: list[Any], directory: str = ""):
         """Initialize CSVLogger class."""
         Path("./logs/" + directory).mkdir(parents=True, exist_ok=True)
-        self.filepath = (
-            "./logs/" + directory + "/" + filename
-            if filename.endswith(".csv")
-            else filename + ".csv"
-        )
+
+        filename = filename if filename.endswith(".csv") else filename + ".csv"
+
+        self.filepath = "./logs/" + directory + "/" + filename
         self.csv_file = open(self.filepath, mode="w", newline="")
         self.writer = csv.writer(self.csv_file)
         self.columns = [col.__str__ for col in columns]
@@ -41,7 +41,7 @@ class CSVLogger:
         Log an arbitrary row.
 
         Args:
-            row (list[str]): row.
+            row (list[str]): row to be logged.
 
         Raises:
             ValueError: if length of row is not equal to the amount of columns
@@ -52,19 +52,42 @@ class CSVLogger:
             )
         self.writer.writerow(row)
 
+    def log_rows(self, rows: list[list[Any]]):
+        """
+        Log multiple arbitrary row.
+
+        Args:
+            rows (list[list[str]]): rows to be logged.
+
+        Raises:
+            ValueError: if length of any row is not equal to the amount of columns
+        """
+        for row in rows:
+            self.log_row(row)
+
 
 class ActionLogger(CSVLogger):
     """CSVLogger child class which is dedicated to handle the logging of actions."""
 
-    def __init__(self, filename: str = ""):
+    def __init__(
+        self, validator_node_list: list[ValidatorNode], filename: str | None = None
+    ):
         """Initialize ActionLogger class."""
-        final_filename = (
-            filename
-            if filename != ""
-            else f"action_log_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.csv"
+        final_filename = filename if filename is not None else "action_log.csv"
+        directory = f"action_logs/{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}"
+
+        node_logger = CSVLogger(
+            filename="node_info",
+            columns=["validator_node_info"],
+            directory=directory,
         )
+        node_logger.log_rows([[node] for node in validator_node_list])
+        node_logger.close()
+
         super().__init__(
-            filename=final_filename, columns=action_log_columns, directory="action_logs"
+            filename=final_filename,
+            columns=action_log_columns,
+            directory=directory,
         )
 
     def log_action(self, action: int, from_port: int, to_port: int, data: bytes):

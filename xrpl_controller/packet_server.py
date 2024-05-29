@@ -30,8 +30,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
         self.keep_log = keep_log
-        if keep_log:
-            self.logger = ActionLogger()
+        self.logger = None
 
     def send_packet(self, request, context):
         """
@@ -95,6 +94,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 )
             )
         store_validator_node_info(validator_node_list)
+
+        if self.keep_log:
+            self.logger = ActionLogger(validator_node_list)
+
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 
