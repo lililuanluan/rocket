@@ -5,7 +5,6 @@ from typing import Tuple
 
 from xrpl_controller.strategies.strategy import Strategy
 
-
 MAX_U32 = 2**32 - 1
 
 

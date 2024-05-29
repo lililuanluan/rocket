@@ -7,12 +7,12 @@ import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.request_ledger_data import store_validator_node_info
-from xrpl_controller.validator_node_info import (
-    ValidatorNode,
-    ValidatorKeyData,
-    SocketAddress,
-)
 from xrpl_controller.strategies.strategy import Strategy
+from xrpl_controller.validator_node_info import (
+    SocketAddress,
+    ValidatorKeyData,
+    ValidatorNode,
+)
 
 HOST = "localhost"
 
