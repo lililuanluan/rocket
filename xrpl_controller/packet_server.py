@@ -96,6 +96,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         store_validator_node_info(validator_node_list)
 
         if self.keep_log:
+            if (
+                self.logger is not None
+            ):  # Close the previous logger if there was a previous one
+                self.logger.close()
             self.logger = ActionLogger(validator_node_list)
 
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
