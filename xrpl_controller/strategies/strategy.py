@@ -32,7 +32,7 @@ class Strategy(ABC):
             partitions (list[list[int]]): List containing the network partitions (as lists of port numbers).
 
         Raises:
-            ValueError: if given partition is invalid
+            ValueError: if given partitions are invalid
         """
         flattened_partitions = flatten(partitions)
         if (
@@ -106,9 +106,6 @@ class Strategy(ABC):
             packet: the original packet.
 
         Returns:
-        Tuple[bytes, int]: the new packet and the action.
-            action 0: send immediately without delay
-            action MAX: drop the packet
-            action 0<x<MAX: delay the packet x ms
+            Tuple[bytes, int]: the new packet and the action.
         """
         pass

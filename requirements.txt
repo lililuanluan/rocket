@@ -36,6 +36,7 @@ sphinxcontrib-jsmath==1.0.1
 sphinxcontrib-qthelp==1.0.7
 sphinxcontrib-serializinghtml==1.1.10
 tox==4.15.0
+typing==3.7.4.3
 typing_extensions==4.11.0
 urllib3==2.2.1
 virtualenv==20.26.1

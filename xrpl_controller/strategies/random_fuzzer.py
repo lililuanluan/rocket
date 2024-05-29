@@ -17,7 +17,7 @@ class RandomFuzzer(Strategy):
         delay_probability: float,
         min_delay_ms: int,
         max_delay_ms: int,
-        seed: int = -sys.maxsize,
+        seed: int | None = None,
     ):
         """
         Initializes the random fuzzer.
@@ -34,7 +34,7 @@ class RandomFuzzer(Strategy):
         """
         super().__init__()
 
-        if seed != -sys.maxsize:
+        if seed is not None:
             random.seed(seed)
 
         if drop_probability < 0 or delay_probability < 0:
@@ -74,7 +74,7 @@ class RandomFuzzer(Strategy):
             packet: the original packet to be sent.
 
         Returns:
-        Tuple[bytes, int]: the new packet and the random action.
+            Tuple[bytes, int]: the new packet and the random action.
         """
         choice: float = random.random()
         if choice < self.send_probability:
