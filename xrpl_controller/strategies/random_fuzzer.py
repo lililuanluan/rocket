@@ -28,6 +28,9 @@ class RandomFuzzer(Strategy):
             min_delay_ms: minimum number of milliseconds that will be delayed.
             max_delay_ms: maximum number of milliseconds that will be delayed.
             seed: seed for random number generator. Defaults to -sys.maxsize to indicate no seeding.
+
+        Raises:
+            ValueError: if the given probabilities or delays are invalid
         """
         super().__init__()
 

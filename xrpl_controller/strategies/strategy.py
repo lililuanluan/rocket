@@ -30,6 +30,9 @@ class Strategy(ABC):
 
         Args:
             partitions (list[list[int]]): List containing the network partitions (as lists of port numbers).
+
+        Raises:
+            ValueError: if given partition is invalid
         """
         flattened_partitions = flatten(partitions)
         if (
@@ -64,8 +67,8 @@ class Strategy(ABC):
             peer_to_port (int): The peer port to where the message was sent.
 
         Returns:
-        int: An action represented as integer which is either
-             the original action or the integer value of the 'drop' action
+            int: An action represented as integer which is either the original action
+            or the integer value representing the 'drop' action
         """
         return (
             action
