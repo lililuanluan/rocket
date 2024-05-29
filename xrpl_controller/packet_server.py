@@ -49,9 +49,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         (data, action) = self.strategy.handle_packet(request.data)
 
         if self.keep_log:
-            # TODO integrate peer_from_port and peer_to_port when functionality becomes available
             self.logger.log_action(
-                action=action, from_port=60000, to_port=60001, data=data
+                action=action,
+                from_port=request.from_port,
+                to_port=request.to_port,
+                data=data,
             )
 
         return packet_pb2.PacketAck(data=data, action=action)

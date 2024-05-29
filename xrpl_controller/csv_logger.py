@@ -42,6 +42,9 @@ class CSVLogger:
 
         Args:
             row (list[str]): row.
+
+        Raises:
+            ValueError: if length of row is not equal to the amount of columns
         """
         if len(self.columns) != len(row):
             raise ValueError(
@@ -60,7 +63,9 @@ class ActionLogger(CSVLogger):
             if filename != ""
             else f"action_log_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.csv"
         )
-        super().__init__(final_filename, action_log_columns, directory="action_logs")
+        super().__init__(
+            filename=final_filename, columns=action_log_columns, directory="action_logs"
+        )
 
     def log_action(self, action: int, from_port: int, to_port: int, data: bytes):
         """
