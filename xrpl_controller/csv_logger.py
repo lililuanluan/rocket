@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import csv
 from typing import Any
+import atexit
 
 from xrpl_controller.core import MAX_U32
 
@@ -25,6 +26,7 @@ class CSVLogger:
         self.writer = csv.writer(self.csv_file)
         self.columns = [col.__str__ for col in columns]
         self.writer.writerow(columns)
+        atexit.register(self.close)
 
     def close(self):
         """Close the CSV file."""
@@ -51,10 +53,14 @@ class CSVLogger:
 class ActionLogger(CSVLogger):
     """CSVLogger child class which is dedicated to handle the logging of actions."""
 
-    def __init__(self):
+    def __init__(self, filename: str = ""):
         """Initialize ActionLogger class."""
-        filename = f"action_log_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.csv"
-        super().__init__(filename, action_log_columns, directory="action_logs")
+        final_filename = (
+            filename
+            if filename != ""
+            else f"action_log_{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}.csv"
+        )
+        super().__init__(final_filename, action_log_columns, directory="action_logs")
 
     def log_action(self, action: int, from_port: int, to_port: int, data: bytes):
         """
