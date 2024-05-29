@@ -3,10 +3,8 @@
 from concurrent import futures
 from typing import List
 
-import csv
-from datetime import datetime
 import grpc
-import os
+from xrpl_controller.csv_logger import ActionLogger
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.validator_node_info import (
@@ -17,8 +15,6 @@ from xrpl_controller.validator_node_info import (
 from xrpl_controller.strategies.strategy import Strategy
 
 HOST = "localhost"
-
-MAX_U32 = 2**32 - 1
 
 
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
@@ -33,14 +29,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             keep_log: whether to keep track of a log containing all actions taken
         """
         self.strategy = strategy
+        self.keep_log = keep_log
         if keep_log:
-            # File name format is: execution_log_[year]_[month]_[day]_[hour (24hr clock)]:[minute].csv
-            file_path = f"../execution_logs/execution_log_{datetime.now().strftime('%Y_%m_%d_%H:%M')}.csv"
-            csv_file = open(file_path, mode="w", newline="")
-            self.writer = csv.writer(csv_file)
-            self.writer.writerow(
-                ["timestamp", "action", "from_port", "to_port", "data"]
-            )
+            self.logger = ActionLogger()
 
     def send_packet(self, request, context):
         """
@@ -57,19 +48,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         (data, action) = self.strategy.handle_packet(request.data)
 
-        self.writer.writerow(
-            [
-                datetime.now(),
-                "Send"
-                if action == 0
-                else "Drop"
-                if action == MAX_U32
-                else "Delay:" + str(action) + "ms",
-                request.from_port,
-                request.to_port,
-                data.hex(),
-            ]
-        )
+        if self.keep_log:
+            # TODO integrate peer_from_port and peer_to_port when functionality becomes available
+            self.logger.log_action(
+                action=action, from_port=60000, to_port=60001, data=data
+            )
 
         return packet_pb2.PacketAck(data=data, action=action)
 

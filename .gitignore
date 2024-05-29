@@ -1,6 +1,6 @@
 .gitlab-ci-local
 
-execution_logs
+logs
 
 # Sphinx
 docs/_build
