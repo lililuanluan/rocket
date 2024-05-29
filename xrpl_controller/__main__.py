@@ -6,5 +6,5 @@ from xrpl_controller.strategies.PacketHandler import PacketHandler
 from .packet_server import serve
 
 if __name__ == "__main__":
-    strategy: Strategy = PacketHandler(0.01, 0.04, 1, 150)
+    strategy: Strategy = PacketHandler(0.01, 0.04, 1, 150, None, None)
     serve(strategy)
