@@ -95,3 +95,17 @@ def serve(strategy: Strategy):
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
+
+
+def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:
+    """
+    This function starts the server and listens for incoming packets.
+
+    Returns: None
+
+    """
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
+    server.add_insecure_port("[::]:50051")
+    server.start()
+    return server

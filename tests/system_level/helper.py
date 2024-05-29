@@ -1,6 +1,8 @@
 """Helper methods to aid in quickly implementing system-level tests."""
 
 import subprocess
+import os
+import stat
 
 from git import Repo
 from loguru import logger
@@ -56,3 +58,23 @@ def start_interceptor() -> None:
     )
     logger.info("packet interceptor started")
     run_process.communicate()
+
+
+def on_exc(func, path, exc_info):
+    """
+    Error handler for ``shutil.rmtree``.
+
+    From: https://stackoverflow.com/a/2656405
+
+    If the error is due to an access error (read only file)
+    it attempts to add write permission and then retries.
+
+    If the error is for another reason it re-raises the error.
+
+    Usage : ``shutil.rmtree(path, onerror=onerror)``
+    """
+    if not os.access(path, os.W_OK):
+        os.chmod(path, stat.S_IWUSR)
+        func(path)
+    else:
+        raise

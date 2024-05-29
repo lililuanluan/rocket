@@ -10,15 +10,15 @@ from asyncio import sleep
 from os import path
 from shutil import rmtree
 from loguru import logger
-from threading import Thread
 
 import xrpl_controller.request_ledger_data as request_ledger_data
 from tests.system_level.base import SystemLevelTest, LivenessFailure, ConsistencyFailure
 from tests.system_level.helper import (
     fetch_node_info,
     start_interceptor,
+    on_exc,
 )
-from xrpl_controller.packet_server import serve
+from xrpl_controller.packet_server import serve_for_automated_tests
 from xrpl_controller.strategies import RandomFuzzer
 
 
@@ -69,15 +69,15 @@ class LivenessTest(SystemLevelTest):
         """The run method containing the test case logic from start to finish."""
         if path.exists(".temp-interceptor"):
             logger.info("'.temp-interceptor' directory exists, removing it...")
-            rmtree(".temp-interceptor")
+            rmtree(".temp-interceptor", onexc=on_exc)
 
         # Random fuzzer which is not random, it will send every packet without delaying or dropping
         strategy: RandomFuzzer = RandomFuzzer(0, 0, 1, 150)
 
-        controller_thread = Thread(target=serve, args=(strategy,))
+        # controller_thread = Thread(target=serve, args=(strategy,))
         interceptor_process = multiprocessing.Process(target=start_interceptor)
 
-        controller_thread.start()
+        server = serve_for_automated_tests(strategy)
         interceptor_process.start()
 
         while len(request_ledger_data.validator_node_list_store) != 2:
@@ -117,5 +117,6 @@ class LivenessTest(SystemLevelTest):
         else:
             logger.info("test passed")
 
-        rmtree(".temp-interceptor")
+        rmtree(".temp-interceptor", onexc=on_exc)
         interceptor_process.kill()
+        server.stop(5)
