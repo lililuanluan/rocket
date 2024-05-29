@@ -1,5 +1,7 @@
 """Core module."""
 
+MAX_U32 = 2**32 - 1
+
 
 def add(x: int, y: int) -> int:
     """
