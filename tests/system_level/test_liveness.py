@@ -25,6 +25,15 @@ from xrpl_controller.strategies import RandomFuzzer
 class LivenessTest(SystemLevelTest):
     """The test case class that tests our software for liveness bugs."""
 
+    def __init__(self, iterations: int = 3) -> None:
+        """
+        Initialize the LivenessTest class.
+
+        Args:
+            iterations: The amount of iterations to run the test for (~15 seconds per iteration)
+        """
+        self.iterations = iterations
+
     def assert_hashes_equal(self, hash_compare: str, node_infos: [dict]) -> None:
         """
         Asserts that the ledger hashes in a list of validator node info dicts are equal to another hash.
@@ -87,10 +96,12 @@ class LivenessTest(SystemLevelTest):
             await sleep(2)
 
         logger.info("waiting 30 seconds for nodes to validate first ledger...")
+
+        # TODO: Figure out a better way to wait for validator nodes
         await sleep(30)
 
         prev_ledger_hash = None
-        for i in range(3):
+        for i in range(self.iterations):
             logger.info(f"starting test iteration {i}")
             await sleep(15)
 
@@ -117,6 +128,6 @@ class LivenessTest(SystemLevelTest):
         else:
             logger.info("test passed")
 
-        rmtree(".temp-interceptor", onexc=on_exc)
         interceptor_process.kill()
+        rmtree(".temp-interceptor", onexc=on_exc)
         server.stop(5)
