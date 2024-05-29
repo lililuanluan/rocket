@@ -64,9 +64,9 @@ def test_partition_network_0():
     strategy.partition_network([[10], [11, 12]])
     assert strategy.network_partitions == [[10], [11, 12]]
     assert strategy.communication_matrix == [
-        [True, False, False],
-        [False, True, True],
-        [False, True, True],
+        [False, False, False],
+        [False, False, True],
+        [False, True, False],
     ]
 
 
@@ -77,9 +77,9 @@ def test_partition_network_1():
     strategy.partition_network([[10, 11, 12]])
     assert strategy.network_partitions == [[10, 11, 12]]
     assert strategy.communication_matrix == [
-        [True, True, True],
-        [True, True, True],
-        [True, True, True],
+        [False, True, True],
+        [True, False, True],
+        [True, True, False],
     ]
 
 
@@ -90,9 +90,9 @@ def test_partition_network_2():
     strategy.partition_network([[10], [11], [12]])
     assert strategy.network_partitions == [[10], [11], [12]]
     assert strategy.communication_matrix == [
-        [True, False, False],
-        [False, True, False],
-        [False, False, True],
+        [False, False, False],
+        [False, False, False],
+        [False, False, False],
     ]
 
 
@@ -128,4 +128,5 @@ def test_apply_partition():
     assert strategy.apply_network_partition(0, 10, 12) == MAX_U32
     assert strategy.apply_network_partition(0, 12, 10) == MAX_U32
     assert strategy.apply_network_partition(42, 11, 12) == MAX_U32
-    assert strategy.apply_network_partition(42, 12, 12) == 42
+    assert strategy.apply_network_partition(42, 12, 12) == MAX_U32
+    assert strategy.apply_network_partition(42, 11, 10) == 42

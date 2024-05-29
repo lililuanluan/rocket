@@ -49,11 +49,14 @@ class Strategy(ABC):
         ]
 
         for partition in partitions:
-            for i in partition:
-                for j in partition:
-                    self.communication_matrix[self.port_dict[i]][self.port_dict[j]] = (
-                        True
-                    )
+            for i in range(len(partition)):
+                for j in range(i + 1, len(partition)):
+                    self.communication_matrix[self.port_dict[partition[i]]][
+                        self.port_dict[partition[j]]
+                    ] = True
+                    self.communication_matrix[self.port_dict[partition[j]]][
+                        self.port_dict[partition[i]]
+                    ] = True
 
     def apply_network_partition(
         self, action: int, peer_from_port: int, peer_to_port: int
