@@ -128,5 +128,12 @@ def test_apply_partition():
     assert strategy.apply_network_partition(0, 10, 12) == MAX_U32
     assert strategy.apply_network_partition(0, 12, 10) == MAX_U32
     assert strategy.apply_network_partition(42, 11, 12) == MAX_U32
-    assert strategy.apply_network_partition(42, 12, 12) == MAX_U32
+
+    # Test whether exception gets raised when ports are equal
+    try:
+        assert strategy.apply_network_partition(42, 12, 12) == MAX_U32
+        assert False
+    except ValueError:
+        pass
+
     assert strategy.apply_network_partition(42, 11, 10) == 42

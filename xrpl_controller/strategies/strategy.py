@@ -72,7 +72,18 @@ class Strategy(ABC):
         Returns:
             int: An action represented as integer which is either the original action
             or the integer value representing the 'drop' action
+
+        Raises:
+            ValueError: If peer_from_port is equal to peer_to_port
         """
+        if peer_from_port == peer_to_port:
+            raise ValueError(
+                (
+                    "Sending port should not be the same as receiving port. "
+                    f"from_port == to_port == {peer_from_port}"
+                )
+            )
+
         return (
             action
             if self.communication_matrix[self.port_dict[peer_from_port]][
