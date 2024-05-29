@@ -54,7 +54,7 @@ class Strategy(ABC):
 
     def apply_network_partition(
         self, action: int, peer_from_port: int, peer_to_port: int
-    ):
+    ) -> int:
         """
         Apply the network partition to an action with its related ports.
 
@@ -62,6 +62,10 @@ class Strategy(ABC):
             action (int): The action to apply the network partition on.
             peer_from_port (int): The peer port from where the message was sent.
             peer_to_port (int): The peer port to where the message was sent.
+
+        Returns:
+        int: An action represented as integer which is either
+             the original action or the integer value of the 'drop' action
         """
         return (
             action
