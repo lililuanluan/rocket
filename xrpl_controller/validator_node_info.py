@@ -59,7 +59,7 @@ class SocketAddress:
         Makes an URL of the SocketAddress.
 
         Returns:
-        str: An URL as string.
+            str: An URL as string.
         """
         return f"{self.host}:{self.port}"
 

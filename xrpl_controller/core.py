@@ -4,7 +4,7 @@
 MAX_U32 = 2**32 - 1
 
 
-def flatten(xss: list[list[int]]) -> list:
+def flatten(xss: list[list[int]]) -> list[int]:
     """
     Flatten a 2D list.
 
@@ -12,6 +12,6 @@ def flatten(xss: list[list[int]]) -> list:
         xss: A 2D integer list to be flattened.
 
     Returns:
-    A flattened list.
+        list[int]: A flattened list.
     """
     return [x for xs in xss for x in xs]

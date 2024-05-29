@@ -38,9 +38,20 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             request: packet containing intercepted data
             context: grpc context
 
-        Returns: the possibly modified packet and an action
+        Returns:
+            the possibly modified packet and an action
 
+        Raises:
+            ValueError: if from_port == to_port
         """
+        if request.from_port == request.to_port:
+            raise ValueError(
+                (
+                    "Sending port should not be the same as receiving port. "
+                    f"from_port == to_port == {request.from_port}"
+                )
+            )
+
         (data, action) = self.strategy.handle_packet(request.data)
         action = (
             self.strategy.apply_network_partition(
@@ -56,11 +67,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         This function receives the validator node info from the interceptor and passes it to the controller.
 
         Args:
-            request_iterator: iterator of validator node info
-            context: grpc context
+            request_iterator: Iterator of validator node info.
+            context: grpc context.
 
-        Returns: an acknowledgement
-
+        Returns:
+            ValidatorNodeInfoAck: An acknowledgement.
         """
         validator_node_list: List[ValidatorNode] = []
         for request in request_iterator:
@@ -97,12 +108,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
 
 def serve(strategy: Strategy):
-    """
-    This function starts the server and listens for incoming packets.
-
-    Returns: None
-
-    """
+    """This function starts the server and listens for incoming packets."""
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")

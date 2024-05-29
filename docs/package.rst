@@ -14,6 +14,13 @@ Core
         :members:
 
 
+-------------
+Packet Sender
+-------------
+
+    .. automodule:: xrpl_controller.packet_server
+        :members:
+
 --------------------
 Validator Node Info
 --------------------
