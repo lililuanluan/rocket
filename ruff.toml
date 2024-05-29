@@ -2,8 +2,22 @@ extend-exclude = ["docs/*", "protos/*"]
 
 [lint]
 # Enable enforcing docstring comments
-extend-select = ["D"]
-ignore = ["D211", "D212", "D400"]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    "D",
+]
+ignore = ["D211", "D212", "D400", "E501", "SIM115"]
 
 [lint.pydocstyle]
 convention = "google"

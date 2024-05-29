@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 
 
-class TestFailure(object):
+class TestFailure:
     """Base class for test failures."""
 
     def __init__(self, failure_description: str):

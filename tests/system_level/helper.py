@@ -1,8 +1,8 @@
 """Helper methods to aid in quickly implementing system-level tests."""
 
-import subprocess
 import os
 import stat
+import subprocess
 
 from git import Repo
 from loguru import logger
@@ -30,7 +30,12 @@ async def fetch_node_info(ws_port: int) -> dict:
 
 
 def start_interceptor() -> None:
-    """Clone the network interceptor repository, build it and run it. This function blocks."""
+    """
+    Starts the network interceptor.
+
+    Clone the network interceptor repository,
+    build it and run it. This function blocks execution.
+    """
     logger.info("cloning interceptor repository")
     Repo.clone_from(
         "git@gitlab.ewi.tudelft.nl:cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet"
@@ -42,8 +47,7 @@ def start_interceptor() -> None:
     build_process = subprocess.run(
         "cargo build",
         shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         cwd=".temp-interceptor",
     )
     build_process.check_returncode()

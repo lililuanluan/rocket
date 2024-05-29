@@ -1,4 +1,8 @@
-"""Entry point of the system-level test suite, run with `python -m tests.system_level`."""
+"""
+Entry point of the system-level test suite.
+
+Run with `python -m tests.system_level`.
+"""
 
 import asyncio
 

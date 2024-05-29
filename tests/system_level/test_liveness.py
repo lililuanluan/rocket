@@ -1,7 +1,8 @@
 """
 A system-level test case.
 
-This test case checks whether the XRPL validator network is able to validate new ledgers with our software in between
+This test case checks whether the XRPL validator network is able to validate new ledgers
+with our software in between
 """
 
 import asyncio
@@ -9,14 +10,15 @@ import multiprocessing
 from asyncio import sleep
 from os import path
 from shutil import rmtree
+
 from loguru import logger
 
 import xrpl_controller.request_ledger_data as request_ledger_data
-from tests.system_level.base import SystemLevelTest, LivenessFailure, ConsistencyFailure
+from tests.system_level.base import ConsistencyFailure, LivenessFailure, SystemLevelTest
 from tests.system_level.helper import (
     fetch_node_info,
-    start_interceptor,
     on_exc,
+    start_interceptor,
 )
 from xrpl_controller.packet_server import serve_for_automated_tests
 from xrpl_controller.strategies import RandomFuzzer
@@ -30,13 +32,17 @@ class LivenessTest(SystemLevelTest):
         Initialize the LivenessTest class.
 
         Args:
-            iterations: The amount of iterations to run the test for (~15 seconds per iteration)
+            iterations: The amount of iterations to run the test for
+                        (~15 seconds per iteration)
         """
         self.iterations = iterations
 
     def assert_hashes_equal(self, hash_compare: str, node_infos: [dict]) -> None:
         """
-        Asserts that the ledger hashes in a list of validator node info dicts are equal to another hash.
+        Asserts a hash is equal to all hashes in a dict[].
+
+        Asserts that the ledger hashes in a list of validator
+        node info dicts are equal to another hash.
 
         Args:
             hash_compare: The hash that needs to be compared
