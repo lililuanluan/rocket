@@ -6,6 +6,7 @@ from typing import List
 import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
+from xrpl_controller.core import validate_ports
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.strategy import Strategy
@@ -47,23 +48,25 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             the possibly modified packet and an action
 
         Raises:
-            ValueError: if from_port == to_port
+            ValueError: if request.from_port == request.to_port
         """
-        if request.from_port == request.to_port:
-            raise ValueError(
-                "Sending port should not be the same as receiving port. "
-                f"from_port == to_port == {request.from_port}"
-            )
+        validate_ports(request.from_port, request.to_port)
 
-        (data, action) = self.strategy.handle_packet(request.data)
-
-        action = (
-            self.strategy.apply_network_partition(
-                action, request.from_port, request.to_port
-            )
-            if self.strategy.auto_partition
-            else action
-        )
+        if (
+            self.strategy.auto_parse
+            and self.strategy.parse_message(
+                request.from_port, request.to_port, request.data
+            )[0]
+        ):
+            (data, action) = self.strategy.parse_message(
+                request.from_port, request.to_port, request.data
+            )[1]
+        else:
+            (data, action) = self.strategy.handle_packet(request.data)
+            if self.strategy.auto_partition:
+                action = self.strategy.apply_network_partition(
+                    action, request.from_port, request.to_port
+                )
 
         if self.keep_log:
             self.logger.log_action(

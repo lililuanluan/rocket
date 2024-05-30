@@ -15,3 +15,20 @@ def flatten(xss: list[list[int]]) -> list[int]:
         list[int]: A flattened list.
     """
     return [x for xs in xss for x in xs]
+
+
+def validate_ports(port_1: int, port_2: int):
+    """
+    Validate whether 2 ports are not equal to each other.
+
+    Args:
+        port_1: Port 1
+        port_2: Port 2
+
+    Raises:
+        ValueError: if the ports are equal.
+    """
+    if port_1 == port_2:
+        raise ValueError(
+            f"Received ports can not be equal to each other, value: {port_1}."
+        )
