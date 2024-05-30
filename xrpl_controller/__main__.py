@@ -6,3 +6,4 @@ from .packet_server import serve
 if __name__ == "__main__":
     strategy: Strategy = RandomFuzzer(0.01, 0.04, 1, 150)
     serve(strategy)
+    print("Controller Module started.")

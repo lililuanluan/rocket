@@ -59,7 +59,7 @@ class SocketAddress:
         Makes an URL of the SocketAddress.
 
         Returns:
-        str: An URL as string.
+            str: An URL as string.
         """
         return f"{self.host}:{self.port}"
 
@@ -73,6 +73,7 @@ class ValidatorNode:
 
     def __init__(
         self,
+        peer: SocketAddress,
         ws_public: SocketAddress,
         ws_admin: SocketAddress,
         rpc: SocketAddress,
@@ -82,11 +83,13 @@ class ValidatorNode:
         Initializes a new ValidatorNode object.
 
         Args:
+            peer: the socket address fot the Peer connection
             ws_public: the socket address for the public WebSocket connection.
             ws_admin: the socket address for the admin WebSocket connection.
             rpc: the socket address for Json-RPC requests.
             validator_key_data: the validator data of this node
         """
+        self.peer = peer
         self.ws_public = ws_public
         self.ws_private = ws_admin
         self.rpc = rpc
@@ -95,6 +98,6 @@ class ValidatorNode:
     @override
     def __str__(self):
         return (
-            f"ValidatorNode(ws_public={self.ws_public}, ws_private={self.ws_private}, "
+            f"ValidatorNode(peer={self.peer}, ws_public={self.ws_public}, ws_private={self.ws_private}, "
             f"rpc={self.rpc}, validator_key_data={self.validator_key_data})"
         )
