@@ -107,3 +107,5 @@ The user can apply partitions manually by using
 `self.apply_network_partition(action: int, peer_from_port: int, peer_to_port: int)` which will transform an arbitrary action to a `drop` action when `peer_from_port` is not in the same partition as `peer_to_port`.
 Any other network partition-related field should not be modified by the user themselves. Custom partitions can be realized by modifying the boolean matrix `self.communication_matrix`, although it is not recommended to do so manually.
 
+### System-level Automated Testing
+We have included some system-level automated tests. These can be run using `python -m tests.system_level`. Make sure Docker is running before you start the tests, to ensure correct execution.
