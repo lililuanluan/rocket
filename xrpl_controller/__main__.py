@@ -1,6 +1,7 @@
 """Entry point of the application, run with python -m xrpl_controller."""
 
-from xrpl_controller.strategies import Strategy, RandomFuzzer
+from xrpl_controller.strategies import RandomFuzzer, Strategy
+
 from .packet_server import serve
 
 if __name__ == "__main__":

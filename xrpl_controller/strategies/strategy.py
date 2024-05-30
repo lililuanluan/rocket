@@ -1,10 +1,10 @@
 """This module is responsible for defining the Strategy interface."""
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Dict
-from xrpl_controller.core import flatten
+from typing import Dict, List, Tuple
+
+from xrpl_controller.core import MAX_U32, flatten
 from xrpl_controller.validator_node_info import ValidatorNode
-from xrpl_controller.core import MAX_U32
 
 
 class Strategy(ABC):
@@ -78,10 +78,8 @@ class Strategy(ABC):
         """
         if peer_from_port == peer_to_port:
             raise ValueError(
-                (
-                    "Sending port should not be the same as receiving port. "
-                    f"from_port == to_port == {peer_from_port}"
-                )
+                "Sending port should not be the same as receiving port. "
+                f"from_port == to_port == {peer_from_port}"
             )
 
         return (

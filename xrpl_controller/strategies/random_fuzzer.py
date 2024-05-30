@@ -1,11 +1,10 @@
 """This module contains the class that implements a random fuzzer."""
 
 import random
-import sys
 from typing import Tuple
 
-from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.core import MAX_U32
+from xrpl_controller.strategies.strategy import Strategy
 
 
 class RandomFuzzer(Strategy):

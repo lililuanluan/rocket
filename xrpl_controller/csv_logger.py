@@ -1,13 +1,13 @@
 """CSVLogger class."""
 
+import atexit
+import csv
 from datetime import datetime
 from pathlib import Path
-from xrpl_controller.validator_node_info import ValidatorNode
-import csv
 from typing import Any
-import atexit
 
 from xrpl_controller.core import MAX_U32
+from xrpl_controller.validator_node_info import ValidatorNode
 
 action_log_columns = ["timestamp", "action", "from_port", "to_port", "data"]
 

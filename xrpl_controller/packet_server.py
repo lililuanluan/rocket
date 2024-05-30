@@ -1,19 +1,19 @@
 """This module is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
 from concurrent import futures
-
 from typing import List
 
 import grpc
-from xrpl_controller.csv_logger import ActionLogger
+
 from protos import packet_pb2, packet_pb2_grpc
+from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
-from xrpl_controller.validator_node_info import (
-    ValidatorNode,
-    ValidatorKeyData,
-    SocketAddress,
-)
 from xrpl_controller.strategies.strategy import Strategy
+from xrpl_controller.validator_node_info import (
+    SocketAddress,
+    ValidatorKeyData,
+    ValidatorNode,
+)
 
 HOST = "localhost"
 
@@ -51,10 +51,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         if request.from_port == request.to_port:
             raise ValueError(
-                (
-                    "Sending port should not be the same as receiving port. "
-                    f"from_port == to_port == {request.from_port}"
-                )
+                "Sending port should not be the same as receiving port. "
+                f"from_port == to_port == {request.from_port}"
             )
 
         (data, action) = self.strategy.handle_packet(request.data)
@@ -144,3 +142,17 @@ def serve(strategy: Strategy, keep_log: bool = True):
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
+
+
+def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:
+    """
+    This function starts the server and listens for incoming packets.
+
+    Returns: None
+
+    """
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
+    server.add_insecure_port("[::]:50051")
+    server.start()
+    return server

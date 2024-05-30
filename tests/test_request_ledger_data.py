@@ -1,14 +1,14 @@
 """Test request_ledger_data.py."""
 
+import io
 import unittest
 from unittest.mock import patch
-import io
 
 from xrpl_controller import request_ledger_data
 from xrpl_controller.validator_node_info import (
-    ValidatorNode,
     SocketAddress,
     ValidatorKeyData,
+    ValidatorNode,
 )
 
 node = ValidatorNode(

@@ -1,9 +1,9 @@
 """Tests for ValidatorNode class."""
 
 from xrpl_controller.validator_node_info import (
-    ValidatorNode,
-    ValidatorKeyData,
     SocketAddress,
+    ValidatorKeyData,
+    ValidatorNode,
 )
 
 node = ValidatorNode(

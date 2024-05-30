@@ -37,7 +37,7 @@ def test_init_invalid_sum_0():
     """Test whether probabilities sum to at most 1."""
     try:
         RandomFuzzer(0.4, 0.61, 0, 0)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -46,7 +46,7 @@ def test_init_invalid_sum_1():
     """Test whether probabilities sum to at most 1. Overflow caused by drop_probability."""
     try:
         RandomFuzzer(1.001, 0, 0, 0)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -55,7 +55,7 @@ def test_init_invalid_sum_2():
     """Test whether probabilities sum to at most 1. Overflow caused by delay_probability."""
     try:
         RandomFuzzer(0, 2.0, 0, 0)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -64,7 +64,7 @@ def test_init_negative_drop():
     """Test whether drop probability is non-negative."""
     try:
         RandomFuzzer(-0.001, 0.5, 0, 0)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -73,7 +73,7 @@ def test_init_negative_delay():
     """Test whether delay probability is non-negative."""
     try:
         RandomFuzzer(0.5, -1, 0, 0)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -82,7 +82,7 @@ def test_init_negative_min_delay():
     """Test whether min_delay_ms is non-negative."""
     try:
         RandomFuzzer(0.5, 0.3, -1, 150)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -91,7 +91,7 @@ def test_init_negative_max_delay():
     """Test whether max_delay_ms is non-negative."""
     try:
         RandomFuzzer(0.5, 0.3, 1, -1)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -100,7 +100,7 @@ def test_init_invalid_range():
     """Test whether min_delay_ms is not greater than max_delay_ms."""
     try:
         RandomFuzzer(0.5, 0.3, 2, 1)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 

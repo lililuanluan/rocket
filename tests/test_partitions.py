@@ -1,10 +1,12 @@
 """Tests for network partitions functionality."""
 
-from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
-from xrpl_controller.validator_node_info import ValidatorNode
-from xrpl_controller.validator_node_info import SocketAddress
-from xrpl_controller.validator_node_info import ValidatorKeyData
 from xrpl_controller.core import MAX_U32
+from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
+from xrpl_controller.validator_node_info import (
+    SocketAddress,
+    ValidatorKeyData,
+    ValidatorNode,
+)
 
 node_0 = ValidatorNode(
     SocketAddress("test_peer", 10),
@@ -102,7 +104,7 @@ def test_partition_network_invalid_partitions():
     strategy.update_network([node_0, node_1, node_2])
     try:
         strategy.partition_network([[10], [12]])
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -113,7 +115,7 @@ def test_partition_network_invalid_amount():
     strategy.update_network([node_0, node_1, node_2])
     try:
         strategy.partition_network([[10], [11, 11, 12]])
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -132,7 +134,7 @@ def test_apply_partition():
     # Test whether exception gets raised when ports are equal
     try:
         assert strategy.apply_network_partition(42, 12, 12) == MAX_U32
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
