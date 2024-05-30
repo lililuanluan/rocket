@@ -19,7 +19,8 @@ class TestFailure:
         """
         Create a string representation of the TestFailure object.
 
-        Returns: the string representation of the TestFailure object.
+        Returns:
+            str: the string representation of the TestFailure object.
         """
         return f"{self.__class__.__name__}('{self.failure_description}')"
 
