@@ -1,26 +1,17 @@
 """Core module."""
 
+# The delay value which indicated a drop. This is the max value of an u32 datatype in Rust.
 MAX_U32 = 2**32 - 1
 
 
-def add(x: int, y: int) -> int:
+def flatten(xss: list[list[int]]) -> list[int]:
     """
-    Add two numbers.
+    Flatten a 2D list.
 
     Args:
-        x: First number.
-        y: Second number.
+        xss: A 2D integer list to be flattened.
 
-    Returns: Result of addition.
+    Returns:
+        list[int]: A flattened list.
     """
-    return x + y
-
-
-def print_hi(name: str) -> None:
-    """
-    Print hi {user}.
-
-    Args:
-        name: User's name.
-    """
-    print(f"Hi, {name}")
+    return [x for xs in xss for x in xs]

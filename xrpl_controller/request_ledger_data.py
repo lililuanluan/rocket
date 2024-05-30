@@ -8,8 +8,12 @@ validator_node_list_store: List[ValidatorNode] = []
 
 
 def store_validator_node_info(validator_node_list: List[ValidatorNode]):
-    """This function stores the validator node info."""
+    """
+    Store validator node info in a global variable.
+
+    Args:
+        validator_node_list: The list of ValidatorNode's to be stored.
+    """
     global validator_node_list_store
     validator_node_list_store = validator_node_list
     print(f"Stored validator node info: {validator_node_list_store}")
-    return

@@ -43,10 +43,27 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             request: packet containing intercepted data
             context: grpc context
 
-        Returns: the possibly modified packet and an action
+        Returns:
+            the possibly modified packet and an action
 
+        Raises:
+            ValueError: if from_port == to_port
         """
+        if request.from_port == request.to_port:
+            raise ValueError(
+                "Sending port should not be the same as receiving port. "
+                f"from_port == to_port == {request.from_port}"
+            )
+
         (data, action) = self.strategy.handle_packet(request.data)
+
+        action = (
+            self.strategy.apply_network_partition(
+                action, request.from_port, request.to_port
+            )
+            if self.strategy.auto_partition
+            else action
+        )
 
         if self.keep_log:
             self.logger.log_action(
@@ -63,16 +80,20 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         This function receives the validator node info from the interceptor and passes it to the controller.
 
         Args:
-            request_iterator: iterator of validator node info
-            context: grpc context
+            request_iterator: Iterator of validator node info.
+            context: grpc context.
 
-        Returns: an acknowledgement
-
+        Returns:
+            ValidatorNodeInfoAck: An acknowledgement.
         """
         validator_node_list: List[ValidatorNode] = []
         for request in request_iterator:
             validator_node_list.append(
                 ValidatorNode(
+                    peer=SocketAddress(
+                        host=HOST,
+                        port=request.peer_port,
+                    ),
                     ws_public=SocketAddress(
                         host=HOST,
                         port=request.ws_public_port,
@@ -95,6 +116,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 )
             )
         store_validator_node_info(validator_node_list)
+        self.strategy.update_network(validator_node_list)
 
         if self.keep_log:
             if (
