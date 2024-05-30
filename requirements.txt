@@ -42,3 +42,7 @@ virtualenv==20.26.1
 xrpl-py==2.5.0
 grpcio==1.63.0
 grpcio-tools==1.63.0
+
+base58~=2.1.1
+ecdsa~=0.19.0
+cryptography~=42.0.7

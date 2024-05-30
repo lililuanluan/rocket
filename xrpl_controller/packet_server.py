@@ -41,7 +41,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         """
         (data, action) = self.strategy.handle_packet(
-            request.data,
+            request
         )
         return packet_pb2.PacketAck(data=data, action=action)
 

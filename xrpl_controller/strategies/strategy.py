@@ -3,12 +3,14 @@
 from abc import ABC, abstractmethod
 from typing import Tuple
 
+from protos import packet_pb2
+
 
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
     @abstractmethod
-    def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
+    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """
         This method is responsible for returning a possibly mutated packet and an action.
 

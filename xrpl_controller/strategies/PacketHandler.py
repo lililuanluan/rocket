@@ -1,8 +1,10 @@
 """This module contains the class that implements a random fuzzer."""
-import json
+import hashlib
 import struct
+import random
 from typing import Tuple
 from typing import List
+from ecdsa import SigningKey, SECP256k1
 
 import base58
 from cryptography.hazmat.backends import default_backend
@@ -79,9 +81,10 @@ class PacketHandler(Strategy):
         Returns:
         Tuple[bytes, int]: the new packet and the random action.
         """
+        print("\n")
         print(f"Received packet: {packet}")
 
-
+        print("\n")
         length = struct.unpack("!I", packet[:4])[0]
         print(f"Message length: {length}")
 
@@ -130,68 +133,211 @@ class PacketHandler(Strategy):
 
             message = message_class()
             message.ParseFromString(message_payload)
+            print("\n")
             print(f"Message type: {message_class}")
             print(f"Deserialized message: {message}")
 
-            if message_type == 31:  # TMGetLedger
-                message.ledgerSeq = 123456
-                print(f"Ledger seq changed with message original: {message}")
+            if message_type == 33:  # TMGetLedger
+                message.currentTxHash = bytes.fromhex("e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c")
+                print(f"Tx Hash changed with message original: {message}")
 
-            modified_payload = message.SerializeToString()
 
-            modified_packet = (
-                    struct.pack("!I", length)
-                    + struct.pack("!H", message_type)
-                    + modified_payload
-            )
+                def sha512_first_half(data: bytes) -> bytes:
+                    hash_bytes = hashlib.sha512(data).digest()
+                    return hash_bytes[:32]
 
-            print(f"Modified packet: {modified_packet}")
+                def sign_message(hash_bytes: bytes, private_key: bytes) -> bytes:
+                    algo = SECP256k1.lib.secp256k1_context_create(SECP256k1.ALL_FLAGS)
+                    priv_key = SECP256k1.PrivateKey(private_key, raw=True)
+                    message = SECP256k1.lib.secp256k1_ecdsa_signature_parse_der(
+                        algo, hash_bytes, len(hash_bytes)
+                    )
+                    signature = priv_key.ecdsa_sign(hash_bytes, raw=True)
+                    signature_der = SECP256k1.lib.secp256k1_ecdsa_signature_serialize_der(
+                        algo, signature, None, 0
+                    )
+                    SECP256k1.lib.secp256k1_context_destroy(algo)
+                    return bytes(signature_der)
 
-            modified_length = struct.unpack("!I", modified_packet[:4])[0]
-            print(f"Changed Message length: {modified_length}")
+                hash_bytes = sha512_first_half(
+                    b"".join([
+                        b"\x50\x52\x50\x00",
+                        message.closeTime.to_bytes(4, "big"),
+                        message.previousledger,
+                        message.currentTxHash,
+                    ])
+                )
 
-            modified_message_type = struct.unpack("!H", modified_packet[4:6])[0]
-            print(f"Changed Message type: {modified_message_type}")
-            modified_message_payload = modified_packet[6:]
-            print(f"Changed Message data: {modified_message_payload}")
-
-            if modified_message_type in message_type_map:
-                message_class = message_type_map[modified_message_type]
-
-                message = message_class()
-                message.ParseFromString(modified_message_payload)
-                print(f" same Message type: {message_class}")
-                print(f" changed Deserialized message: {message}")
-
-                if(modified_message_payload == message_payload):
-                    print(f"They are the same")
-                else:
-                    print(f"They are different")
-
-                if(modified_payload == message_payload):
-                    print(f"They are the same2")
-                else:
-                    print(f"They are different2")
+                priv_key = base58.b58decode(self.private_key)
+                signature = sign_message(hash_bytes, priv_key[1:33])
 
 
 
+                # Create an ECDSA signing key from the private key
 
+
+                message.signature = signature
+                message_bytes = message.SerializeToString()
+
+                print(f"Message bytes: {message_bytes}")
+                print(f"Signature final: {signature}")
         else:
             print(f"Unknown message type: {message_type}")
-            modified_packet = packet
 
-        # Example of modifying binary data
+        return packet,0
 
 
-        binary_data = bytearray(modified_packet)
-        print(
-            f"This is the original bytes with arbitary parts for type 31: {binary_data}"
-        )
+        #     modified_packet = (
+        #             struct.pack("!I", length)
+        #             + struct.pack("!H", message_type)
+        #             + modified_payload
+        #     )
+        #
+        #     print(f"Modified packet: {modified_packet}")
+        #     print("\n")
+        #
+        #     modified_length = struct.unpack("!I", modified_packet[:4])[0]
+        #     print(f"Changed Message length: {modified_length}")
+        #
+        #     modified_message_type = struct.unpack("!H", modified_packet[4:6])[0]
+        #     print(f"Changed Message type: {modified_message_type}")
+        #     print("\n")
+        #     modified_message_payload = modified_packet[6:]
+        #     print(f"Changed Message data: {modified_message_payload}")
+        #
+        #     if modified_message_type in message_type_map:
+        #         message_class = message_type_map[modified_message_type]
+        #
+        #         message = message_class()
+        #         message.ParseFromString(modified_message_payload)
+        #         print("\n")
+        #         print(f" same Message type: {message_class}")
+        #         print(f" changed Deserialized message: {message}")
+        #         print("\n")
+        #
+        #         if(modified_message_payload == message_payload):
+        #
+        #             print(f"They are the same")
+        #         else:
+        #             print(f"They are different")
+        #
+        #         if(modified_payload == message_payload):
+        #             print(f"They are the same2")
+        #         else:
+        #             print(f"They are different2")
+        #         if(modified_payload == modified_message_payload):
+        #             print(f"They are the same3")
+        #         else:
+        #             print(f"They are different3")
+        #
+        #         print("\n")
+        #
+        #
+        #
+        #
+        # else:
+        #     print(f"Unknown message type: {message_type}")
+        #     modified_packet = packet
+        #
+        # # Example of modifying binary data
+        #
+        # modified_message_payload = modified_packet[6:]
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        # binary_data = bytearray(modified_message_payload)
+        # original_data = binary_data
+        # print(f"This is the original bytes with arbitary parts for type 31: {binary_data}")
+        # print(f"This is the orig length {len(binary_data)}")
+        # print("\n")
+        # data_length = len(binary_data)
+        # changes = 10
+        #
+        # for _ in range(changes):
+        #     # Select a random index within the packet
+        #     index = random.randint(0, data_length - 1)
+        #
+        #     # Apply an arbitrary modification (e.g., XOR with a random value)
+        #     binary_data[index] ^= 0xFF
+        #
+        #
+        #
+        #
+        #
+        # print(
+        #     f"This is the modified bytes with arbitary parts for type 31: {binary_data}"
+        # )
+        # print(f"This is the modified length {len(binary_data)}")
+        # print("\n")
+        #
+        # bytes_packet_changed = (
+        #         struct.pack("!I", length)
+        #         + struct.pack("!H", message_type)
+        #         + bytes(binary_data)
+        # )
+        #
+        # print(f"Modified bytes packet: {bytes_packet_changed}")
+        # print("\n")
+        #
+        #
+        # def sha512_first_half(message: bytes) -> bytes:
+        #     sha512 = hashlib.sha512()
+        #     sha512.update(message)
+        #     full_hash = sha512.digest()
+        #     return full_hash[:32]
+        #
+        #
+        # hash = sha512_first_half(bytes_packet_changed)
+        #
+        # priv_key_bytes = base58.b58decode(self.private_key)
+        # priv_key = priv_key_bytes[1:33]
+        #
+        #
 
-        binary_data[1] ^= 0xFF  # Example: XOR byte at index 10 with 0xFF
-        print(
-            f"This is the modified bytes with arbitary parts for type 31: {binary_data}"
-        )
+        #
+        # signature = sk.sign_deterministic(hash)
+        # print(f"Signature {signature} ")
+        #
+        #
+        # # bytes_packet_changed.set_signature(signature)
+        #
+        #
+        #
+        #
+        #
+        # modified_bytes_length = struct.unpack("!I", bytes_packet_changed[:4])[0]
+        # print(f"Changed Message length of bytes: {modified_bytes_length}")
+        # print(f"Modified bytes length: {len(bytes_packet_changed)}")
+        #
+        # bytes_message_type = struct.unpack("!H", modified_packet[4:6])[0]
+        # print(f"Changed Message bytes type: {bytes_message_type}")
+        # print("\n")
+        # bytes_message_payload = modified_packet[6:]
+        # print(f"Changed Message bytes data: {bytes_message_payload}")
+        #
+        # if bytes_message_type in message_type_map:
+        #     message_class = message_type_map[bytes_message_type]
+        #
+        #     message = message_class()
+        #     message.ParseFromString(modified_message_payload)
+        #     print("\n")
+        #     print(f" same bytes Message type: {message_class}")
+        #     print(f" changed bytes Deserialized message: {message}")
+        #     print("\n")
+        #
+
+
+            #
+            # return bytes_packet_changed,0
+
+
+
+
+
 
 
 
@@ -237,7 +383,7 @@ class PacketHandler(Strategy):
 
 
 
-        return packet, 0
+
 
         #  ripple_message = self.deserialize_message(message_type, message_payload)
 
