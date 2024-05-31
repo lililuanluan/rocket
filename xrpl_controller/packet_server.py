@@ -9,6 +9,8 @@ from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.strategy import Strategy
+from xrpl_controller.strategies.SpecificPacketHandler import getKeys
+
 from xrpl_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,
@@ -55,8 +57,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 "Sending port should not be the same as receiving port. "
                 f"from_port == to_port == {request.from_port}"
             )
-
-        (data, action) = self.strategy.handle_packet(request.data)
+        (data, action) = self.strategy.handle_packet(request)
 
         action = (
             self.strategy.apply_network_partition(
@@ -126,8 +127,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 self.logger.close()
             self.logger = ActionLogger(validator_node_list)
 
-        self.strategy.getKey(validator_node_list)
+        getKeys(validator_node_list)
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
+
+
 
 
 def serve(strategy: Strategy, keep_log: bool = True):
