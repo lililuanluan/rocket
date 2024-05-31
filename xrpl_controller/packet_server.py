@@ -7,7 +7,7 @@ import grpc
 import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.core import validate_ports
+from xrpl_controller.core import validate_ports, MAX_U32
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.strategy import Strategy
@@ -53,21 +53,21 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         validate_ports(request.from_port, request.to_port)
 
-        if (
-            self.strategy.auto_parse
-            and self.strategy.parse_message(
-                request.from_port, request.to_port, request.data
-            )[0]
-        ):
-            (data, action) = self.strategy.parse_message(
-                request.from_port, request.to_port, request.data
-            )[1]
+        if self.strategy.auto_partition and self.strategy.check_communication(request.from_port, request.to_port):
+            (data, action) = (bytes.fromhex("00000002003d1000"), MAX_U32)
+
         else:
-            (data, action) = self.strategy.handle_packet(request.data)
-            if self.strategy.auto_partition:
-                action = self.strategy.apply_network_partition(
-                    action, request.from_port, request.to_port
-                )
+            if (
+                self.strategy.auto_parse
+                and self.strategy.check_previous_message(
+                    request.from_port, request.to_port, request.data
+                )[0]
+            ):
+                (data, action) = self.strategy.check_previous_message(
+                    request.from_port, request.to_port, request.data
+                )[1]
+            else:
+                (data, action) = self.strategy.handle_packet(request.data)
 
         if self.keep_log:
             self.logger.log_action(
@@ -121,6 +121,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             )
         store_validator_node_info(validator_node_list)
         self.strategy.update_network(validator_node_list)
+        self.strategy.partition_network([[60000, 60001, 60002], [60003]])
 
         if self.keep_log:
             if (

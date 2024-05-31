@@ -11,7 +11,7 @@ from xrpl_controller.validator_node_info import ValidatorNode
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, auto_partition: bool = True, auto_parse: bool = True):
+    def __init__(self, auto_partition: bool = True, keep_prev_messages: bool = False, auto_parse: bool = False):
         """
         Initialize the Strategy interface with needed fields.
 
@@ -24,8 +24,9 @@ class Strategy(ABC):
         self.network_partitions: list[list[int]] = []
         self.port_dict: Dict[int, int] = {}
         self.communication_matrix: list[list[bool]] = []
-        self.message_action_matrix: list[list[MessageAction]] = []
         self.auto_partition = auto_partition
+        self.prev_message_action_matrix: list[list[MessageAction]] = []
+        self.keep_prev_messages = keep_prev_messages
         self.auto_parse = auto_parse
 
     def partition_network(self, partitions: list[list[int]]):
@@ -61,14 +62,13 @@ class Strategy(ABC):
                     self.communication_matrix[idx_1][idx_2] = True
                     self.communication_matrix[idx_2][idx_1] = True
 
-    def apply_network_partition(
-        self, action: int, peer_from_port: int, peer_to_port: int
+    def check_communication(
+        self, peer_from_port: int, peer_to_port: int
     ) -> int:
         """
-        Apply the network partition to an action with its related ports.
+        Check whether 2 ports can communicate with each other.
 
         Args:
-            action (int): The action to apply the network partition on.
             peer_from_port (int): The peer port from where the message was sent.
             peer_to_port (int): The peer port to where the message was sent.
 
@@ -80,13 +80,9 @@ class Strategy(ABC):
             ValueError: If peer_from_port is equal to peer_to_port
         """
         validate_ports(peer_from_port, peer_to_port)
-        return (
-            action
-            if self.communication_matrix[self.port_dict[peer_from_port]][
-                self.port_dict[peer_to_port]
-            ]
-            else MAX_U32
-        )
+        return self.communication_matrix[self.idx(peer_from_port)][
+                self.idx(peer_to_port)
+        ]
 
     def set_message_action(
         self,
@@ -107,13 +103,13 @@ class Strategy(ABC):
             action: The taken action
         """
         validate_ports(peer_from_port, peer_to_port)
-        self.message_action_matrix[self.idx(peer_from_port)][
+        self.prev_message_action_matrix[self.idx(peer_from_port)][
             self.idx(peer_to_port)
         ].set_initial_message(initial_message).set_final_message(
             final_message
         ).set_action(action)
 
-    def parse_message(
+    def check_previous_message(
         self, peer_from_port: int, peer_to_port: int, message: bytes
     ) -> tuple[bool, tuple[bytes, int]]:
         """
@@ -131,7 +127,10 @@ class Strategy(ABC):
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
         """
-        message_action = self.message_action_matrix[self.idx(peer_from_port)][
+        if not self.keep_prev_messages:
+            return False, (b'', -1)
+
+        message_action = self.prev_message_action_matrix[self.idx(peer_from_port)][
             self.idx(peer_to_port)
         ]
         return message == message_action.initial_message, (
@@ -157,6 +156,7 @@ class Strategy(ABC):
         self.communication_matrix = [
             [True for _ in range(self.node_amount)] for _ in range(self.node_amount)
         ]
+
         self.message_action_matrix = [
             [MessageAction() for _ in range(self.node_amount)]
             for _ in range(self.node_amount)
