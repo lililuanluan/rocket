@@ -1,11 +1,13 @@
 """This module is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
+import datetime
 from concurrent import futures
 from typing import List
 
 import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
+from xrpl_controller.core import format_datetime
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.strategy import Strategy
@@ -123,7 +125,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 self.logger is not None
             ):  # Close the previous logger if there was a previous one
                 self.logger.close()
-            self.logger = ActionLogger(validator_node_list)
+            self.logger = ActionLogger(
+                format_datetime(datetime.datetime.now()), validator_node_list
+            )
 
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
