@@ -36,12 +36,16 @@ sphinxcontrib-jsmath==1.0.1
 sphinxcontrib-qthelp==1.0.7
 sphinxcontrib-serializinghtml==1.1.10
 tox==4.15.0
+typing==3.7.4.3
 typing_extensions==4.11.0
 urllib3==2.2.1
 virtualenv==20.26.1
 xrpl-py==2.5.0
 grpcio==1.63.0
 grpcio-tools==1.63.0
+GitPython==3.1.43
+docker==7.1.0
+loguru==0.7.2
 
 base58~=2.1.1
 ecdsa~=0.19.0
