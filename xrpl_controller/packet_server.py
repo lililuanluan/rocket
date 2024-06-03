@@ -23,7 +23,7 @@ HOST = "localhost"
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
     """This class is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
-    def __init__(self, strategy: Strategy, keep_log: bool = True):
+    def __init__(self, strategy: Strategy, keep_log: bool = False):
         """
         Constructor for the PacketService class.
 
@@ -132,7 +132,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 
-def serve(strategy: Strategy, keep_log: bool = True):
+def serve(strategy: Strategy, keep_log: bool = False):
     """
     This function starts the server and listens for incoming packets.
 
