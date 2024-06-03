@@ -31,8 +31,9 @@ def test_columns():
         csv_reader = csv.reader(file)
         first_line = next(csv_reader)
         assert first_line == cols
-        os.remove(path)
-        os.rmdir("./logs/" + test_dir)
+
+    os.remove(path)
+    os.rmdir("./logs/" + test_dir)
 
 
 def test_flush():
@@ -40,16 +41,16 @@ def test_flush():
     cols = ["col1", "col2"]
     logger = CSVLogger("TEST_FLUSH", cols, test_dir)
     logger.flush()
+    logger.close()
 
     path = "./logs/" + test_dir + "/TEST_FLUSH.csv"
     with open(path) as file:
         csv_reader = csv.reader(file)
         first_line = next(csv_reader)
         assert first_line == cols
-        os.remove(path)
-        os.rmdir("./logs/" + test_dir)
 
-    logger.close()
+    os.remove(path)
+    os.rmdir("./logs/" + test_dir)
 
 
 def test_rows():
@@ -82,6 +83,7 @@ def test_wrong_amount():
     except ValueError:
         pass
 
+    logger.close()
     path = "./logs/" + test_dir + "/TEST_INVALID.csv"
     os.remove(path)
     os.rmdir("./logs/" + test_dir)
