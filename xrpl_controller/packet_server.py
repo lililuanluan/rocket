@@ -8,8 +8,9 @@ import grpc
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
-from xrpl_controller.strategies.strategy import Strategy
-from xrpl_controller.strategies.SpecificPacketHandler import getKeys
+from xrpl_controller.strategies.Decoder import checkList
+# from xrpl_controller.strategies.strategy import Strategy
+# from xrpl_controller.strategies.SpecificPacketHandler import getKeys
 
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -75,6 +76,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 data=data,
             )
 
+        print(f"data being sent {data}")
         return packet_pb2.PacketAck(data=data, action=action)
 
     def send_validator_node_info(self, request_iterator, context):
@@ -127,7 +129,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 self.logger.close()
             self.logger = ActionLogger(validator_node_list)
 
-        getKeys(validator_node_list)
+        checkList(validator_node_list)
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 
