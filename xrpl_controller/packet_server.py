@@ -142,12 +142,16 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         with open("network-config.toml", "rb") as f:
             config = tomllib.load(f)
 
+        partition_list: List[List[int]] = config.get("network_partition")
+        partitions = map(lambda x: packet_pb2.Partition(nodes=x), partition_list)
+
         return packet_pb2.Config(
             base_port_peer=config.get("base_port_peer"),
             base_port_ws=config.get("base_port_ws"),
             base_port_ws_admin=config.get("base_port_ws_admin"),
             base_port_rpc=config.get("base_port_rpc"),
             number_of_nodes=config.get("number_of_nodes"),
+            partitions=partitions,
         )
 
 

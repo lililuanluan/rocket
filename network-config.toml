@@ -14,4 +14,12 @@ base_port_ws_admin = 62000
 base_port_rpc = 63000
 
 # The number of validator nodes to configure and start
-number_of_nodes = 2
+number_of_nodes = 3
+
+# A 2-dimensional array containing the groups of node indices that should be connected
+# to each other. Some examples for 3 nodes:
+# [[0, 1, 2]] -> base config, all nodes in the same group and thus connected
+# [[0, 1], [1, 2]] -> 1 partition, node 0 <-> node 1 | node 1 <-> node 2 | node 0 <-X-> node 2
+# All nodes have a direct connection except node 0 and node 2.
+#
+network_partition = [[0, 1, 2]]
