@@ -53,21 +53,24 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         validate_ports(request.from_port, request.to_port)
 
-        if self.strategy.auto_partition and self.strategy.check_communication(request.from_port, request.to_port):
-            (data, action) = (bytes.fromhex("00000002003d1000"), MAX_U32)
-
-        else:
-            if (
-                self.strategy.auto_parse
+        if (self.strategy.auto_parse
                 and self.strategy.check_previous_message(
                     request.from_port, request.to_port, request.data
                 )[0]
-            ):
-                (data, action) = self.strategy.check_previous_message(
-                    request.from_port, request.to_port, request.data
-                )[1]
+        ):
+            print("yes")
+            (data, action) = self.strategy.check_previous_message(
+                request.from_port, request.to_port, request.data
+            )[1]
+        else:
+            if self.strategy.auto_partition and not self.strategy.check_communication(request.from_port,
+                                                                                      request.to_port):
+                (data, action) = (request.data, MAX_U32)
             else:
                 (data, action) = self.strategy.handle_packet(request.data)
+
+            if self.strategy.auto_parse:
+                self.strategy.set_message_action(request.from_port, request.to_port, request.data, data, action)
 
         if self.keep_log:
             self.logger.log_action(
@@ -125,7 +128,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         if self.keep_log:
             if (
-                self.logger is not None
+                    self.logger is not None
             ):  # Close the previous logger if there was a previous one
                 self.logger.close()
             self.logger = ActionLogger(validator_node_list)
