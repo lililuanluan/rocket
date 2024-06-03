@@ -1,0 +1,17 @@
+# The following options define the port numbers to start incrementing from
+# e.g. for a network of 3 validator nodes, and a base_port_peer of 60000
+# the resulting peer ports exposed on the network would be:
+# validator_0 -> 60000
+# validator_1 -> 60001
+# validator_2 -> 60002
+#
+base_port_peer = 60000
+# base_port_ws -> the node's Websocket API starting port
+base_port_ws = 61000
+# base_port_ws_admin -> the node's Websocket API (with admin methods) starting port
+base_port_ws_admin = 62000
+# base_port_rpc -> the node's JSON RPC starting port
+base_port_rpc = 63000
+
+# The number of validator nodes to configure and start
+number_of_nodes = 2
