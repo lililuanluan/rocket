@@ -7,7 +7,7 @@ import grpc
 import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.core import validate_ports, MAX_U32
+from xrpl_controller.core import MAX_U32, validate_ports
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.strategy import Strategy
@@ -53,24 +53,27 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         validate_ports(request.from_port, request.to_port)
 
-        if (self.strategy.auto_parse
-                and self.strategy.check_previous_message(
-                    request.from_port, request.to_port, request.data
-                )[0]
+        if (
+            self.strategy.auto_parse
+            and self.strategy.check_previous_message(
+                request.from_port, request.to_port, request.data
+            )[0]
         ):
-            print("yes")
             (data, action) = self.strategy.check_previous_message(
                 request.from_port, request.to_port, request.data
             )[1]
         else:
-            if self.strategy.auto_partition and not self.strategy.check_communication(request.from_port,
-                                                                                      request.to_port):
+            if self.strategy.auto_partition and not self.strategy.check_communication(
+                request.from_port, request.to_port
+            ):
                 (data, action) = (request.data, MAX_U32)
             else:
                 (data, action) = self.strategy.handle_packet(request.data)
 
             if self.strategy.auto_parse:
-                self.strategy.set_message_action(request.from_port, request.to_port, request.data, data, action)
+                self.strategy.set_message_action(
+                    request.from_port, request.to_port, request.data, data, action
+                )
 
         if self.keep_log:
             self.logger.log_action(
@@ -124,11 +127,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             )
         store_validator_node_info(validator_node_list)
         self.strategy.update_network(validator_node_list)
-        self.strategy.partition_network([[60000, 60001, 60002], [60003]])
 
         if self.keep_log:
             if (
-                    self.logger is not None
+                self.logger is not None
             ):  # Close the previous logger if there was a previous one
                 self.logger.close()
             self.logger = ActionLogger(validator_node_list)

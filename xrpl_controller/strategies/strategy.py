@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
-from xrpl_controller.core import MAX_U32, flatten, validate_ports
+from xrpl_controller.core import flatten, validate_ports
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -11,13 +11,13 @@ from xrpl_controller.validator_node_info import ValidatorNode
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, auto_partition: bool = True, keep_prev_messages: bool = False, auto_parse: bool = False):
+    def __init__(self, auto_partition: bool = True, auto_parse: bool = True):
         """
         Initialize the Strategy interface with needed fields.
 
         Args:
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions. Defaults to True.
-            auto_parse (bool, optional): Whether the strategy will perform same actions on identical messages
+            auto_parse (bool, optional): Whether the strategy will perform same actions on identical messages. Defaults to True.
         """
         self.validator_node_list: List[ValidatorNode] = []
         self.node_amount: int = 0
@@ -25,9 +25,9 @@ class Strategy(ABC):
         self.port_dict: Dict[int, int] = {}
         self.communication_matrix: list[list[bool]] = []
         self.auto_partition = auto_partition
-        self.prev_message_action_matrix: list[list[MessageAction]] = []
-        self.keep_prev_messages = keep_prev_messages
         self.auto_parse = auto_parse
+        if self.auto_parse:
+            self.prev_message_action_matrix: list[list[MessageAction]] = []
 
     def partition_network(self, partitions: list[list[int]]):
         """
@@ -62,9 +62,7 @@ class Strategy(ABC):
                     self.communication_matrix[idx_1][idx_2] = True
                     self.communication_matrix[idx_2][idx_1] = True
 
-    def check_communication(
-        self, peer_from_port: int, peer_to_port: int
-    ) -> int:
+    def check_communication(self, peer_from_port: int, peer_to_port: int) -> int:
         """
         Check whether 2 ports can communicate with each other.
 
@@ -81,7 +79,7 @@ class Strategy(ABC):
         """
         validate_ports(peer_from_port, peer_to_port)
         return self.communication_matrix[self.idx(peer_from_port)][
-                self.idx(peer_to_port)
+            self.idx(peer_to_port)
         ]
 
     def set_message_action(
@@ -127,8 +125,8 @@ class Strategy(ABC):
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
         """
-        if not self.keep_prev_messages:
-            return False, (b'', -1)
+        if not self.auto_parse:
+            return False, (b"", -1)
 
         message_action = self.prev_message_action_matrix[self.idx(peer_from_port)][
             self.idx(peer_to_port)
@@ -157,10 +155,11 @@ class Strategy(ABC):
             [True for _ in range(self.node_amount)] for _ in range(self.node_amount)
         ]
 
-        self.message_action_matrix = [
-            [MessageAction() for _ in range(self.node_amount)]
-            for _ in range(self.node_amount)
-        ]
+        if self.auto_parse:
+            self.prev_message_action_matrix = [
+                [MessageAction() for _ in range(self.node_amount)]
+                for _ in range(self.node_amount)
+            ]
 
     def idx(self, port: int) -> int:
         """
