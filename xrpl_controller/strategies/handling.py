@@ -20,8 +20,6 @@ class Handling(Strategy):
            drop_probability (float): Probability of dropping the packet
            min_delay_ms (float): Minimum delay in milliseconds
            max_delay_ms (float): Maximum delay in milliseconds
-           private_key: Private key of the node
-           validator_list: List of validator nodes
         """
         super().__init__()
         self.send_probability = send_probability
@@ -41,7 +39,7 @@ class Handling(Strategy):
         Returns: Tuple of mutated packet and action
 
         """
-        print(f"packet received: {packet}")
+        print(f"\npacket received: {packet.data!r}\n")
         message, message_type, length, private_key_from = self.decoder.decode_packet(
             packet
         )
@@ -50,13 +48,14 @@ class Handling(Strategy):
             mutated_message_bytes = self.mutator.mutate_packet(
                 message, message_type, private_key_from
             )
-            print(f"\nmutated_message_bytes: {mutated_message_bytes}\n")
+            print(f"\nmutated_message_bytes: {mutated_message_bytes!r}\n")
             # changed_packet = (
             #     struct.pack("!I", length)
             #     + struct.pack("!H", message_type)
             #     + mutated_message_bytes
             # ).Serialise
-            print(f"\nchanged_packet: {packet}\n")
+            print(f"\nchanged_packet: {packet.data!r}\n")
+
             return packet.data, 0
         except Exception:
             print("PAcket is None")

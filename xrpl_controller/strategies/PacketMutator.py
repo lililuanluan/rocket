@@ -35,7 +35,7 @@ class PacketMutator:
         return full_hash[:32]
 
     @staticmethod
-    def sign_message(hash_bytes: bytes, private_key: bytes) -> bytes:
+    def sign_message(hash_bytes: bytes, private_key: bytes):
         """
         Sign the message.
 
