@@ -49,6 +49,11 @@ class PacketServiceStub(object):
                 request_serializer=protos_dot_packet__pb2.ValidatorNodeInfo.SerializeToString,
                 response_deserializer=protos_dot_packet__pb2.ValidatorNodeInfoAck.FromString,
                 _registered_method=True)
+        self.get_config = channel.unary_unary(
+                '/packet.PacketService/get_config',
+                request_serializer=protos_dot_packet__pb2.GetConfig.SerializeToString,
+                response_deserializer=protos_dot_packet__pb2.Config.FromString,
+                _registered_method=True)
 
 
 class PacketServiceServicer(object):
@@ -66,6 +71,12 @@ class PacketServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def get_config(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PacketServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -78,6 +89,11 @@ def add_PacketServiceServicer_to_server(servicer, server):
                     servicer.send_validator_node_info,
                     request_deserializer=protos_dot_packet__pb2.ValidatorNodeInfo.FromString,
                     response_serializer=protos_dot_packet__pb2.ValidatorNodeInfoAck.SerializeToString,
+            ),
+            'get_config': grpc.unary_unary_rpc_method_handler(
+                    servicer.get_config,
+                    request_deserializer=protos_dot_packet__pb2.GetConfig.FromString,
+                    response_serializer=protos_dot_packet__pb2.Config.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -134,6 +150,33 @@ class PacketService(object):
             '/packet.PacketService/send_validator_node_info',
             protos_dot_packet__pb2.ValidatorNodeInfo.SerializeToString,
             protos_dot_packet__pb2.ValidatorNodeInfoAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def get_config(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/packet.PacketService/get_config',
+            protos_dot_packet__pb2.GetConfig.SerializeToString,
+            protos_dot_packet__pb2.Config.FromString,
             options,
             channel_credentials,
             insecure,

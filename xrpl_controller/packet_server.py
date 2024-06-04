@@ -4,6 +4,7 @@ from concurrent import futures
 from typing import List
 
 import grpc
+import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.csv_logger import ActionLogger, CSVLogger
@@ -133,6 +134,32 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         checkList(validator_node_list)
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
+
+    def get_config(self, request, context):
+        """
+        This function sends the config specified in `network-config.toml`, to the interceptor.
+
+        Args:
+            request: The request containing the Config.
+            context: gRPC context.
+
+        Returns:
+            Config: The Config object.
+        """
+        with open("network-config.toml", "rb") as f:
+            config = tomllib.load(f)
+
+        partition_list: List[List[int]] = config.get("network_partition")
+        partitions = map(lambda x: packet_pb2.Partition(nodes=x), partition_list)
+
+        return packet_pb2.Config(
+            base_port_peer=config.get("base_port_peer"),
+            base_port_ws=config.get("base_port_ws"),
+            base_port_ws_admin=config.get("base_port_ws_admin"),
+            base_port_rpc=config.get("base_port_rpc"),
+            number_of_nodes=config.get("number_of_nodes"),
+            partitions=partitions,
+        )
 
 
 def serve(strategy: Strategy, keep_log: bool = True):
