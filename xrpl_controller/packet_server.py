@@ -6,7 +6,7 @@ from typing import List
 import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.csv_logger import ActionLogger
+from xrpl_controller.csv_logger import ActionLogger, CSVLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.Decoder import checkList
 from xrpl_controller.strategies.strategy import Strategy
@@ -35,7 +35,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
         self.keep_log = keep_log
-        self.logger = None
+        self.logger: CSVLogger | None = None
 
     def send_packet(self, request, context):
         """
@@ -79,7 +79,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         print(f"data being sent {data}")
         return packet_pb2.PacketAck(data=data, action=action)
 
-    def send_validator_node_info(self, request_iterator, context):
+    def send_validator_node_info(
+        self, request_iterator, context
+    ) -> packet_pb2.ValidatorNodeInfoAck:
         """
         This function receives the validator node info from the interceptor and passes it to the controller.
 

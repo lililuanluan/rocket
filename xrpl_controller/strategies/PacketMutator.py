@@ -5,7 +5,8 @@ import random
 from typing import List
 
 import base58
-from ecdsa import SECP256k1, SigningKey
+from ecdsa.keys import SigningKey  # type: ignore
+from ecdsa.curves import SECP256k1  # type: ignore
 
 from xrpl_controller.validator_node_info import ValidatorNode
 

@@ -60,5 +60,5 @@ class Handling(Strategy):
             return changed_packet.data, 0
         except Exception:
             print("PAcket is None")
-            print(f"packed data {packet.data}")
+            print(f"packed data {packet.data!r}")
             return packet.data, 0

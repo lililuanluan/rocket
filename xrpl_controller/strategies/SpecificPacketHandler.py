@@ -3,14 +3,14 @@
 import hashlib
 import random
 import struct
-from typing import List, Tuple
-
+from typing import Tuple, List
+from ecdsa.keys import SigningKey # type: ignore
+from ecdsa.curves import SECP256k1 # type: ignore
 import base58
-from ecdsa import SECP256k1, SigningKey
 
-from protos import packet_pb2, ripple_pb2
-from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import ValidatorNode
+from protos import ripple_pb2, packet_pb2
+from xrpl_controller.strategies.strategy import Strategy
 
 MAX_U32 = 2**32 - 1
 validator_node_list_store: List[ValidatorNode] = []
@@ -144,7 +144,7 @@ class SpecificPacketHandler(Strategy):
                     if len(priv_key) != 33:
                         raise ValueError("Invalid private key length")
                     actual_priv_key = priv_key[1:33]
-                except (base58.InvalidBase58Error, ValueError) as e:
+                except ValueError as e:
                     print(f"Error decoding or validating private key: {e}")
                     return packet.data, 0
 

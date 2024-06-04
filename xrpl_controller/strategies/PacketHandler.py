@@ -4,14 +4,14 @@ import hashlib
 import struct
 from typing import List, Tuple
 
-import base58
-import secp256k1
+import base58  # type: ignore
+import secp256k1  # type: ignore
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from google.protobuf import message
 
-from protos import packet_pb2
+from protos import packet_pb2, ripple_pb2
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -73,7 +73,7 @@ class PacketHandler(Strategy):
 
         return "no_key"
 
-    def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
+    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """
         Implements the handle_packet method with a random action.
 
@@ -83,28 +83,28 @@ class PacketHandler(Strategy):
         Returns:
             Tuple[bytes, int]: the new packet and the random action.
         """
-        print("\nReceived packet: {packet}\n")
-        length = struct.unpack("!I", packet[:4])[0]
+        print(f"\nReceived packet: {packet}\n")
+        length = struct.unpack("!I", packet.data[:4])[0]
         print(f"Message length: {length}")
 
-        message_type = struct.unpack("!H", packet[4:6])[0]
-        print(f"Message type: {message_type}")
-        message_payload = packet[6:]
-        print(f"Message data: {message_payload}")
+        message_type = struct.unpack("!H", packet.data[4:6])[0]
+        print(f"Message type: {message_type!r}")
+        message_payload = packet.data[6:]
+        print(f"Message data: {message_payload!r}")
 
         message_type_map = {
-            2: packet_pb2.TMManifests,
-            3: packet_pb2.TMPing,
-            5: packet_pb2.TMCluster,
-            15: packet_pb2.TMEndpoints,
-            30: packet_pb2.TMTransaction,
-            31: packet_pb2.TMGetLedger,
-            32: packet_pb2.TMLedgerData,
-            33: packet_pb2.TMProposeSet,
-            34: packet_pb2.TMStatusChange,
-            35: packet_pb2.TMHaveTransactionSet,
-            41: packet_pb2.TMValidation,
-            42: packet_pb2.TMGetObjectByHash,
+            2: ripple_pb2.TMManifests,
+            3: ripple_pb2.TMPing,
+            5: ripple_pb2.TMCluster,
+            15: ripple_pb2.TMEndpoints,
+            30: ripple_pb2.TMTransaction,
+            31: ripple_pb2.TMGetLedger,
+            32: ripple_pb2.TMLedgerData,
+            33: ripple_pb2.TMProposeSet,
+            34: ripple_pb2.TMStatusChange,
+            35: ripple_pb2.TMHaveTransactionSet,
+            41: ripple_pb2.TMValidation,
+            42: ripple_pb2.TMGetObjectByHash,
         }
 
         self.message_type_name_map = {
@@ -165,14 +165,14 @@ class PacketHandler(Strategy):
                 message_bytes = message.SerializeToString()
 
                 print(f"Message bytes: {message_bytes}")
-                print(f"Signature final: {signature}")
+                print(f"Signature final: {signature!r}")
         else:
             print(f"Unknown message type: {message_type}")
 
-        return packet, 0
+        return packet.data, 0
 
 
-def load_private_key_from_base58(private_key_base58: str) -> rsa.RSAPrivateKey:
+def load_private_key_from_base58(private_key_base58: str) -> rsa.RSAPrivateKey | None:
     """
     Loads a private key from a base58-encoded string.
 
@@ -227,7 +227,7 @@ def sign_message(private_key, message: bytes) -> bytes:
 
 def deserialize_message(
     self, message_type: int, message_data: bytes
-) -> message.Message:
+) -> message.Message | None:
     """
     Implements the DeserializeMessage method with a random action.
 
@@ -239,28 +239,30 @@ def deserialize_message(
     Returns:
         message.Message: The deserialized message.
     """
+    msg = None
     try:
-        if message_type == packet_pb2.mtTRANSACTION:
+        if message_type == ripple_pb2.mtTRANSACTION:
             print("Transaction")
-            msg = packet_pb2.TMTransaction()
+            msg = ripple_pb2.TMTransaction()
             print(f"Message Transaction TMTransaction: {msg}")
-        elif message_type == packet_pb2.mtVALIDATION:
+        elif message_type == ripple_pb2.mtVALIDATION:
             print("Validation")
-            msg = packet_pb2.TMValidation
+            msg = ripple_pb2.TMValidation()
             print(f"Message Validation TMValidation: {msg}")
-        elif message_type == packet_pb2.mtSTATUS_CHANGE:
+        elif message_type == ripple_pb2.mtSTATUS_CHANGE:
             print("Status Change")
-            msg = packet_pb2.TMStatusChange()
+            msg = ripple_pb2.TMStatusChange()
             print(f"Message Status Change TMStatusChange: {msg}")
-        elif message_type == packet_pb2.mtMANIFESTS:
+        elif message_type == ripple_pb2.mtMANIFESTS:
             print("Manifest")
-            msg = packet_pb2.TMManifests()
+            msg = ripple_pb2.TMManifests()
             print(f"Message Manifests TMManifests: {msg}")
-        elif message_type == packet_pb2.mtCLUSTER:
+        elif message_type == ripple_pb2.mtCLUSTER:
             print("Cluster")
-            msg = packet_pb2.TMCluster()
+            msg = ripple_pb2.TMCluster()
             print(f"Message Cluster TMCluster: {msg}")
         else:
             print("Unknown message type")
     except Exception:
         print(f"Error decoding message: {message_type}")
+    return msg
