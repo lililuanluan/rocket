@@ -3,9 +3,10 @@
 import random
 from typing import Tuple
 
+from protos import packet_pb2
 from xrpl_controller.core import MAX_U32
 from xrpl_controller.strategies.strategy import Strategy
-from protos import packet_pb2
+
 
 class RandomFuzzer(Strategy):
     """Class that implements random fuzzer."""

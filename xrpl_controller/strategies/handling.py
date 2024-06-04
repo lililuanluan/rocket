@@ -1,6 +1,5 @@
 """This module contains the class that implements a handling."""
 
-import struct
 from typing import Tuple
 
 from protos import packet_pb2
@@ -42,6 +41,7 @@ class Handling(Strategy):
         Returns: Tuple of mutated packet and action
 
         """
+        print(f"packet received: {packet}")
         message, message_type, length, private_key_from = self.decoder.decode_packet(
             packet
         )
@@ -50,14 +50,14 @@ class Handling(Strategy):
             mutated_message_bytes = self.mutator.mutate_packet(
                 message, message_type, private_key_from
             )
-            print(f"mutated_message_bytes: {mutated_message_bytes}")
-            changed_packet = (
-                struct.pack("!I", length)
-                + struct.pack("!H", message_type)
-                + mutated_message_bytes
-            )
-            print(f"changed_packet: {changed_packet}")
-            return changed_packet.data, 0
+            print(f"\nmutated_message_bytes: {mutated_message_bytes}\n")
+            # changed_packet = (
+            #     struct.pack("!I", length)
+            #     + struct.pack("!H", message_type)
+            #     + mutated_message_bytes
+            # ).Serialise
+            print(f"\nchanged_packet: {packet}\n")
+            return packet.data, 0
         except Exception:
             print("PAcket is None")
             print(f"packed data {packet.data!r}")

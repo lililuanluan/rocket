@@ -3,14 +3,15 @@
 import hashlib
 import random
 import struct
-from typing import Tuple, List
-from ecdsa.keys import SigningKey # type: ignore
-from ecdsa.curves import SECP256k1 # type: ignore
-import base58
+from typing import List, Tuple
 
-from xrpl_controller.validator_node_info import ValidatorNode
-from protos import ripple_pb2, packet_pb2
+import base58
+from ecdsa.curves import SECP256k1  # type: ignore
+from ecdsa.keys import SigningKey  # type: ignore
+
+from protos import packet_pb2, ripple_pb2
 from xrpl_controller.strategies.strategy import Strategy
+from xrpl_controller.validator_node_info import ValidatorNode
 
 MAX_U32 = 2**32 - 1
 validator_node_list_store: List[ValidatorNode] = []

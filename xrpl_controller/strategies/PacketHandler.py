@@ -9,7 +9,6 @@ import secp256k1  # type: ignore
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
-from google.protobuf import message
 
 from protos import packet_pb2, ripple_pb2
 from xrpl_controller.strategies.strategy import Strategy
@@ -223,46 +222,3 @@ def sign_message(private_key, message: bytes) -> bytes:
         hashes.SHA256(),
     )
     return signature
-
-
-def deserialize_message(
-    self, message_type: int, message_data: bytes
-) -> message.Message | None:
-    """
-    Implements the DeserializeMessage method with a random action.
-
-    Args:
-        self: The self that is present
-        message_type (int): Type of the message to be deserialized.
-        message_data (bytes): Data to be deserialized.
-
-    Returns:
-        message.Message: The deserialized message.
-    """
-    msg = None
-    try:
-        if message_type == ripple_pb2.mtTRANSACTION:
-            print("Transaction")
-            msg = ripple_pb2.TMTransaction()
-            print(f"Message Transaction TMTransaction: {msg}")
-        elif message_type == ripple_pb2.mtVALIDATION:
-            print("Validation")
-            msg = ripple_pb2.TMValidation()
-            print(f"Message Validation TMValidation: {msg}")
-        elif message_type == ripple_pb2.mtSTATUS_CHANGE:
-            print("Status Change")
-            msg = ripple_pb2.TMStatusChange()
-            print(f"Message Status Change TMStatusChange: {msg}")
-        elif message_type == ripple_pb2.mtMANIFESTS:
-            print("Manifest")
-            msg = ripple_pb2.TMManifests()
-            print(f"Message Manifests TMManifests: {msg}")
-        elif message_type == ripple_pb2.mtCLUSTER:
-            print("Cluster")
-            msg = ripple_pb2.TMCluster()
-            print(f"Message Cluster TMCluster: {msg}")
-        else:
-            print("Unknown message type")
-    except Exception:
-        print(f"Error decoding message: {message_type}")
-    return msg

@@ -5,8 +5,9 @@ import random
 from typing import List
 
 import base58
-from ecdsa.keys import SigningKey  # type: ignore
+from ecdsa import util  # type: ignore
 from ecdsa.curves import SECP256k1  # type: ignore
+from ecdsa.keys import SigningKey  # type: ignore
 
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -44,8 +45,9 @@ class PacketMutator:
 
         Returns: byte version of key signed
         """
-        signing_key = SigningKey.from_string(private_key, curve=SECP256k1)
-        return signing_key.sign_digest(hash_bytes)
+        sk = SigningKey.from_string(private_key, curve=SECP256k1)
+        signature = sk.sign_digest(hash_bytes, sigencode=util.sigencode_der)
+        return signature
 
     def mutate_packet(self, message, message_type, private_key_from):
         """
@@ -61,7 +63,7 @@ class PacketMutator:
         print("Enter Packet")
         if (
             message_type == 33
-            and random.random() <= 0.05
+            and random.random() <= 1
             and private_key_from != "no private key"
         ):
             message.currentTxHash = bytes.fromhex(
@@ -94,11 +96,11 @@ class PacketMutator:
                 ) from None
 
             signature = self.sign_message(hash_bytes, actual_priv_key)
-            print(f"\nSignature: {signature}")
+            print(f"\nSignature: {signature}\n")
             message.signature = signature
             serialized = message.SerializeToString()
 
-            print(f"\nMessage serialised to string: {serialized}")
+            print(f"\nMessage serialised to string: {serialized}\n")
 
             return serialized
         raise ValueError("Message type is not able to be mutated")
