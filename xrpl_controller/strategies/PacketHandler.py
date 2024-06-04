@@ -1,19 +1,21 @@
+"""This module contains the class that implements a Packet handling."""
+
+import hashlib
 import struct
-import random
-from typing import Tuple, List
-from ecdsa import SigningKey, SECP256k1
+from typing import List, Tuple
 
 import base58
+import secp256k1
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from google.protobuf import message
 
-from xrpl_controller.validator_node_info import ValidatorNode
 from protos import packet_pb2
 from xrpl_controller.strategies.strategy import Strategy
+from xrpl_controller.validator_node_info import ValidatorNode
 
-MAX_U32 = 2 ** 32 - 1
+MAX_U32 = 2**32 - 1
 validator_node_list_store: List[ValidatorNode] = []
 private_key_from = None
 
@@ -21,7 +23,15 @@ private_key_from = None
 class PacketHandler(Strategy):
     """Class that implements random fuzzer."""
 
-    def __init__(self, send_probability, drop_probability, min_delay_ms, max_delay_ms, private_key, validator_list):
+    def __init__(
+        self,
+        send_probability,
+        drop_probability,
+        min_delay_ms,
+        max_delay_ms,
+        private_key,
+        validator_list,
+    ):
         """
         Implements the initialization of PacketHandler.
 
@@ -123,7 +133,9 @@ class PacketHandler(Strategy):
             print(f"Deserialized message: {message}")
 
             if message_type == 33:  # TMProposeSet
-                message.currentTxHash = bytes.fromhex("e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c")
+                message.currentTxHash = bytes.fromhex(
+                    "e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c"
+                )
                 print(f"Tx Hash changed with message original: {message}")
 
                 def sha512_first_half(data: bytes) -> bytes:
@@ -131,25 +143,19 @@ class PacketHandler(Strategy):
                     return hash_bytes[:32]
 
                 def sign_message(hash_bytes: bytes, private_key: bytes) -> bytes:
-                    algo = SECP256k1.lib.secp256k1_context_create(SECP256k1.ALL_FLAGS)
-                    priv_key = SECP256k1.PrivateKey(private_key, raw=True)
-                    message = SECP256k1.lib.secp256k1_ecdsa_signature_parse_der(
-                        algo, hash_bytes, len(hash_bytes)
-                    )
-                    signature = priv_key.ecdsa_sign(hash_bytes, raw=True)
-                    signature_der = SECP256k1.lib.secp256k1_ecdsa_signature_serialize_der(
-                        algo, signature, None, 0
-                    )
-                    SECP256k1.lib.secp256k1_context_destroy(algo)
-                    return bytes(signature_der)
+                    ctx = secp256k1.PrivateKey(private_key)
+                    signature = ctx.ecdsa_sign(hash_bytes)
+                    return ctx.ecdsa_serialize_der(signature)
 
                 hash_bytes = sha512_first_half(
-                    b"".join([
-                        b"\x50\x52\x50\x00",
-                        message.closeTime.to_bytes(4, "big"),
-                        message.previousledger,
-                        message.currentTxHash,
-                    ])
+                    b"".join(
+                        [
+                            b"\x50\x52\x50\x00",
+                            message.closeTime.to_bytes(4, "big"),
+                            message.previousledger,
+                            message.currentTxHash,
+                        ]
+                    )
                 )
 
                 priv_key = base58.b58decode(self.private_key)
@@ -164,6 +170,7 @@ class PacketHandler(Strategy):
             print(f"Unknown message type: {message_type}")
 
         return packet, 0
+
 
 def load_private_key_from_base58(private_key_base58: str) -> rsa.RSAPrivateKey:
     """
@@ -185,15 +192,14 @@ def load_private_key_from_base58(private_key_base58: str) -> rsa.RSAPrivateKey:
 -----END PRIVATE KEY-----"""
 
         private_key = serialization.load_pem_private_key(
-            private_key_pem.encode(),
-            password=None,
-            backend=default_backend()
+            private_key_pem.encode(), password=None, backend=default_backend()
         )
         return private_key
 
     except Exception as e:
         print(f"Error loading private key: {e}")
         return None
+
 
 def sign_message(private_key, message: bytes) -> bytes:
     """
@@ -212,20 +218,21 @@ def sign_message(private_key, message: bytes) -> bytes:
     signature = private_key.sign(
         message,
         padding.PSS(
-            mgf=padding.MGF1(hashes.SHA256()),
-            salt_length=padding.PSS.MAX_LENGTH
+            mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH
         ),
-        hashes.SHA256()
+        hashes.SHA256(),
     )
     return signature
 
+
 def deserialize_message(
-        self, message_type: int, message_data: bytes
+    self, message_type: int, message_data: bytes
 ) -> message.Message:
     """
     Implements the DeserializeMessage method with a random action.
 
     Args:
+        self: The self that is present
         message_type (int): Type of the message to be deserialized.
         message_data (bytes): Data to be deserialized.
 
@@ -255,7 +262,5 @@ def deserialize_message(
             print(f"Message Cluster TMCluster: {msg}")
         else:
             print("Unknown message type")
-    except:
+    except Exception:
         print(f"Error decoding message: {message_type}")
-
-            

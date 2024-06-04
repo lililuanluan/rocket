@@ -9,15 +9,15 @@ from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.Decoder import checkList
+from xrpl_controller.strategies.strategy import Strategy
+
 # from xrpl_controller.strategies.strategy import Strategy
 # from xrpl_controller.strategies.SpecificPacketHandler import getKeys
-
 from xrpl_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,
     ValidatorNode,
 )
-from xrpl_controller.strategies.strategy import Strategy
 
 HOST = "localhost"
 
@@ -131,8 +131,6 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         checkList(validator_node_list)
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
-
-
 
 
 def serve(strategy: Strategy, keep_log: bool = True):

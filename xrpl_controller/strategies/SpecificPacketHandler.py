@@ -1,17 +1,21 @@
+"""This module contains the class that implements a specificPacketHandler."""
+
 import hashlib
 import random
 import struct
-from typing import Tuple, List
-from ecdsa import SigningKey, SECP256k1
-import base58
+from typing import List, Tuple
 
-from xrpl_controller.validator_node_info import ValidatorNode
-from protos import ripple_pb2, packet_pb2
+import base58
+from ecdsa import SECP256k1, SigningKey
+
+from protos import packet_pb2, ripple_pb2
 from xrpl_controller.strategies.strategy import Strategy
+from xrpl_controller.validator_node_info import ValidatorNode
 
 MAX_U32 = 2**32 - 1
 validator_node_list_store: List[ValidatorNode] = []
 private_key_from = None
+
 
 class SpecificPacketHandler(Strategy):
     """Class that implements a strategy for handling specific packets."""
@@ -112,21 +116,31 @@ class SpecificPacketHandler(Strategy):
             message = message_class()
             message.ParseFromString(message_payload)
 
-            if message_type == 33 and random.random() <= 0.15 and private_key_from != "no private key":  # 0.1% chance
-                message.currentTxHash = bytes.fromhex("e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c")
+            if (
+                message_type == 33
+                and random.random() <= 0.15
+                and private_key_from != "no private key"
+            ):  # 0.1% chance
+                message.currentTxHash = bytes.fromhex(
+                    "e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c"
+                )
 
                 hash_bytes = self.sha512_first_half(
-                    b"".join([
-                        b"\x50\x52\x50\x00",
-                        message.proposeSeq.to_bytes(4, "big"),
-                        message.closeTime.to_bytes(4, "big"),
-                        message.previousledger,
-                        message.currentTxHash,
-                    ])
+                    b"".join(
+                        [
+                            b"\x50\x52\x50\x00",
+                            message.proposeSeq.to_bytes(4, "big"),
+                            message.closeTime.to_bytes(4, "big"),
+                            message.previousledger,
+                            message.currentTxHash,
+                        ]
+                    )
                 )
 
                 try:
-                    priv_key = base58.b58decode(private_key_from, alphabet=base58.XRP_ALPHABET)
+                    priv_key = base58.b58decode(
+                        private_key_from, alphabet=base58.XRP_ALPHABET
+                    )
                     if len(priv_key) != 33:
                         raise ValueError("Invalid private key length")
                     actual_priv_key = priv_key[1:33]
@@ -137,12 +151,26 @@ class SpecificPacketHandler(Strategy):
                 signature = self.sign_message(hash_bytes, actual_priv_key)
                 message.signature = signature
 
-                changed_packet = struct.pack("!I", length) + struct.pack("!H", message_type) + message.SerializeToString()
+                changed_packet = (
+                    struct.pack("!I", length)
+                    + struct.pack("!H", message_type)
+                    + message.SerializeToString()
+                )
                 return changed_packet, 0
 
         return packet.data, 0
 
+
 def getKeys(validator_node_list: List[ValidatorNode]):
+    """
+    Implements a method to get the private key.
+
+    Args:
+        validator_node_list: List[ValidatorNode] List of validator nodes.
+
+    Returns:
+        str: this is the string of the private key
+    """
     global validator_node_list_store
     validator_node_list_store = validator_node_list
     print(f"Validator list: {validator_node_list_store}")

@@ -7,7 +7,6 @@ from xrpl_controller.validator_node_info import ValidatorNode
 validator_node_list_store: List[ValidatorNode] = []
 
 
-
 def store_validator_node_info(validator_node_list: List[ValidatorNode]):
     """
     Store validator node info in a global variable.

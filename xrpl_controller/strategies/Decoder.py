@@ -1,18 +1,17 @@
-
-from typing import List, Tuple, Any
-
-from xrpl_controller.validator_node_info import ValidatorNode
+"""This module contains the class that implements a Decoder."""
 
 import struct
-from typing import Tuple, Any
+from typing import Any, List
 
-from protos import ripple_pb2, packet_pb2
+from protos import packet_pb2, ripple_pb2
+from xrpl_controller.validator_node_info import ValidatorNode
 
 validator_node_list_store: List[ValidatorNode] = []
 private_key_from = None
+
+
 class PacketDecoder:
-
-
+    """Class that implements a packet decoder."""
 
     message_type_map = {
         2: ripple_pb2.TMManifests,
@@ -32,15 +31,14 @@ class PacketDecoder:
     def get_private_key(self, from_port: int) -> str:
         """
             Gets the private key from the given port.
+
         Args:
             from_port: int fo the port
 
         Returns: private key
 
         """
-
         for node in validator_node_list_store:
-
             print(f"from port {from_port} peer port: {node.peer.port}")
             if node.peer.port == from_port:
                 private_key_from = node.validator_key_data.validation_private_key
@@ -49,18 +47,16 @@ class PacketDecoder:
         print("Private key not found.")
         return "no private key"
 
-
     def decode_packet(self, packet: packet_pb2.Packet) -> tuple[Any, Any, Any, str]:
         """
         Decodes the given packet into a tuple.
+
         Args:
             packet:  packet to decode
 
         Returns:   tuple of message, type, length and private key
 
         """
-
-
         print(f"Received packet {packet}")
 
         length = struct.unpack("!I", packet.data[:4])[0]
@@ -68,7 +64,6 @@ class PacketDecoder:
         message_payload = packet.data[6:]
         print(f"length: {length}")
         print(f"Message type {message_type}")
-
 
         if message_type in PacketDecoder.message_type_map:
             message_class = PacketDecoder.message_type_map[message_type]
@@ -80,11 +75,13 @@ class PacketDecoder:
         else:
             raise Exception("Invalid message type")
 
+
 def checkList(validator_node_list: List[ValidatorNode]):
     """
-    returns the updated validator_node_list
+    returns the updated validator_node_list.
+
     Args:
-        validator_node_list:
+        validator_node_list: List with all the validator nodes
 
     Returns: nothing
 

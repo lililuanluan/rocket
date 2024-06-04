@@ -3,10 +3,9 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
+from protos import packet_pb2
 from xrpl_controller.core import MAX_U32, flatten
 from xrpl_controller.validator_node_info import ValidatorNode
-
-from protos import packet_pb2
 
 
 class Strategy(ABC):

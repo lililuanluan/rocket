@@ -64,6 +64,7 @@ class RandomFuzzer(Strategy):
         self.send_probability = 1 - drop_probability - delay_probability
         self.min_delay_ms = min_delay_ms
         self.max_delay_ms = max_delay_ms
+
     def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
         """
         Implements the handle_packet method with a random action.
