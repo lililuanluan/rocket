@@ -27,7 +27,12 @@ class Packet(google.protobuf.message.Message):
         from_port: builtins.int = ...,
         to_port: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["data", b"data", "from_port", b"from_port", "to_port", b"to_port"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "data", b"data", "from_port", b"from_port", "to_port", b"to_port"
+        ],
+    ) -> None: ...
 
 global___Packet = Packet
 
@@ -45,7 +50,9 @@ class PacketAck(google.protobuf.message.Message):
         data: builtins.bytes = ...,
         action: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["action", b"action", "data", b"data"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["action", b"action", "data", b"data"]
+    ) -> None: ...
 
 global___PacketAck = PacketAck
 
@@ -84,7 +91,29 @@ class ValidatorNodeInfo(google.protobuf.message.Message):
         validation_public_key: builtins.str = ...,
         validation_seed: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["peer_port", b"peer_port", "rpc_port", b"rpc_port", "status", b"status", "validation_key", b"validation_key", "validation_private_key", b"validation_private_key", "validation_public_key", b"validation_public_key", "validation_seed", b"validation_seed", "ws_admin_port", b"ws_admin_port", "ws_public_port", b"ws_public_port"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "peer_port",
+            b"peer_port",
+            "rpc_port",
+            b"rpc_port",
+            "status",
+            b"status",
+            "validation_key",
+            b"validation_key",
+            "validation_private_key",
+            b"validation_private_key",
+            "validation_public_key",
+            b"validation_public_key",
+            "validation_seed",
+            b"validation_seed",
+            "ws_admin_port",
+            b"ws_admin_port",
+            "ws_public_port",
+            b"ws_public_port",
+        ],
+    ) -> None: ...
 
 global___ValidatorNodeInfo = ValidatorNodeInfo
 
