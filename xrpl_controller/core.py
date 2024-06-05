@@ -29,7 +29,7 @@ def validate_ports(port_1: int, port_2: int):
         ValueError: if the ports are equal or if any of the ports are negative.
     """
     if port_1 < 0 or port_2 < 0:
-        raise ValueError("Ports must be positive")
+        raise ValueError("Ports must be non-negative")
 
     if port_1 == port_2:
         raise ValueError(

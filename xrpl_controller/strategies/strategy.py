@@ -75,7 +75,7 @@ class Strategy(ABC):
             or the integer value representing the 'drop' action
 
         Raises:
-            ValueError: If peer_from_port is equal to peer_to_port
+            ValueError: If peer_from_port is equal to peer_to_port or if any is negative
         """
         validate_ports(peer_from_port, peer_to_port)
         return self.communication_matrix[self.idx(peer_from_port)][
@@ -99,6 +99,9 @@ class Strategy(ABC):
             initial_message: The pre-processed message.
             final_message: The (possibly mutated) processed message
             action: The taken action
+
+        Raises:
+            ValueError: if peer_from_port is equal to peer_to_port or if any is negative
         """
         validate_ports(peer_from_port, peer_to_port)
         self.prev_message_action_matrix[self.idx(peer_from_port)][
