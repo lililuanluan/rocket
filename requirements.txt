@@ -19,6 +19,7 @@ mypy-extensions==1.0.0
 packaging==24.0
 platformdirs==4.2.1
 pluggy==1.5.0
+protobuf==5.26.1
 Pygments==2.17.2
 pyproject-api==1.6.1
 pytest==8.2.0
@@ -50,4 +51,3 @@ loguru==0.7.2
 base58~=2.1.1
 ecdsa~=0.19.0
 cryptography~=42.0.7
-secp256k1~=0.14.0
