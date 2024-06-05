@@ -11,9 +11,6 @@ from xrpl_controller.csv_logger import ActionLogger, CSVLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.Decoder import checkList
 from xrpl_controller.strategies.strategy import Strategy
-
-# from xrpl_controller.strategies.strategy import Strategy
-# from xrpl_controller.strategies.SpecificPacketHandler import getKeys
 from xrpl_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,
@@ -122,7 +119,6 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                     ),
                 )
             )
-        store_validator_node_info(validator_node_list)
         self.strategy.update_network(validator_node_list)
 
         if self.keep_log:
