@@ -110,7 +110,7 @@ class Strategy(ABC):
         ]
 
     @abstractmethod
-    def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
+    def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:  # pragma: no cover
         """
         This method is responsible for returning a possibly mutated packet and an action.
 
