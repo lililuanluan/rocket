@@ -109,10 +109,7 @@ def test_init_invalid_range():
 def test_handle_packet():
     """Test the handle_packet method with a random seed."""
     fuzzer = RandomFuzzer(0.33, 0.33, 10, 150, 10)
-    packet_ack = packet_pb2.PacketAck(
-        data=b"test",
-        action=4294967295,
-    )
+    packet_ack = packet_pb2.Packet(data=b"test", from_port=60000, to_port=3)
 
     assert fuzzer.handle_packet(packet_ack) == (b"test", 4294967295)
     assert fuzzer.handle_packet(packet_ack) == (b"test", 4294967295)

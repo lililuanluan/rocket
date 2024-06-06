@@ -49,58 +49,56 @@ class PacketMutator:
         signature = sk.sign_digest(hash_bytes, sigencode=util.sigencode_der)
         return signature
 
-    def mutate_packet(self, message, message_type, private_key_from):
+    def mutate_packet(self, message, message_type: int, private_key_from: str):
         """
         Mutates the packet with message type 33.
 
         Args:
-            message: this is the message received
+            message: this is the message received, the type is a ripple_pb2.Propose if it is a propose message type
             message_type: type of message, here it is a propose message type 33
             private_key_from: this is the private key of the node
 
         Returns: Returns the mutated message or raises an error if it is not the right message type
         """
         print("Enter Packet")
-        if (
-            message_type == 33
-            and random.random() <= 1
-            and private_key_from != "no private key"
-        ):
-            message.currentTxHash = bytes.fromhex(
-                "e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c"
-            )
-            print(f"Tx Hash changed with message original: {message}")
-
-            hash_bytes = self.sha512_first_half(
-                b"".join(
-                    [
-                        b"\x50\x52\x50\x00",
-                        message.proposeSeq.to_bytes(4, "big"),
-                        message.closeTime.to_bytes(4, "big"),
-                        message.previousledger,
-                        message.currentTxHash,
-                    ]
+        match message_type:
+            case 33 if random.random() <= 1:
+                message.currentTxHash = bytes.fromhex(
+                    "e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c"
                 )
-            )
+                print(f"Tx Hash changed with message original: {message}")
 
-            try:
-                priv_key = base58.b58decode(
-                    private_key_from, alphabet=base58.XRP_ALPHABET
+                hash_bytes = self.sha512_first_half(
+                    b"".join(
+                        [
+                            b"\x50\x52\x50\x00",
+                            message.proposeSeq.to_bytes(4, "big"),
+                            message.closeTime.to_bytes(4, "big"),
+                            message.previousledger,
+                            message.currentTxHash,
+                        ]
+                    )
                 )
-                actual_priv_key = priv_key[1:33]
-                if len(actual_priv_key) != 32:
-                    raise ValueError("Decoded private key length is incorrect.")
-            except base58.InvalidBase58Error:
-                raise RuntimeError(
-                    "Error: Invalid base58 encoded private key"
-                ) from None
 
-            signature = self.sign_message(hash_bytes, actual_priv_key)
-            print(f"\nSignature: {signature}\n")
-            message.signature = signature
-            serialized = message.SerializeToString()
+                try:
+                    priv_key = base58.b58decode(
+                        private_key_from, alphabet=base58.XRP_ALPHABET
+                    )
+                    actual_priv_key = priv_key[1:33]
+                    if len(actual_priv_key) != 32:
+                        raise ValueError("Decoded private key length is incorrect.")
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Error: Invalid base58 encoded private key: {e}"
+                    ) from None
 
-            print(f"\nMessage serialised to string: {serialized}\n")
+                signature = self.sign_message(hash_bytes, actual_priv_key)
+                print(f"\nSignature: {signature}\n")
+                message.signature = signature
+                serialized = message.SerializeToString()
 
-            return serialized
-        raise ValueError("Message type is not able to be mutated")
+                print(f"\nMessage serialised to string: {serialized}\n")
+
+                return serialized
+            case _:
+                raise ValueError("Message type is not able to be mutated")

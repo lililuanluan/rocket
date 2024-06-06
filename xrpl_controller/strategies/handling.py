@@ -21,6 +21,8 @@ class Handling(Strategy):
            min_delay_ms (float): Minimum delay in milliseconds
            max_delay_ms (float): Maximum delay in milliseconds
         """
+        # TODO: To implement the randomFuzzer action, therefore these fields are there
+
         super().__init__()
         self.send_probability = send_probability
         self.drop_probability = drop_probability
@@ -40,22 +42,31 @@ class Handling(Strategy):
 
         """
         print(f"\npacket received: {packet.data!r}\n")
-        message, message_type, length, private_key_from = self.decoder.decode_packet(
-            packet
-        )
 
         try:
+            message, message_type, length = self.decoder.decode_packet(packet)
+        except Exception as e:
+            print(f"Invalid message type {e}")
+            return packet.data, 0
+
+        try:
+            private_key = self.get_private_key(packet.from_port)
             mutated_message_bytes = self.mutator.mutate_packet(
-                message, message_type, private_key_from
+                message, message_type, private_key
             )
             print(f"\nmutated_message_bytes: {mutated_message_bytes!r}\n")
+            # Below is an implementation of how you can create a packet
             # changed_packet = (
             #     struct.pack("!I", length)
             #     + struct.pack("!H", message_type)
             #     + mutated_message_bytes
             # ).Serialise
             print(f"\nchanged_packet: {packet.data!r}\n")
-
+            # Below i am returning the changed packet,
+            # the message has already been changed in
+            # the mutator and this change is
+            # reflected in the packet.data already reuslting in different
+            # print statements
             return packet.data, 0
         except Exception:
             print("PAcket is None")

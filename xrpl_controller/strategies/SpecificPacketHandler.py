@@ -1,4 +1,7 @@
-"""This module contains the class that implements a specificPacketHandler."""
+"""This module contains the class to quickly test and try different mutations to see if they reach consensus instead.
+
+of needing to change three seperate files.
+"""
 
 import hashlib
 import random
@@ -97,7 +100,7 @@ class SpecificPacketHandler(Strategy):
 
         private_key_from = self.get_private_key(packet.from_port)
 
-        message_type_map = {
+        message_type_maps = {
             2: ripple_pb2.TMManifests,
             3: ripple_pb2.TMPing,
             5: ripple_pb2.TMCluster,
@@ -112,8 +115,8 @@ class SpecificPacketHandler(Strategy):
             42: ripple_pb2.TMGetObjectByHash,
         }
 
-        if message_type in message_type_map:
-            message_class = message_type_map[message_type]
+        if message_type in message_type_maps:
+            message_class = message_type_maps[message_type]
             message = message_class()
             message.ParseFromString(message_payload)
 

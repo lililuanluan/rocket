@@ -28,26 +28,7 @@ class PacketDecoder:
         42: ripple_pb2.TMGetObjectByHash,
     }
 
-    def get_private_key(self, from_port: int) -> str:
-        """
-            Gets the private key from the given port.
-
-        Args:
-            from_port: int fo the port
-
-        Returns: private key
-
-        """
-        for node in validator_node_list_store:
-            print(f"from port {from_port} peer port: {node.peer.port}")
-            if node.peer.port == from_port:
-                private_key_from = node.validator_key_data.validation_private_key
-                print(f"private key {private_key_from}")
-                return private_key_from
-        print("Private key not found.")
-        return "no private key"
-
-    def decode_packet(self, packet: packet_pb2.Packet) -> tuple[Any, Any, Any, str]:
+    def decode_packet(self, packet: packet_pb2.Packet) -> tuple[Any, Any, Any]:
         """
         Decodes the given packet into a tuple.
 
@@ -65,27 +46,12 @@ class PacketDecoder:
         print(f"length: {length}")
         print(f"Message type {message_type}")
 
-        if message_type in PacketDecoder.message_type_map:
-            message_class = PacketDecoder.message_type_map[message_type]
+        if message_type in self.message_type_map:
+            message_class = self.message_type_map[message_type]
             message = message_class()
             message.ParseFromString(message_payload)
             print(f"deserealised: {message}")
-            private_key_from = self.get_private_key(packet.from_port)
-            return message, message_type, length, private_key_from
+            print(f"type of message: {type(message)})")
+            return message, message_type, length
         else:
             raise Exception("Invalid message type")
-
-
-def checkList(validator_node_list: List[ValidatorNode]):
-    """
-    returns the updated validator_node_list.
-
-    Args:
-        validator_node_list: List with all the validator nodes
-
-    Returns: nothing
-
-    """
-    global validator_node_list_store
-
-    validator_node_list_store = validator_node_list
