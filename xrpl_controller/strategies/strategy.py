@@ -62,7 +62,7 @@ class Strategy(ABC):
                     self.communication_matrix[idx_1][idx_2] = True
                     self.communication_matrix[idx_2][idx_1] = True
 
-    def check_communication(self, peer_from_port: int, peer_to_port: int) -> int:
+    def check_communication(self, peer_from_port: int, peer_to_port: int) -> bool:
         """
         Check whether 2 ports can communicate with each other.
 
@@ -71,7 +71,7 @@ class Strategy(ABC):
             peer_to_port (int): The peer port to where the message was sent.
 
         Returns:
-            int: An action represented as integer which is either the original action
+            bool: An action represented as integer which is either the original action
             or the integer value representing the 'drop' action
 
         Raises:
