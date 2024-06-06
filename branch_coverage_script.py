@@ -24,6 +24,8 @@ def calculate_branch_coverage(filepath):
         print("No branches found in the coverage report.")
     else:
         branch_coverage = covered_branches / total_branches * 100
+        print(f"Total branches: {total_branches}")
+        print(f"Covered branches: {covered_branches}")
         print(f"Branch coverage: {branch_coverage:.2f}%")
 
 
