@@ -23,16 +23,14 @@ HOST = "localhost"
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
     """This class is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
-    def __init__(self, strategy: Strategy, keep_log: bool = False):
+    def __init__(self, strategy: Strategy):
         """
         Constructor for the PacketService class.
 
         Args:
             strategy: the strategy to use while serving packets
-            keep_log: whether to keep track of a log containing all actions taken
         """
         self.strategy = strategy
-        self.keep_log = keep_log
         self.logger = None
 
     def send_packet(self, request, context):
@@ -67,7 +65,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             else action
         )
 
-        if self.keep_log:
+        if self.strategy.keep_action_log:
             self.logger.log_action(
                 action=action,
                 from_port=request.from_port,
@@ -120,7 +118,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         store_validator_node_info(validator_node_list)
         self.strategy.update_network(validator_node_list)
 
-        if self.keep_log:
+        if self.strategy.keep_action_log:
             if (
                 self.logger is not None
             ):  # Close the previous logger if there was a previous one
@@ -132,7 +130,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
 
-def serve(strategy: Strategy, keep_log: bool = False):
+def serve(strategy: Strategy):
     """
     This function starts the server and listens for incoming packets.
 
@@ -140,9 +138,7 @@ def serve(strategy: Strategy, keep_log: bool = False):
 
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(
-        PacketService(strategy, keep_log), server
-    )
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
