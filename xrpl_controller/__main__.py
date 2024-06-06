@@ -1,7 +1,7 @@
 """Entry point of the application, run with python -m xrpl_controller."""
 
 from xrpl_controller.strategies import Strategy
-from xrpl_controller.strategies.handling import Handling
+from xrpl_controller.strategies.propose_mutation_strategy import Handling
 
 from .packet_server import serve
 

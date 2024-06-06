@@ -1,13 +1,9 @@
 """This module contains the class that implements a Decoder."""
 
 import struct
-from typing import Any, List
+from typing import Any
 
 from protos import packet_pb2, ripple_pb2
-from xrpl_controller.validator_node_info import ValidatorNode
-
-validator_node_list_store: List[ValidatorNode] = []
-private_key_from = None
 
 
 class PacketDecoder:

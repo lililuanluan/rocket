@@ -105,9 +105,7 @@ class Strategy(ABC):
             print(f"from port {from_port} peer port: {node.peer.port}")
             if node.peer.port == from_port:
                 private_key_from = node.validator_key_data.validation_private_key
-                print(f"private key {private_key_from}")
                 return private_key_from
-        print("Private key not found.")
         raise ValueError("Private key not found.")
 
     def update_network(self, validator_node_list: List[ValidatorNode]):

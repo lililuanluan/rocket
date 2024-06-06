@@ -3,8 +3,8 @@
 from typing import Tuple
 
 from protos import packet_pb2
-from xrpl_controller.strategies.Decoder import PacketDecoder
-from xrpl_controller.strategies.PacketMutator import PacketMutator
+from xrpl_controller.strategies.decoder import PacketDecoder
+from xrpl_controller.strategies.packet_mutator import PacketMutator
 from xrpl_controller.strategies.strategy import Strategy
 
 
@@ -68,7 +68,6 @@ class Handling(Strategy):
             # reflected in the packet.data already reuslting in different
             # print statements
             return packet.data, 0
-        except Exception:
-            print("PAcket is None")
-            print(f"packed data {packet.data!r}")
+        except Exception as err:
+            print(f"Unexpected {err=}, sending the original packet instead")
             return packet.data, 0

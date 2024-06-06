@@ -6,7 +6,7 @@ of needing to change three seperate files.
 import hashlib
 import random
 import struct
-from typing import List, Tuple
+from typing import Tuple
 
 import base58
 from ecdsa.curves import SECP256k1  # type: ignore
@@ -14,11 +14,8 @@ from ecdsa.keys import SigningKey  # type: ignore
 
 from protos import packet_pb2, ripple_pb2
 from xrpl_controller.strategies.strategy import Strategy
-from xrpl_controller.validator_node_info import ValidatorNode
 
 MAX_U32 = 2**32 - 1
-validator_node_list_store: List[ValidatorNode] = []
-private_key_from = None
 
 
 class SpecificPacketHandler(Strategy):
@@ -41,34 +38,18 @@ class SpecificPacketHandler(Strategy):
 
     @staticmethod
     def sha512_first_half(message: bytes) -> bytes:
-        """Compute the SHA-512 hash of the first half of the message.
+        """Compute the SHA-512 hash of the first half of bytes.
 
         Args:
             message (bytes): The input message.
 
         Returns:
-            bytes: The SHA-512 hash of the first half of the message.
+            bytes: The SHA-512 hash of the first half of the bytes.
         """
         sha512 = hashlib.sha512()
         sha512.update(message)
         full_hash = sha512.digest()
         return full_hash[:32]
-
-    def get_private_key(self, from_port: int) -> str:
-        """Get the private key corresponding to the given port.
-
-        Args:
-            from_port (int): The port number.
-
-        Returns:
-            str: The private key corresponding to the port.
-        """
-        for node in validator_node_list_store:
-            if node.peer.port == from_port:
-                private_key_from = node.validator_key_data.validation_private_key
-                return private_key_from
-        print("Private key not found.")
-        return "no private key"
 
     @staticmethod
     def sign_message(hash_bytes: bytes, private_key: bytes) -> bytes:
@@ -124,7 +105,7 @@ class SpecificPacketHandler(Strategy):
                 message_type == 33
                 and random.random() <= 0.15
                 and private_key_from != "no private key"
-            ):  # 0.1% chance
+            ):  # 15% chance
                 message.currentTxHash = bytes.fromhex(
                     "e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c"
                 )
@@ -163,18 +144,3 @@ class SpecificPacketHandler(Strategy):
                 return changed_packet, 0
 
         return packet.data, 0
-
-
-def getKeys(validator_node_list: List[ValidatorNode]):
-    """
-    Implements a method to get the private key.
-
-    Args:
-        validator_node_list: List[ValidatorNode] List of validator nodes.
-
-    Returns:
-        str: this is the string of the private key
-    """
-    global validator_node_list_store
-    validator_node_list_store = validator_node_list
-    print(f"Validator list: {validator_node_list_store}")

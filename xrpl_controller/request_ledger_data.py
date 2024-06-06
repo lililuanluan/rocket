@@ -18,5 +18,3 @@ def store_validator_node_info(validator_node_list: List[ValidatorNode]):
     validator_node_list_store = validator_node_list
 
     print(f"Stored validator node info: {validator_node_list_store}")
-
-    return

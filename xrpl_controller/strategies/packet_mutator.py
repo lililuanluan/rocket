@@ -2,17 +2,11 @@
 
 import hashlib
 import random
-from typing import List
 
 import base58
 from ecdsa import util  # type: ignore
 from ecdsa.curves import SECP256k1  # type: ignore
 from ecdsa.keys import SigningKey  # type: ignore
-
-from xrpl_controller.validator_node_info import ValidatorNode
-
-MAX_U32 = 2**32 - 1
-validator_node_list_store: List[ValidatorNode] = []
 
 
 class PacketMutator:
@@ -21,7 +15,7 @@ class PacketMutator:
     @staticmethod
     def sha512_first_half(message: bytes) -> bytes:
         """
-        sha512 on first half of all bytes.
+        First half of the bytes of sha512 hash.
 
         Args:
             message: message from the packet that is mutated
@@ -48,6 +42,25 @@ class PacketMutator:
         sk = SigningKey.from_string(private_key, curve=SECP256k1)
         signature = sk.sign_digest(hash_bytes, sigencode=util.sigencode_der)
         return signature
+
+    def base58_private_key(self, private_key: str):
+        """
+        encode into base58 private key.
+
+        Args:
+            private_key: private key of node
+
+        Returns: byte version of key signed
+        """
+        try:
+            priv_key = base58.b58decode(private_key, alphabet=base58.XRP_ALPHABET)
+            shortened_priv_key = priv_key[1:33]
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Error: Invalid base58 encoded private key: {e}"
+            ) from None
+        return shortened_priv_key
 
     def mutate_packet(self, message, message_type: int, private_key_from: str):
         """
@@ -79,20 +92,8 @@ class PacketMutator:
                         ]
                     )
                 )
-
-                try:
-                    priv_key = base58.b58decode(
-                        private_key_from, alphabet=base58.XRP_ALPHABET
-                    )
-                    actual_priv_key = priv_key[1:33]
-                    if len(actual_priv_key) != 32:
-                        raise ValueError("Decoded private key length is incorrect.")
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Error: Invalid base58 encoded private key: {e}"
-                    ) from None
-
-                signature = self.sign_message(hash_bytes, actual_priv_key)
+                shortened_priv_key = self.base58_private_key(private_key_from)
+                signature = self.sign_message(hash_bytes, shortened_priv_key)
                 print(f"\nSignature: {signature}\n")
                 message.signature = signature
                 serialized = message.SerializeToString()
