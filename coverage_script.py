@@ -26,7 +26,7 @@ total_branch_coverage = (
 
 data.append(
     {
-        "File": "Total",
+        "File": len(coverage_data['files']),
         "Line Coverage": f'{coverage_data["totals"]["covered_lines"]}/{coverage_data["totals"]["num_statements"]} ({total_line_coverage:.2f}%)',
         "Branch Coverage": f'{coverage_data["totals"]["covered_branches"]}/{coverage_data["totals"]["num_branches"]} ({total_branch_coverage:.2f}%)',
     }
@@ -116,6 +116,11 @@ html_template = """
 <body>
     <h1>Coverage Report</h1>
     <table>
+        <tr>
+            <th>Number of Files</th>
+            <th>Line Coverage</th>
+            <th>Branch Coverage</th>
+        </tr>
 """
 
 html_template = add_row_html(data[0], html_template)
