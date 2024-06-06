@@ -22,3 +22,9 @@ def test_auto_parsing():
     res3 = strategy.check_previous_message(10, 12, b"test")
     assert not res3[0]
     assert res3[1] == (b"", -1)
+
+    try:
+        strategy.set_message_action(10, 10, b"test", b"mutated", 42)
+        raise AssertionError()
+    except ValueError:
+        pass

@@ -21,7 +21,6 @@ class Strategy(ABC):
         """
         self.validator_node_list: List[ValidatorNode] = []
         self.node_amount: int = 0
-        self.network_partitions: list[list[int]] = []
         self.port_dict: Dict[int, int] = {}
         self.communication_matrix: list[list[bool]] = []
         self.auto_partition = auto_partition
@@ -31,7 +30,7 @@ class Strategy(ABC):
 
     def partition_network(self, partitions: list[list[int]]):
         """
-        Set the network partition and update the communication matrix.
+        Set the network partition and update the communication matrix. This overrides any preceding communications.
 
         Args:
             partitions (list[list[int]]): List containing the network partitions (as lists of port numbers).
@@ -41,14 +40,14 @@ class Strategy(ABC):
         """
         flattened_partitions = flatten(partitions)
         if (
-            set(flattened_partitions) != set(flatten(self.network_partitions))
+            set(flattened_partitions)
+            != set([node.peer.port for node in self.validator_node_list])
             or len(flattened_partitions) != self.node_amount
         ):
             raise ValueError(
                 "The given network partition is not valid for the current network."
             )
 
-        self.network_partitions = partitions
         self.communication_matrix = [
             [False for _ in range(self.node_amount)] for _ in range(self.node_amount)
         ]
@@ -61,6 +60,36 @@ class Strategy(ABC):
 
                     self.communication_matrix[idx_1][idx_2] = True
                     self.communication_matrix[idx_2][idx_1] = True
+
+    def connect_nodes(self, peer_port_1: int, peer_port_2: int):
+        """
+        Connect 2 nodes using their ports, which allows for communication between them.
+
+        Args:
+            peer_port_1 (int): Peer port 1.
+            peer_port_2 (int): Peer port 2.
+
+        Raises:
+            ValueError: If peer_port_1 is equal to peer_port_2 or if any is negative
+        """
+        validate_ports(peer_port_1, peer_port_2)
+        self.communication_matrix[self.idx(peer_port_1)][self.idx(peer_port_2)] = True
+        self.communication_matrix[self.idx(peer_port_2)][self.idx(peer_port_1)] = True
+
+    def disconnect_nodes(self, peer_port_1: int, peer_port_2: int):
+        """
+        Disconnect 2 nodes using their ports, which allows for communication between them.
+
+        Args:
+            peer_port_1 (int): Peer port 1.
+            peer_port_2 (int): Peer port 2.
+
+        Raises:
+            ValueError: If peer_port_1 is equal to peer_port_2 or if any is negative
+        """
+        validate_ports(peer_port_1, peer_port_2)
+        self.communication_matrix[self.idx(peer_port_1)][self.idx(peer_port_2)] = False
+        self.communication_matrix[self.idx(peer_port_2)][self.idx(peer_port_1)] = False
 
     def check_communication(self, peer_from_port: int, peer_to_port: int) -> bool:
         """
@@ -149,14 +178,14 @@ class Strategy(ABC):
         print("Updating the strategy's network information")
         self.validator_node_list = validator_node_list
         self.node_amount = len(validator_node_list)
-
-        self.network_partitions = [[node.peer.port for node in validator_node_list]]
         self.port_dict = {
-            port: index for index, port in enumerate(self.network_partitions[0])
+            port: index
+            for index, port in enumerate(
+                [node.peer.port for node in validator_node_list]
+            )
         }
-        self.communication_matrix = [
-            [True for _ in range(self.node_amount)] for _ in range(self.node_amount)
-        ]
+
+        self.partition_network([[node.peer.port for node in validator_node_list]])
 
         if self.auto_parse:
             self.prev_message_action_matrix = [

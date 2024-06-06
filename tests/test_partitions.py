@@ -6,12 +6,54 @@ from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
 # Ports of the imported nodes are 10, 11, 12 respectively
 
 
+def test_custom_connections():
+    """Test whether Strategy attributes get updated correctly when connect_nodes is called."""
+    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy.update_network([node_0, node_1, node_2])
+    strategy.disconnect_nodes(10, 11)
+    assert strategy.communication_matrix == [
+        [False, False, True],
+        [False, False, True],
+        [True, True, False],
+    ]
+
+    assert not strategy.check_communication(10, 11)
+    assert not strategy.check_communication(11, 10)
+
+    strategy.connect_nodes(10, 11)
+    assert strategy.communication_matrix == [
+        [False, True, True],
+        [True, False, True],
+        [True, True, False],
+    ]
+
+    assert strategy.check_communication(10, 11)
+    assert strategy.check_communication(11, 10)
+
+    try:
+        strategy.check_communication(10, 10)
+        raise AssertionError()
+    except ValueError:
+        pass
+
+    try:
+        strategy.disconnect_nodes(10, 10)
+        raise AssertionError()
+    except ValueError:
+        pass
+
+    try:
+        strategy.connect_nodes(11, 11)
+        raise AssertionError()
+    except ValueError:
+        pass
+
+
 def test_partition_network_0():
     """Test whether Strategy attributes get updated correctly when partition_network is called. Formation 0."""
     strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[10], [11, 12]])
-    assert strategy.network_partitions == [[10], [11, 12]]
     assert strategy.communication_matrix == [
         [False, False, False],
         [False, False, True],
@@ -24,7 +66,6 @@ def test_partition_network_1():
     strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[10, 11, 12]])
-    assert strategy.network_partitions == [[10, 11, 12]]
     assert strategy.communication_matrix == [
         [False, True, True],
         [True, False, True],
@@ -37,7 +78,6 @@ def test_partition_network_2():
     strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[10], [11], [12]])
-    assert strategy.network_partitions == [[10], [11], [12]]
     assert strategy.communication_matrix == [
         [False, False, False],
         [False, False, False],

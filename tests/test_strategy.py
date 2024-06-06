@@ -37,7 +37,6 @@ def test_init():
     strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
     assert strategy.validator_node_list == []
     assert strategy.node_amount == 0
-    assert strategy.network_partitions == []
     assert strategy.port_dict == {}
     assert strategy.communication_matrix == []
     assert strategy.auto_partition
@@ -51,12 +50,11 @@ def test_update_network():
     strategy.update_network([node_0, node_1, node_2])
     assert strategy.validator_node_list == [node_0, node_1, node_2]
     assert strategy.node_amount == 3
-    assert strategy.network_partitions == [[10, 11, 12]]
     assert strategy.port_dict == {10: 0, 11: 1, 12: 2}
     assert strategy.communication_matrix == [
-        [True, True, True],
-        [True, True, True],
-        [True, True, True],
+        [False, True, True],
+        [True, False, True],
+        [True, True, False],
     ]
 
     assert len(strategy.prev_message_action_matrix) == 3
