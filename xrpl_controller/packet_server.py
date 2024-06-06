@@ -33,7 +33,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
         self.keep_log = keep_log
-        self.logger = None
+        if keep_log:
+            self.logger = None
 
     def send_packet(self, request, context):
         """
@@ -54,7 +55,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         validate_ports(request.from_port, request.to_port)
 
         if (
-            self.strategy.auto_parse
+            self.strategy.auto_parse_identical
             and self.strategy.check_previous_message(
                 request.from_port, request.to_port, request.data
             )[0]
@@ -62,18 +63,18 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             (data, action) = self.strategy.check_previous_message(
                 request.from_port, request.to_port, request.data
             )[1]
+
         else:
-            if self.strategy.auto_partition and not self.strategy.check_communication(
+            if not self.strategy.check_communication(
                 request.from_port, request.to_port
             ):
                 (data, action) = (request.data, MAX_U32)
             else:
                 (data, action) = self.strategy.handle_packet(request.data)
 
-            if self.strategy.auto_parse:
-                self.strategy.set_message_action(
-                    request.from_port, request.to_port, request.data, data, action
-                )
+            self.strategy.set_message_action(
+                request.from_port, request.to_port, request.data, data, action
+            )
 
         if self.keep_log:
             self.logger.log_action(

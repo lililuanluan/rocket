@@ -11,22 +11,20 @@ from xrpl_controller.validator_node_info import ValidatorNode
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, auto_partition: bool = True, auto_parse: bool = True):
+    def __init__(self, auto_parse_identical: bool = True):
         """
         Initialize the Strategy interface with needed fields.
 
         Args:
-            auto_partition (bool, optional): Whether the strategy will auto-apply network partitions. Defaults to True.
-            auto_parse (bool, optional): Whether the strategy will perform same actions on identical messages. Defaults to True.
+            auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
+            Defaults to True.
         """
         self.validator_node_list: List[ValidatorNode] = []
         self.node_amount: int = 0
         self.port_dict: Dict[int, int] = {}
         self.communication_matrix: list[list[bool]] = []
-        self.auto_partition = auto_partition
-        self.auto_parse = auto_parse
-        if self.auto_parse:
-            self.prev_message_action_matrix: list[list[MessageAction]] = []
+        self.auto_parse_identical = auto_parse_identical
+        self.prev_message_action_matrix: list[list[MessageAction]] = []
 
     def partition_network(self, partitions: list[list[int]]):
         """
@@ -157,9 +155,6 @@ class Strategy(ABC):
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
         """
-        if not self.auto_parse:
-            return False, (b"", -1)
-
         message_action = self.prev_message_action_matrix[self.idx(peer_from_port)][
             self.idx(peer_to_port)
         ]
@@ -187,7 +182,7 @@ class Strategy(ABC):
 
         self.partition_network([[node.peer.port for node in validator_node_list]])
 
-        if self.auto_parse:
+        if self.auto_parse_identical:
             self.prev_message_action_matrix = [
                 [MessageAction() for _ in range(self.node_amount)]
                 for _ in range(self.node_amount)

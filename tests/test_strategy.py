@@ -39,8 +39,7 @@ def test_init():
     assert strategy.node_amount == 0
     assert strategy.port_dict == {}
     assert strategy.communication_matrix == []
-    assert strategy.auto_partition
-    assert strategy.auto_parse
+    assert strategy.auto_parse_identical
     assert strategy.prev_message_action_matrix == []
 
 
