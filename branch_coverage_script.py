@@ -1,4 +1,4 @@
-"""This module is responsible for calculating branch coverage from the json coverage report."""
+"""This script is responsible for calculating branch coverage from the json coverage report."""
 
 import json
 
