@@ -1,5 +1,7 @@
 """Core module."""
 
+from datetime import datetime
+
 # The delay value which indicated a drop. This is the max value of an u32 datatype in Rust.
 MAX_U32 = 2**32 - 1
 
@@ -35,3 +37,16 @@ def validate_ports(port_1: int, port_2: int):
         raise ValueError(
             f"Received ports can not be equal to each other, value: {port_1}."
         )
+
+
+def format_datetime(time: datetime) -> str:
+    """
+    Format a datetime to a fixed format.
+
+    Args:
+        time: Timestamp
+
+    Returns:
+        str: Formatted time
+    """
+    return time.strftime("%Y_%m_%d_%Hh%Mm")

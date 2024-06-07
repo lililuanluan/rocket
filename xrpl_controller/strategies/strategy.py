@@ -11,13 +11,14 @@ from xrpl_controller.validator_node_info import ValidatorNode
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, auto_parse_identical: bool = True):
+    def __init__(self, auto_parse_identical: bool = True, keep_action_log: bool = True):
         """
         Initialize the Strategy interface with needed fields.
 
         Args:
             auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
             Defaults to True.
+            keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
         """
         self.validator_node_list: List[ValidatorNode] = []
         self.node_amount: int = 0
@@ -25,6 +26,7 @@ class Strategy(ABC):
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical
         self.prev_message_action_matrix: list[list[MessageAction]] = []
+        self.keep_action_log = keep_action_log
 
     def partition_network(self, partitions: list[list[int]]):
         """
