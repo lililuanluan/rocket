@@ -70,11 +70,14 @@ class ActionLogger(CSVLogger):
     """CSVLogger child class which is dedicated to handle the logging of actions."""
 
     def __init__(
-        self, validator_node_list: list[ValidatorNode], filename: str | None = None
+        self,
+        sub_directory: str,
+        validator_node_list: list[ValidatorNode],
+        filename: str | None = None,
     ):
         """Initialize ActionLogger class."""
         final_filename = filename if filename is not None else "action_log.csv"
-        directory = f"action_logs/{datetime.now().strftime('%Y_%m_%d_%Hh%Mm')}"
+        directory = f"action_logs/{sub_directory}"
 
         node_logger = CSVLogger(
             filename="node_info",
