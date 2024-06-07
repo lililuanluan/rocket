@@ -7,7 +7,7 @@ import grpc
 import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.core import MAX_U32, validate_ports
+from xrpl_controller.core import validate_ports
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.strategy import Strategy
@@ -54,27 +54,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         validate_ports(request.from_port, request.to_port)
 
-        if (
-            self.strategy.auto_parse_identical
-            and self.strategy.check_previous_message(
-                request.from_port, request.to_port, request.data
-            )[0]
-        ):
-            (data, action) = self.strategy.check_previous_message(
-                request.from_port, request.to_port, request.data
-            )[1]
-
-        else:
-            if not self.strategy.check_communication(
-                request.from_port, request.to_port
-            ):
-                (data, action) = (request.data, MAX_U32)
-            else:
-                (data, action) = self.strategy.handle_packet(request.data)
-
-            self.strategy.set_message_action(
-                request.from_port, request.to_port, request.data, data, action
-            )
+        (data, action) = self.strategy.process_packet(
+            request.data, request.from_port, request.to_port
+        )
 
         if self.keep_log:
             self.logger.log_action(

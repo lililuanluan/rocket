@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
-from xrpl_controller.core import flatten, validate_ports
+from xrpl_controller.core import MAX_U32, flatten, validate_ports
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -199,6 +199,42 @@ class Strategy(ABC):
             int: The corresponding index
         """
         return self.port_dict[port]
+
+    def process_packet(
+        self, packet_data: bytes, peer_from_port: int, peer_to_port: int
+    ) -> Tuple[bytes, int]:
+        """
+        Process an incoming packet, applies automatic processes if applicable.
+
+        Args:
+            packet_data: The packet data
+            peer_from_port: The peer port from where the message was sent.
+            peer_to_port: The peer port to where the message was sent.
+
+        Returns:
+            Tuple[bytes, int]: The processed packet as bytes and an action in a tuple.
+        """
+        if (
+            self.auto_parse_identical
+            and self.check_previous_message(peer_from_port, peer_to_port, packet_data)[
+                0
+            ]
+        ):
+            (final_data, action) = self.check_previous_message(
+                peer_from_port, peer_to_port, packet_data
+            )[1]
+
+        else:
+            if not self.check_communication(peer_from_port, peer_to_port):
+                (final_data, action) = (packet_data, MAX_U32)
+            else:
+                (final_data, action) = self.handle_packet(packet_data)
+
+            self.set_message_action(
+                peer_from_port, peer_to_port, packet_data, final_data, action
+            )
+
+        return final_data, action
 
     @abstractmethod
     def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
