@@ -32,9 +32,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             strategy: the strategy to use while serving packets
         """
         self.strategy = strategy
-        self.keep_log = keep_log
-        if keep_log:
-            self.logger = None
+        self.logger: ActionLogger | None = None
 
     def send_packet(self, request, context):
         """
