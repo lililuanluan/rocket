@@ -1,14 +1,14 @@
-"""This script is responsible for calculating branch coverage from the json coverage report."""
+"""This script is responsible for calculating branch coverage shown in GitLab from the json coverage report."""
 
 import json
 
 
-def calculate_branch_coverage(filepath):
+def calculate_branch_coverage(filepath: str) -> None:
     """
     Calculate branch coverage from the given coverage report and print it to terminal.
 
     Args:
-        filepath: the path to the json coverage report.
+        filepath (str): the path to the json coverage report.
     """
     with open(filepath) as f:
         data = json.load(f)

@@ -58,7 +58,8 @@ coverage.*
 .hypothesis/
 .pytest_cache/
 cover/
-coverage_reports/
+coverage_reports/*
+!coverage_reports/coverage_report_template.html
 junit-report.xml 
 
 # Translations

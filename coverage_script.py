@@ -2,152 +2,148 @@
 
 import json
 
-# Load the coverage JSON report
 with open("coverage_reports/coverage.json") as f:
     coverage_data = json.load(f)
 
-# Prepare data for the table
 data = []
 
-total_line_coverage = (
-    coverage_data["totals"]["covered_lines"]
-    / coverage_data["totals"]["num_statements"]
-    * 100
-    if coverage_data["totals"]["num_statements"] > 0
-    else 100
-)
-total_branch_coverage = (
-    coverage_data["totals"]["covered_branches"]
-    / coverage_data["totals"]["num_branches"]
-    * 100
-    if coverage_data["totals"]["num_branches"] > 0
-    else 100
-)
 
-data.append(
-    {
-        "File": len(coverage_data['files']),
-        "Line Coverage": f'{coverage_data["totals"]["covered_lines"]}/{coverage_data["totals"]["num_statements"]} ({total_line_coverage:.2f}%)',
-        "Branch Coverage": f'{coverage_data["totals"]["covered_branches"]}/{coverage_data["totals"]["num_branches"]} ({total_branch_coverage:.2f}%)',
-    }
-)
+def add_row_data(col1: str, summary: dict) -> None:
+    """
+    Add a row to the data list.
 
-# Iterate through each file in the report
-for filename, file_report in coverage_data["files"].items():
-    # Calculate line and branch coverage percentages
+    Args:
+        col1 (str): The first column data.
+        summary (dict): The summary data.
+    """
     line_coverage = (
-        file_report["summary"]["covered_lines"]
-        / file_report["summary"]["num_statements"]
-        * 100
-        if file_report["summary"]["num_statements"] > 0
+        int(summary["covered_lines"] / summary["num_statements"] * 100)
+        if summary["num_statements"] > 0
         else 100
     )
     branch_coverage = (
-        file_report["summary"]["covered_branches"]
-        / file_report["summary"]["num_branches"]
-        * 100
-        if file_report["summary"]["num_branches"] > 0
+        int(summary["covered_branches"] / summary["num_branches"] * 100)
+        if summary["num_branches"] > 0
         else 100
     )
 
-    # Append the data
     data.append(
         {
-            "File": filename,
-            "Line Coverage": f'{file_report["summary"]["covered_lines"]}/{file_report["summary"]["num_statements"]} ({line_coverage:.2f}%)',
-            "Branch Coverage": f'{file_report["summary"]["covered_branches"]}/{file_report["summary"]["num_branches"]} ({branch_coverage:.2f}%)',
+            "File": col1,
+            "Line Coverage Count": f'{summary["covered_lines"]}/{summary["num_statements"]}',
+            "Line Coverage Percentage": line_coverage,
+            "Branch Coverage Count": f'{summary["covered_branches"]}/{summary["num_branches"]}',
+            "Branch Coverage Percentage": branch_coverage,
         }
     )
 
 
-def add_row_html(row, html_template):
+add_row_data(str(len(coverage_data["files"])), coverage_data["totals"])
+
+# Iterate through each file in the report
+for filename, file_report in coverage_data["files"].items():
+    add_row_data(filename, file_report["summary"])
+
+
+def add_coverage_column_html(percentage: int, count: str, html_template: str) -> str:
     """
-    Add a row to the HTML template.
+    Add the HTML for a coverage column that consists of percentage and a progressbar with a count inside it.
 
     Args:
-        row (dict): The row data.
+        percentage (int): The coverage percentage.
+        count (str): The coverage count in format x/x.
         html_template (str): The HTML template.
 
     Returns:
         str: The updated HTML template.
     """
-    line_coverage_percentage = float(row["Line Coverage"].split("(")[1].split("%")[0])
-    branch_coverage_percentage = float(
-        row["Branch Coverage"].split("(")[1].split("%")[0]
-    )
-
     html_template += f"""
-        <tr>
-            <td style="padding-right: 20px;">{row['File']}</td> <!-- Add padding to the right -->
-            <td style="padding-right: 20px;"> <!-- Add padding to the right -->
-                <div style="width: 100%; display: flex; justify-content: space-between;">
-                    <div style="text-align: left;">{row['Line Coverage'].split(' ')[1]}</div> <!-- Counts right-aligned -->
-                    <div style="width: 200px; height: 20px; background-color: #f3f3f3; border-radius: 3px; display: inline-flex; position: relative;">
-                        <div style="flex: {line_coverage_percentage}; background-color: #4caf50;"></div>
-                        <div style="flex: {100 - line_coverage_percentage}; background-color: #f44336;"></div>
-                        <div style="position: absolute; width: 100%; text-align: center;">{row['Line Coverage'].split(' ')[0]}</div> <!-- Percentages inside the progress bar -->
-                    </div>
-                </div>
-            </td>
             <td>
-                <div style="width: 100%; display: flex; justify-content: space-between;">
-                    <div style="text-align: left;">{row['Branch Coverage'].split(' ')[1]}</div> <!-- Counts right-aligned -->
-                    <div style="width: 200px; height: 20px; background-color: #f3f3f3; border-radius: 3px; display: inline-flex; position: relative;">
-                        <div style="flex: {branch_coverage_percentage}; background-color: #4caf50;"></div>
-                        <div style="flex: {100 - branch_coverage_percentage}; background-color: #f44336;"></div>
-                        <div style="position: absolute; width: 100%; text-align: center;">{row['Branch Coverage'].split(' ')[0]}</div> <!-- Percentages inside the progress bar -->
+                <div class="coverage-col">
+                    <div style="padding-right: 5px;">({percentage}%)</div> <!-- Percentages in front -->
+                    <div class="coverage-bar">
+                        <div style="flex: {percentage};" class="covered"></div>
+                        <div style="flex: {100 - percentage};" class="uncovered"></div>
+                        <div class="counts">{count}</div> <!-- Counts inside the progress bar -->
                     </div>
                 </div>
             </td>
-        </tr>
     """
     return html_template
 
 
-# HTML template that resembles the JaCoCo layout
-html_template = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coverage Report</title>
-</head>
-<body>
-    <h1>Coverage Report</h1>
-    <table>
+def add_row_html(row_data: dict) -> str:
+    """
+    Add a row to the HTML template that consists of a filename, line coverage data and branch coverage data.
+
+    Args:
+        row_data (dict): The row data.
+        html_template (str): The HTML template.
+
+    Returns:
+        str: The updated HTML template.
+    """
+    summary_row = f"""
         <tr>
-            <th>Number of Files</th>
-            <th>Line Coverage</th>
-            <th>Branch Coverage</th>
+            <td>{row_data['File']}</td>
+    """
+    summary_row = add_coverage_column_html(
+        row_data["Line Coverage Percentage"],
+        row_data["Line Coverage Count"],
+        summary_row,
+    )
+    summary_row = add_coverage_column_html(
+        row_data["Branch Coverage Percentage"],
+        row_data["Branch Coverage Count"],
+        summary_row,
+    )
+
+    summary_row += """
         </tr>
-"""
+    """
 
-html_template = add_row_html(data[0], html_template)
+    return summary_row
 
-html_template += """
-    </table>
-    <h2>File Coverage</h2>
-    <table>
-        <tr>
-            <th>File</th>
-            <th>Line Coverage</th>
-            <th>Branch Coverage</th>
-        </tr>
-"""
 
-# Add the data to the HTML template
-# skip the first row as it is the total coverage
-for row in data[1:]:
-    html_template = add_row_html(row, html_template)
+def generate_total_html(total_data: dict) -> str:
+    """
+    Generate the HTML for the total coverage data.
 
-# Close the HTML tags
-html_template += """
-    </table>
-</body>
-</html>
-"""
+    Args:
+        total_data (dict): The total coverage data.
 
-# Save the HTML report to a file
+    Returns:
+        str: The HTML for the total coverage data.
+    """
+    total_html = add_row_html(total_data)
+    return total_html
+
+
+def generate_files_html(files_data: list[dict]) -> str:
+    """
+    Generate the HTML for the files coverage data.
+
+    Args:
+        files_data (list): The list of files coverage data.
+
+    Returns:
+        str: The HTML for the files coverage data.
+    """
+    files_html = [add_row_html(row) for row in files_data]
+    return "".join(files_html)
+
+
+# Generate the HTML for the placeholders in the template
+total_html = generate_total_html(data[0])
+files_html = generate_files_html(data[1:])
+
+with open("coverage_reports/coverage_report_template.html") as f:
+    html_template = f.read()
+
+# Use the str.format() function to replace the placeholders with the generated HTML
+html_template = html_template.format(
+    total_coverage=total_html, files_coverage=files_html
+)
+
 with open("coverage_reports/coverage_report.html", "w") as f:
     f.write(html_template)

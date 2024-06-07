@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coverage Report</title>
+    <style>
+        td {{
+            padding-right: 20px;
+        }}
+        .coverage-col {{
+            width: 100%;
+            display: flex;
+            justify-content: flex-end;
+        }}
+        .coverage-bar {{
+            width: 200px;
+            height: 20px;
+            background-color: #f3f3f3;
+            border-radius: 3px;
+            display: inline-flex;
+            position: relative;
+        }}
+        .coverage-bar .counts {{
+            position: absolute;
+            width: 100%;
+            text-align: center;
+        }}
+        .coverage-bar .covered {{
+            background-color: #4caf50;
+        }}
+        .coverage-bar .uncovered {{
+            background-color: #f44336;
+        }}
+    </style>
+</head>
+<body>
+<h1>Coverage Report</h1>
+<table>
+    <tr>
+        <th>Number of Files</th>
+        <th>Line Coverage</th>
+        <th>Branch Coverage</th>
+    </tr>
+    {total_coverage}
+    </table>
+    <h2>File Coverage</h2>
+    <table>
+        <tr>
+            <th>File</th>
+            <th>Line Coverage</th>
+            <th>Branch Coverage</th>
+        </tr>
+        {files_coverage}
+    </table>
+</body>
+</html>
