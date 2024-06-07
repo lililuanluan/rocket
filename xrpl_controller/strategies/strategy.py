@@ -98,8 +98,7 @@ class Strategy(ABC):
             peer_to_port (int): The peer port to where the message was sent.
 
         Returns:
-            bool: An action represented as integer which is either the original action
-            or the integer value representing the 'drop' action
+            bool: A boolean indicating whether communication is permitted between the 2 given ports.
 
         Raises:
             ValueError: If peer_from_port is equal to peer_to_port or if any is negative
@@ -143,9 +142,10 @@ class Strategy(ABC):
         """
         Parse a message automatically to a final state with an action if it was matching to the previous message.
 
-        Example Usage in Pseudocode: res = parse(port_1, port_2, message);
-        if(res._1) then message = res._2._1; action = res._2._2; send(message, action)
-        else (message, action) = handle(message); send(message, action)
+        Example Usage (Pseudocode):
+            res: (bool, (bytes, int)) = check_previous_message(port_1, port_2, message)
+            if res[0] then (message, action) = res[1]
+            else: ...
 
         Args:
             peer_from_port: Sender peer port.
