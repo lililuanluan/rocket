@@ -67,7 +67,16 @@ class Handling(Strategy):
             # the mutator and this change is
             # reflected in the packet.data already reuslting in different
             # print statements
-            return packet.data, 0
+
+            final_message = (
+                bytes.fromhex(
+                    int(len(mutated_message_bytes.hex()) / 2).to_bytes(4, "big").hex()
+                )
+                + bytes.fromhex("0021")
+                + mutated_message_bytes
+            )
+            return final_message, 0
+
         except Exception as err:
             print(f"Unexpected {err=}, sending the original packet instead")
             return packet.data, 0
