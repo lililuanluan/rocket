@@ -10,12 +10,13 @@ from xrpl_controller.validator_node_info import ValidatorNode
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, auto_partition: bool = True):
+    def __init__(self, auto_partition: bool = True, keep_action_log: bool = True):
         """
         Initialize the Strategy interface with needed attributes.
 
         Args:
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions. Defaults to True.
+            keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
         """
         self.validator_node_list: List[ValidatorNode] = []
         self.node_amount: int = 0
@@ -23,6 +24,7 @@ class Strategy(ABC):
         self.port_dict: Dict[int, int] = {}
         self.communication_matrix: list[list[bool]] = []
         self.auto_partition = auto_partition
+        self.keep_action_log = keep_action_log
 
     def partition_network(self, partitions: list[list[int]]):
         """
