@@ -221,7 +221,8 @@ class Strategy(ABC):
         return self.port_dict[port]
 
     def process_packet(
-        self, packet: packet_pb2.Packet,
+        self,
+        packet: packet_pb2.Packet,
     ) -> Tuple[bytes, int]:
         """
         Process an incoming packet, applies automatic processes if applicable.
@@ -234,9 +235,9 @@ class Strategy(ABC):
         """
         if (
             self.auto_parse_identical
-            and self.check_previous_message(packet.from_port, packet.to_port, packet.data)[
-                0
-            ]
+            and self.check_previous_message(
+                packet.from_port, packet.to_port, packet.data
+            )[0]
         ):
             (final_data, action) = self.check_previous_message(
                 packet.from_port, packet.to_port, packet.data
