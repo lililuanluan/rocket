@@ -19,6 +19,7 @@ mypy-extensions==1.0.0
 packaging==24.0
 platformdirs==4.2.1
 pluggy==1.5.0
+protobuf==5.26.1
 Pygments==2.17.2
 pyproject-api==1.6.1
 pytest==8.2.0
@@ -41,8 +42,10 @@ typing_extensions==4.11.0
 urllib3==2.2.1
 virtualenv==20.26.1
 xrpl-py==2.5.0
-grpcio==1.63.0
-grpcio-tools==1.63.0
+grpcio==1.64.0
+grpcio-tools==1.64.0
 GitPython==3.1.43
 docker==7.1.0
 loguru==0.7.2
+base58~=2.1.1
+cryptography~=42.0.7

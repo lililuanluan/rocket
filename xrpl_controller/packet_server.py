@@ -10,7 +10,6 @@ import tomllib
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.core import format_datetime, validate_ports
 from xrpl_controller.csv_logger import ActionLogger
-from xrpl_controller.request_ledger_data import store_validator_node_info
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -57,6 +56,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         )
 
         if self.strategy.keep_action_log:
+            if not self.logger:
+                raise RuntimeError("Logger was not initialized")
             self.logger.log_action(
                 action=action,
                 from_port=request.from_port,
@@ -66,7 +67,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         return packet_pb2.PacketAck(data=data, action=action)
 
-    def send_validator_node_info(self, request_iterator, context):
+    def send_validator_node_info(
+        self, request_iterator, context
+    ) -> packet_pb2.ValidatorNodeInfoAck:
         """
         This function receives the validator node info from the interceptor and passes it to the controller.
 
@@ -106,7 +109,6 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                     ),
                 )
             )
-        store_validator_node_info(validator_node_list)
         self.strategy.update_network(validator_node_list)
 
         if self.strategy.keep_action_log:
