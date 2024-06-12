@@ -1,13 +1,20 @@
 """This module contains the class that implements a Decoder."""
 
 import struct
+from functools import singledispatchmethod
 
 from google.protobuf.message import Message
 
 from protos import packet_pb2, ripple_pb2
 
 
-class PacketDecoder:
+class DecodingNotSupportedError(Exception):
+    """Signals that decoding a certain message is not supported."""
+
+    pass
+
+
+class PacketEncoderDecoder:
     """Class that implements a packet decoder."""
 
     message_type_map = {
@@ -37,12 +44,42 @@ class PacketDecoder:
         """
         length = struct.unpack("!I", packet.data[:4])[0]
         message_type = struct.unpack("!H", packet.data[4:6])[0]
+        if message_type not in PacketEncoderDecoder.message_type_map:
+            raise DecodingNotSupportedError(
+                f"Decoding of message type {message_type} not supported"
+            )
+
         message_payload = packet.data[6:]
+        message_class = PacketEncoderDecoder.message_type_map[message_type]
+        message = message_class()
+        message.ParseFromString(message_payload)
+        return message, length
 
-        if message_type in PacketDecoder.message_type_map:
-            message_class = PacketDecoder.message_type_map[message_type]
-            message = message_class()
-            message.ParseFromString(message_payload)
-            return message, length
+    @singledispatchmethod
+    @staticmethod
+    def encode_message(message) -> bytes:
+        """
+        Encode a message to its bytes representation, adding the correct headers.
 
-        return packet.data, length
+        This function supports method overloading, using the @singledispatchmethod decorator.
+
+        Args:
+            message: message to encode
+        """
+        raise NotImplementedError(
+            f"Please implement this method for type: {type(message)}"
+        )
+
+    @encode_message.register
+    @staticmethod
+    def _(message: ripple_pb2.TMProposeSet) -> bytes:
+        # Serialize message to prepare sending to the interceptor
+        serialized = message.SerializeToString()
+
+        # Add headers containing the message length and type
+        final_message = (
+            int(len(serialized.hex()) / 2).to_bytes(4, "big")
+            + bytes.fromhex("0021")
+            + serialized
+        )
+        return final_message

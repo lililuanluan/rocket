@@ -96,22 +96,6 @@ class Strategy(ABC):
             else MAX_U32
         )
 
-    def get_private_key(self, from_port: int) -> str:
-        """
-            Gets the private key from the given port.
-
-        Args:
-            from_port: int fo the port
-
-        Returns: private key
-
-        """
-        for node in self.validator_node_list:
-            if node.peer.port == from_port:
-                private_key_from = node.validator_key_data.validation_private_key
-                return private_key_from
-        raise ValueError("Private key not found.")
-
     def update_network(self, validator_node_list: List[ValidatorNode]):
         """
         Update the strategy's attributes.
