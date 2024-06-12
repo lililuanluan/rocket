@@ -3,7 +3,7 @@
 import json
 import os
 from pathlib import Path
-
+from protos import packet_pb2
 from xrpl_controller.strategies import RandomFuzzer
 
 
@@ -153,13 +153,15 @@ def test_handle_packet():
     fn = "TEST_SEED"
     create_test_config(fn, 0.33, 0.33, 10, 150, 10)
     fuzzer = RandomFuzzer(strategy_config_file=fn)
-    assert fuzzer.handle_packet(b"test") == (b"test", 4294967295)
-    assert fuzzer.handle_packet(b"test") == (b"test", 4294967295)
-    assert fuzzer.handle_packet(b"test") == (b"test", 4294967295)
-    assert fuzzer.handle_packet(b"test") == (b"test", 0)
-    assert fuzzer.handle_packet(b"test") == (b"test", 81)
-    assert fuzzer.handle_packet(b"test") == (b"test", 4294967295)
-    assert fuzzer.handle_packet(b"test") == (b"test", 0)
+
+    packet_ack = packet_pb2.Packet(data=b"test", from_port=60000, to_port=3)
+    assert fuzzer.handle_packet(packet_ack) == (b"test", 4294967295)
+    assert fuzzer.handle_packet(packet_ack) == (b"test", 4294967295)
+    assert fuzzer.handle_packet(packet_ack) == (b"test", 4294967295)
+    assert fuzzer.handle_packet(packet_ack) == (b"test", 0)
+    assert fuzzer.handle_packet(packet_ack) == (b"test", 81)
+    assert fuzzer.handle_packet(packet_ack) == (b"test", 4294967295)
+    assert fuzzer.handle_packet(packet_ack) == (b"test", 0)
     remove_test_config(fn)
 
 

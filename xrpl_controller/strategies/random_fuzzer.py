@@ -3,6 +3,7 @@
 import random
 from typing import Tuple
 
+from protos import packet_pb2
 from xrpl_controller.core import MAX_U32
 from xrpl_controller.strategies.strategy import Strategy
 
@@ -55,7 +56,7 @@ class RandomFuzzer(Strategy):
             1 - self.params["drop_probability"] - self.params["delay_probability"]
         )
 
-    def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
+    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """
         Implements the handle_packet method with a random action.
 
@@ -67,10 +68,10 @@ class RandomFuzzer(Strategy):
         """
         choice: float = random.random()
         if choice < self.params["send_probability"]:
-            return packet, 0
+            return packet.data, 0
         elif choice < self.params["send_probability"] + self.params["drop_probability"]:
-            return packet, MAX_U32
+            return packet.data, MAX_U32
         else:
-            return packet, random.randint(
+            return packet.data, random.randint(
                 self.params["min_delay_ms"], self.params["max_delay_ms"]
             )

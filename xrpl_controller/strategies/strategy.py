@@ -2,10 +2,10 @@
 
 import json
 from abc import ABC, abstractmethod
+import base58
 from typing import Dict, List, Tuple
-
 import tomllib
-
+from protos import packet_pb2
 from xrpl_controller.core import MAX_U32, flatten
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -30,6 +30,7 @@ class Strategy(ABC):
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
         """
         self.validator_node_list: List[ValidatorNode] = []
+        self.public_to_private_key_map: Dict[str, str] = {}
         self.node_amount: int = 0
         self.network_partitions: list[list[int]] = []
         self.port_dict: Dict[int, int] = {}
@@ -149,6 +150,7 @@ class Strategy(ABC):
         """
         print("Updating the strategy's network information")
         self.validator_node_list = validator_node_list
+        self.public_to_private_key_map.clear()
         self.node_amount = len(validator_node_list)
 
         self.network_partitions = [[node.peer.port for node in validator_node_list]]
@@ -159,8 +161,21 @@ class Strategy(ABC):
             [True for _ in range(self.node_amount)] for _ in range(self.node_amount)
         ]
 
+        for node in self.validator_node_list:
+            decoded_pub_key = base58.b58decode(
+                node.validator_key_data.validation_public_key,
+                alphabet=base58.XRP_ALPHABET,
+            )[1:34]
+            decoded_priv_key = base58.b58decode(
+                node.validator_key_data.validation_private_key,
+                alphabet=base58.XRP_ALPHABET,
+            )[1:33]
+            self.public_to_private_key_map[decoded_pub_key.hex()] = (
+                decoded_priv_key.hex()
+            )
+
     @abstractmethod
-    def handle_packet(self, packet: bytes) -> Tuple[bytes, int]:
+    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """
         This method is responsible for returning a possibly mutated packet and an action.
 
