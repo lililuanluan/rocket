@@ -48,7 +48,7 @@ class Strategy(ABC):
             else strategy_config_file
         )
         config_path = "./xrpl_controller/strategies/configs/" + (
-            self.__class__.__name__ + ".json"
+            "default-strategy-config.json"
             if str_config_file is None
             else str_config_file
         )
