@@ -74,7 +74,7 @@ def test_partition_network_0():
 
 def test_partition_network_1():
     """Test whether Strategy attributes get updated correctly when partition_network is called. Formation 1."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[10, 11, 12]])
     assert strategy.network_partitions == [[10, 11, 12]]
@@ -87,7 +87,7 @@ def test_partition_network_1():
 
 def test_partition_network_2():
     """Test whether Strategy attributes get updated correctly when partition_network is called."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[10], [11], [12]])
     assert strategy.network_partitions == [[10], [11], [12]]
@@ -100,7 +100,7 @@ def test_partition_network_2():
 
 def test_partition_network_invalid_partitions():
     """Test whether invalid partitions get rejected. Missing port."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     try:
         strategy.partition_network([[10], [12]])
@@ -111,7 +111,7 @@ def test_partition_network_invalid_partitions():
 
 def test_partition_network_invalid_amount():
     """Test whether invalid partitions get rejected. Duplicated port."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     try:
         strategy.partition_network([[10], [11, 11, 12]])
@@ -122,7 +122,7 @@ def test_partition_network_invalid_amount():
 
 def test_apply_partition():
     """Test whether partitions get applied correctly."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[10, 11], [12]])
     assert strategy.apply_network_partition(0, 10, 11) == 0

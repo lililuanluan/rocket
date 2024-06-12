@@ -1,10 +1,10 @@
 """This module is responsible for defining the Strategy interface."""
-import json
-import warnings
 
-import yaml
+import json
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
+
+import tomllib
 
 from xrpl_controller.core import MAX_U32, flatten
 from xrpl_controller.validator_node_info import ValidatorNode
@@ -13,12 +13,19 @@ from xrpl_controller.validator_node_info import ValidatorNode
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, config_file: str = None, auto_partition: bool = True, keep_action_log: bool = True):
+    def __init__(
+        self,
+        network_config_file: str | None = None,
+        strategy_config_file: str | None = None,
+        auto_partition: bool = True,
+        keep_action_log: bool = True,
+    ):
         """
         Initialize the Strategy interface with needed attributes.
 
         Args:
-            config_file (str): The filename of a strategy configuration file.
+            network_config_file (str): The filename of a network configuration file
+            strategy_config_file (str): The filename of a strategy configuration file.
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions. Defaults to True.
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
         """
@@ -31,14 +38,43 @@ class Strategy(ABC):
         self.keep_action_log = keep_action_log
         self.params = {}
 
-        config_file = config_file + ".json" if config_file is not None and not config_file.endswith('.json') else config_file
-        config_path = "xrpl_controller/strategies/configs/" + (self.__class__.__name__ + ".json" if config_file is None else config_file)
+        str_config_file = (
+            strategy_config_file + ".json"
+            if strategy_config_file is not None
+            and not strategy_config_file.endswith(".json")
+            else strategy_config_file
+        )
+        config_path = "./xrpl_controller/strategies/configs/" + (
+            self.__class__.__name__ + ".json"
+            if str_config_file is None
+            else str_config_file
+        )
 
-        with open(config_path, "r") as f:
+        with open(config_path, "rb") as f:
             config = json.load(f)
-            for param in config.keys():
-                self.params[param] = config.get(param)
-            print("Initialized strategy parameters from configuration file:\n\t", self.params)
+            for param in config:
+                self.params[param] = config[param]
+            print(
+                "Initialized strategy parameters from configuration file:\n\t",
+                self.params,
+            )
+
+        ntw_config_file = (
+            network_config_file + ".toml"
+            if network_config_file is not None and network_config_file.endswith(".toml")
+            else network_config_file
+        )
+        network_config_path = "./xrpl_controller/network_configs/" + (
+            "default-network-config.toml"
+            if ntw_config_file is None
+            else ntw_config_file
+        )
+        with open(network_config_path, "rb") as f:
+            self.network_config = tomllib.load(f)
+            print(
+                "Initialized strategy network configuration from configuration file:\n\t",
+                self.network_config,
+            )
 
     def partition_network(self, partitions: list[list[int]]):
         """

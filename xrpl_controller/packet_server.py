@@ -5,7 +5,6 @@ from concurrent import futures
 from typing import List
 
 import grpc
-import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
 from xrpl_controller.core import format_datetime
@@ -132,7 +131,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
     def get_config(self, request, context):
         """
-        This function sends the config specified in `network-config.toml`, to the interceptor.
+        This function sends the config specified in `default-default-network-config.toml`, to the interceptor.
 
         Args:
             request: The request containing the Config.
@@ -141,9 +140,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Returns:
             Config: The Config object.
         """
-        with open("network-config.toml", "rb") as f:
-            config = tomllib.load(f)
-
+        config = self.strategy.network_config
         partition_list: List[List[int]] = config.get("network_partition")
         partitions = map(lambda x: packet_pb2.Partition(nodes=x), partition_list)
 
