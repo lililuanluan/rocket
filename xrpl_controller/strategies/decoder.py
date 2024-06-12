@@ -14,6 +14,7 @@ class DecodingNotSupportedError(Exception):
     pass
 
 
+# noinspection PyNestedDecorators
 class PacketEncoderDecoder:
     """Class that implements a packet decoder."""
 
