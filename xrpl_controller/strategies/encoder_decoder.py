@@ -1,10 +1,13 @@
 """This module contains the class that implements a Decoder."""
 
 import struct
+from functools import singledispatchmethod
 
 from google.protobuf.message import Message
+from xrpl.core.keypairs.secp256k1 import SECP256K1
 
 from protos import packet_pb2, ripple_pb2
+from protos.ripple_pb2 import TMProposeSet
 
 
 class DecodingNotSupportedError(Exception):
@@ -13,6 +16,7 @@ class DecodingNotSupportedError(Exception):
     pass
 
 
+# noinspection PyNestedDecorators
 class PacketEncoderDecoder:
     """Class that implements a packet decoder."""
 
@@ -30,6 +34,37 @@ class PacketEncoderDecoder:
         41: ripple_pb2.TMValidation,
         42: ripple_pb2.TMGetObjectByHash,
     }
+
+    @singledispatchmethod
+    @staticmethod
+    def sign_message(message: Message, private_key: str) -> Message:
+        """
+        Method that returns a signed version of a message.
+
+        Args:
+            message: Message to be signed.
+            private_key: Private key of the message in hex format.
+        """
+        return message
+
+    @sign_message.register
+    @staticmethod
+    def _(message: TMProposeSet, private_key: str) -> TMProposeSet:
+        # Collect the fields used to originally sign the message
+        bytes_to_sign = (
+            b"\x50\x52\x50\x00"
+            + message.proposeSeq.to_bytes(4, "big")
+            + message.closeTime.to_bytes(4, "big")
+            + message.previousledger
+            + message.currentTxHash
+        )
+
+        # Sign the message using the private key
+        signature = SECP256K1.sign(bytes_to_sign, private_key)
+
+        # Update the message signature to the new signature
+        message.signature = signature
+        return message
 
     @staticmethod
     def decode_packet(packet: packet_pb2.Packet) -> tuple[Message | bytes, int]:

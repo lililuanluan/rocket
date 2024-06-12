@@ -3,7 +3,6 @@
 from datetime import datetime
 from typing import Tuple
 
-from xrpl.core.keypairs.secp256k1 import SECP256K1
 from xrpl.utils.time_conversions import datetime_to_ripple_time
 
 from protos import packet_pb2, ripple_pb2
@@ -41,28 +40,13 @@ class MutationExample(Strategy):
         if not isinstance(message, ripple_pb2.TMProposeSet):
             return packet.data, 0
 
-        # Cast variable to use its fields
-        propose_set_msg: ripple_pb2.TMProposeSet = message
-
         # Mutate the closeTime of each message
-        propose_set_msg.closeTime = datetime_to_ripple_time(datetime.now())
+        message.closeTime = datetime_to_ripple_time(datetime.now())
 
-        # Collect the fields used to originally sign the message
-        bytes_to_sign = (
-            b"\x50\x52\x50\x00"
-            + propose_set_msg.proposeSeq.to_bytes(4, "big")
-            + propose_set_msg.closeTime.to_bytes(4, "big")
-            + propose_set_msg.previousledger
-            + propose_set_msg.currentTxHash
+        # Sign the message
+        signed_message = PacketEncoderDecoder.sign_message(
+            message,
+            self.public_to_private_key_map[message.nodePubKey.hex()],
         )
 
-        # Get the private key belonging to the public key field in the message
-        private_key = self.public_to_private_key_map[propose_set_msg.nodePubKey.hex()]
-
-        # Sign the message using the private key
-        signature = SECP256K1.sign(bytes_to_sign, private_key)
-
-        # Update the message signature to the new signature
-        propose_set_msg.signature = signature
-
-        return PacketEncoderDecoder.encode_message(propose_set_msg, message_type_no), 0
+        return PacketEncoderDecoder.encode_message(signed_message, message_type_no), 0
