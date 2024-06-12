@@ -1,5 +1,5 @@
 """This module is responsible for defining the Strategy interface."""
-
+import yaml
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
@@ -25,6 +25,14 @@ class Strategy(ABC):
         self.communication_matrix: list[list[bool]] = []
         self.auto_partition = auto_partition
         self.keep_action_log = keep_action_log
+        self.fields = {}
+
+        with open("xrpl_controller/strategies/configs/" + self.__class__.__name__ + ".yaml", "r") as f:
+            config = yaml.safe_load(f)
+            for field in config["fields"]:
+                self.fields[field['name']] = field['value']
+
+            print("Initialized Strategy Fields:", self.fields)
 
     def partition_network(self, partitions: list[list[int]]):
         """
