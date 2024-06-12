@@ -8,7 +8,6 @@ import base58
 from protos import packet_pb2
 from xrpl_controller.core import MAX_U32, flatten, validate_ports
 from xrpl_controller.message_action import MessageAction
->>>>>>> xrpl_controller/strategies/strategy.py
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
@@ -196,6 +195,19 @@ class Strategy(ABC):
                 for _ in range(self.node_amount)
             ]
 
+        for node in self.validator_node_list:
+            decoded_pub_key = base58.b58decode(
+                node.validator_key_data.validation_public_key,
+                alphabet=base58.XRP_ALPHABET,
+            )[1:34]
+            decoded_priv_key = base58.b58decode(
+                node.validator_key_data.validation_private_key,
+                alphabet=base58.XRP_ALPHABET,
+            )[1:33]
+            self.public_to_private_key_map[decoded_pub_key.hex()] = (
+                decoded_priv_key.hex()
+            )
+
     def idx(self, port: int) -> int:
         """
         Transform a port to its corresponding index.
@@ -209,53 +221,38 @@ class Strategy(ABC):
         return self.port_dict[port]
 
     def process_packet(
-        self, packet_data: bytes, peer_from_port: int, peer_to_port: int
+        self, packet: packet_pb2.Packet,
     ) -> Tuple[bytes, int]:
         """
         Process an incoming packet, applies automatic processes if applicable.
 
         Args:
-            packet_data: The packet data
-            peer_from_port: The peer port from where the message was sent.
-            peer_to_port: The peer port to where the message was sent.
+            packet: Packet object
 
         Returns:
             Tuple[bytes, int]: The processed packet as bytes and an action in a tuple.
         """
         if (
             self.auto_parse_identical
-            and self.check_previous_message(peer_from_port, peer_to_port, packet_data)[
+            and self.check_previous_message(packet.from_port, packet.to_port, packet.data)[
                 0
             ]
         ):
             (final_data, action) = self.check_previous_message(
-                peer_from_port, peer_to_port, packet_data
+                packet.from_port, packet.to_port, packet.data
             )[1]
 
         else:
-            if not self.check_communication(peer_from_port, peer_to_port):
-                (final_data, action) = (packet_data, MAX_U32)
+            if not self.check_communication(packet.from_port, packet.to_port):
+                (final_data, action) = (packet.data, MAX_U32)
             else:
-                (final_data, action) = self.handle_packet(packet_data)
+                (final_data, action) = self.handle_packet(packet)
 
             self.set_message_action(
-                peer_from_port, peer_to_port, packet_data, final_data, action
+                packet.from_port, packet.to_port, packet.data, final_data, action
             )
 
         return final_data, action
-
-        for node in self.validator_node_list:
-            decoded_pub_key = base58.b58decode(
-                node.validator_key_data.validation_public_key,
-                alphabet=base58.XRP_ALPHABET,
-            )[1:34]
-            decoded_priv_key = base58.b58decode(
-                node.validator_key_data.validation_private_key,
-                alphabet=base58.XRP_ALPHABET,
-            )[1:33]
-            self.public_to_private_key_map[decoded_pub_key.hex()] = (
-                decoded_priv_key.hex()
-            )
 
     @abstractmethod
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:

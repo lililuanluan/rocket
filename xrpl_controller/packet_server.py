@@ -52,7 +52,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         validate_ports(request.from_port, request.to_port)
 
         (data, action) = self.strategy.process_packet(
-            request.data, request.from_port, request.to_port
+            request
         )
 
         if self.strategy.keep_action_log:
