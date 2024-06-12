@@ -49,6 +49,19 @@ def test_custom_connections():
         pass
 
 
+def test_reset_communications():
+    """Test whether Strategy attributes resets communication matrix correctly when reset_communications is called."""
+    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy.update_network([node_0, node_1, node_2])
+    strategy.partition_network([[10], [11, 12]])
+    strategy.reset_communications()
+    assert strategy.communication_matrix == [
+        [False, True, True],
+        [True, False, True],
+        [True, True, False],
+    ]
+
+
 def test_partition_network_0():
     """Test whether Strategy attributes get updated correctly when partition_network is called. Formation 0."""
     strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)

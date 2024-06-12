@@ -93,7 +93,14 @@ class ActionLogger(CSVLogger):
             directory=directory,
         )
 
-    def log_action(self, action: int, from_port: int, to_port: int, data: bytes):
+    def log_action(
+        self,
+        action: int,
+        from_port: int,
+        to_port: int,
+        data: bytes,
+        custom_timestamp: float | None = None,
+    ):
         """
         Log an action according to a specific column format.
 
@@ -102,6 +109,7 @@ class ActionLogger(CSVLogger):
             from_port (int): Port of sending peer.
             to_port (int): Port of receiving peer.
             data (bytes): Data bytes.
+            custom_timestamp (datetime | None): Custom timestamp.
         """
         formatted_action = (
             "send"
@@ -113,7 +121,9 @@ class ActionLogger(CSVLogger):
 
         self.writer.writerow(
             [
-                datetime.now(),
+                datetime.now().timestamp()
+                if custom_timestamp is None
+                else custom_timestamp,
                 formatted_action,
                 from_port,
                 to_port,

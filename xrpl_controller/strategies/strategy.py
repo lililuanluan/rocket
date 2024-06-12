@@ -114,6 +114,14 @@ class Strategy(ABC):
             self.idx(peer_to_port)
         ]
 
+    def reset_communications(self):
+        """
+        Reset all communications, falling back to the network configuration.
+
+        This method uses partition_network to rebuild the communication matrix in a correct way.
+        """
+        self.partition_network([[node.peer.port for node in self.validator_node_list]])
+
     def set_message_action(
         self,
         peer_from_port: int,

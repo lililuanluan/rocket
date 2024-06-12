@@ -49,6 +49,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Raises:
             ValueError: if request.from_port == request.to_port or if any is negative
         """
+        timestamp = datetime.datetime.now().timestamp()
         validate_ports(request.from_port, request.to_port)
 
         (data, action) = self.strategy.process_packet(request)
@@ -61,6 +62,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 from_port=request.from_port,
                 to_port=request.to_port,
                 data=data,
+                custom_timestamp=timestamp,
             )
 
         return packet_pb2.PacketAck(data=data, action=action)
