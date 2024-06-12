@@ -19,6 +19,7 @@ def test_init():
 
     # Make sure super().__init__() is called
     assert fuzzer.node_amount == 0
+    remove_test_config(fn)
 
 
 def test_init_bound_0():
@@ -30,6 +31,7 @@ def test_init_bound_0():
     assert fuzzer.params["delay_probability"] == 0.6
     assert fuzzer.params["min_delay_ms"] == 10
     assert fuzzer.params["max_delay_ms"] == 150
+    remove_test_config(fn)
 
 
 def test_init_bound_1():
@@ -41,6 +43,7 @@ def test_init_bound_1():
     assert fuzzer.params["delay_probability"] == 0
     assert fuzzer.params["min_delay_ms"] == 0
     assert fuzzer.params["max_delay_ms"] == 0
+    remove_test_config(fn)
 
 
 def test_init_invalid_sum_0():
@@ -52,6 +55,7 @@ def test_init_invalid_sum_0():
         raise AssertionError()
     except ValueError:
         pass
+    remove_test_config(fn)
 
 
 def test_init_invalid_sum_1():
@@ -63,6 +67,7 @@ def test_init_invalid_sum_1():
         raise AssertionError()
     except ValueError:
         pass
+    remove_test_config(fn)
 
 
 def test_init_invalid_sum_2():
@@ -74,6 +79,8 @@ def test_init_invalid_sum_2():
         raise AssertionError()
     except ValueError:
         pass
+    finally:
+        remove_test_config(fn)
 
 
 def test_init_negative_drop():
@@ -85,6 +92,8 @@ def test_init_negative_drop():
         raise AssertionError()
     except ValueError:
         pass
+    finally:
+        remove_test_config(fn)
 
 
 def test_init_negative_delay():
@@ -96,6 +105,8 @@ def test_init_negative_delay():
         raise AssertionError()
     except ValueError:
         pass
+    finally:
+        remove_test_config(fn)
 
 
 def test_init_negative_min_delay():
@@ -107,6 +118,8 @@ def test_init_negative_min_delay():
         raise AssertionError()
     except ValueError:
         pass
+    finally:
+        remove_test_config(fn)
 
 
 def test_init_negative_max_delay():
@@ -118,6 +131,8 @@ def test_init_negative_max_delay():
         raise AssertionError()
     except ValueError:
         pass
+    finally:
+        remove_test_config(fn)
 
 
 def test_init_invalid_range():
@@ -129,12 +144,15 @@ def test_init_invalid_range():
         raise AssertionError()
     except ValueError:
         pass
+    finally:
+        remove_test_config(fn)
 
 
 def test_handle_packet():
     """Test the handle_packet method with a random seed."""
-    create_test_config("TEST_SEED", 0.33, 0.33, 10, 150, 10)
-    fuzzer = RandomFuzzer(strategy_config_file="TEST_SEED")
+    fn = "TEST_SEED"
+    create_test_config(fn, 0.33, 0.33, 10, 150, 10)
+    fuzzer = RandomFuzzer(strategy_config_file=fn)
     assert fuzzer.handle_packet(b"test") == (b"test", 4294967295)
     assert fuzzer.handle_packet(b"test") == (b"test", 4294967295)
     assert fuzzer.handle_packet(b"test") == (b"test", 4294967295)
@@ -142,6 +160,7 @@ def test_handle_packet():
     assert fuzzer.handle_packet(b"test") == (b"test", 81)
     assert fuzzer.handle_packet(b"test") == (b"test", 4294967295)
     assert fuzzer.handle_packet(b"test") == (b"test", 0)
+    remove_test_config(fn)
 
 
 def create_test_config(filename, drop_prob, delay_prob, min, max, seed=None):
