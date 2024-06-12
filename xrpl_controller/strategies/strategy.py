@@ -14,11 +14,17 @@ from xrpl_controller.validator_node_info import ValidatorNode
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, auto_parse_identical: bool = True, keep_action_log: bool = True):
+    def __init__(
+        self,
+        auto_partition: bool = True,
+        auto_parse_identical: bool = True,
+        keep_action_log: bool = True,
+    ):
         """
         Initialize the Strategy interface with needed fields.
 
         Args:
+            auto_partition (bool, optional): Whether the strategy automatically applies network partitions.
             auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
             Defaults to True.
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
@@ -27,9 +33,11 @@ class Strategy(ABC):
         self.public_to_private_key_map: Dict[str, str] = {}
         self.node_amount: int = 0
         self.port_dict: Dict[int, int] = {}
+        self.auto_partition: bool = auto_partition
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical
-        self.prev_message_action_matrix: list[list[MessageAction]] = []
+        if auto_parse_identical:
+            self.prev_message_action_matrix: list[list[MessageAction]] = []
         self.keep_action_log = keep_action_log
 
     def partition_network(self, partitions: list[list[int]]):
@@ -109,6 +117,7 @@ class Strategy(ABC):
         Raises:
             ValueError: If peer_from_port is equal to peer_to_port or if any is negative
         """
+        assert self.auto_parse_identical
         validate_ports(peer_from_port, peer_to_port)
         return self.communication_matrix[self.idx(peer_from_port)][
             self.idx(peer_to_port)
@@ -143,6 +152,7 @@ class Strategy(ABC):
         Raises:
             ValueError: if peer_from_port is equal to peer_to_port or if any is negative
         """
+        assert self.auto_parse_identical
         validate_ports(peer_from_port, peer_to_port)
         self.prev_message_action_matrix[self.idx(peer_from_port)][
             self.idx(peer_to_port)
@@ -169,6 +179,7 @@ class Strategy(ABC):
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
         """
+        assert self.auto_parse_identical
         message_action = self.prev_message_action_matrix[self.idx(peer_from_port)][
             self.idx(peer_to_port)
         ]
@@ -252,14 +263,17 @@ class Strategy(ABC):
             )[1]
 
         else:
-            if not self.check_communication(packet.from_port, packet.to_port):
+            if self.auto_partition and not self.check_communication(
+                packet.from_port, packet.to_port
+            ):
                 (final_data, action) = (packet.data, MAX_U32)
             else:
                 (final_data, action) = self.handle_packet(packet)
 
-            self.set_message_action(
-                packet.from_port, packet.to_port, packet.data, final_data, action
-            )
+            if self.auto_parse_identical:
+                self.set_message_action(
+                    packet.from_port, packet.to_port, packet.data, final_data, action
+                )
 
         return final_data, action
 
