@@ -51,9 +51,7 @@ class Strategy(ABC):
         )
 
         with open(config_path, "rb") as f:
-            config = json.load(f)
-            for param in config:
-                self.params[param] = config[param]
+            self.params = json.load(f)
             print(
                 "Initialized strategy parameters from configuration file:\n\t",
                 self.params,
