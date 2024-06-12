@@ -13,7 +13,6 @@ from shutil import rmtree
 
 from loguru import logger
 
-import xrpl_controller.request_ledger_data as request_ledger_data
 from tests.system_level.base import ConsistencyFailure, LivenessFailure, SystemLevelTest
 from tests.system_level.helper import (
     fetch_node_info,
@@ -95,9 +94,9 @@ class LivenessTest(SystemLevelTest):
         server = serve_for_automated_tests(strategy)
         interceptor_process.start()
 
-        while len(request_ledger_data.validator_node_list_store) != 2:
+        while len(strategy.validator_node_list) != 3:
             logger.info(
-                f"waiting for nodes to come online... {len(request_ledger_data.validator_node_list_store)}"
+                f"waiting for nodes to come online... {len(strategy.validator_node_list)}"
             )
             await sleep(2)
 
@@ -112,8 +111,7 @@ class LivenessTest(SystemLevelTest):
             await sleep(15)
 
             futures = [
-                fetch_node_info(p.ws_public.port)
-                for p in request_ledger_data.validator_node_list_store
+                fetch_node_info(p.ws_public.port) for p in strategy.validator_node_list
             ]
             node_infos = await asyncio.gather(*futures)
 
