@@ -45,7 +45,7 @@ class PacketEncoderDecoder:
             message: Message to be signed.
             private_key: Private key of the message in hex format.
         """
-        return message
+        raise NotImplementedError(f"No signing method implemented for {type(message)}.")
 
     @sign_message.register
     @staticmethod
