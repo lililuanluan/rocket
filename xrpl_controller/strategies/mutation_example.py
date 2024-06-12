@@ -37,7 +37,7 @@ class MutationExample(Strategy):
         # Cast variable to use its fields
         propose_set_msg: ripple_pb2.TMProposeSet = message
 
-        # Mutate the closeTime of each method
+        # Mutate the closeTime of each message
         propose_set_msg.closeTime = datetime_to_ripple_time(datetime.now())
 
         # Collect the fields used to originally sign the message
@@ -54,7 +54,6 @@ class MutationExample(Strategy):
 
         # Sign the message using the private key
         signature = SECP256K1.sign(bytes_to_sign, private_key)
-        print(propose_set_msg.signature == signature)
 
         # Update the message signature to the new signature
         propose_set_msg.signature = signature

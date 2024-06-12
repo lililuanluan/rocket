@@ -1,5 +1,6 @@
 """This module is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
+import datetime
 from concurrent import futures
 from typing import List
 
@@ -7,7 +8,8 @@ import grpc
 import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.csv_logger import ActionLogger, CSVLogger
+from xrpl_controller.core import format_datetime
+from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -21,17 +23,15 @@ HOST = "localhost"
 class PacketService(packet_pb2_grpc.PacketServiceServicer):
     """This class is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
-    def __init__(self, strategy: Strategy, keep_log: bool = True):
+    def __init__(self, strategy: Strategy):
         """
         Constructor for the PacketService class.
 
         Args:
             strategy: the strategy to use while serving packets
-            keep_log: whether to keep track of a log containing all actions taken
         """
         self.strategy = strategy
-        self.keep_log = keep_log
-        self.logger: CSVLogger | None = None
+        self.logger: ActionLogger | None = None
 
     def send_packet(self, request, context):
         """
@@ -64,7 +64,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             else action
         )
 
-        if self.keep_log:
+        if self.strategy.keep_action_log:
+            if not self.logger:
+                raise RuntimeError("Logger was not initialized")
             self.logger.log_action(
                 action=action,
                 from_port=request.from_port,
@@ -118,12 +120,14 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             )
         self.strategy.update_network(validator_node_list)
 
-        if self.keep_log:
+        if self.strategy.keep_action_log:
             if (
                 self.logger is not None
             ):  # Close the previous logger if there was a previous one
                 self.logger.close()
-            self.logger = ActionLogger(validator_node_list)
+            self.logger = ActionLogger(
+                format_datetime(datetime.datetime.now()), validator_node_list
+            )
 
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
@@ -154,7 +158,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         )
 
 
-def serve(strategy: Strategy, keep_log: bool = True):
+def serve(strategy: Strategy):
     """
     This function starts the server and listens for incoming packets.
 
@@ -162,9 +166,7 @@ def serve(strategy: Strategy, keep_log: bool = True):
 
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(
-        PacketService(strategy, keep_log), server
-    )
+    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
     server.wait_for_termination()
