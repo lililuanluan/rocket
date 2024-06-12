@@ -57,13 +57,19 @@ def add_coverage_column_html(percentage: int, count: str, html_template: str) ->
     Returns:
         str: The updated HTML template.
     """
+    covered = "covered"
+    uncovered = "uncovered"
+    if count == "0/0":
+        covered = "impossible-coverage"
+        uncovered = "impossible-coverage"
+
     html_template += f"""
             <td>
                 <div class="coverage-col">
                     <div style="padding-right: 5px;">({percentage}%)</div> <!-- Percentages in front -->
                     <div class="coverage-bar">
-                        <div style="flex: {percentage};" class="covered"></div>
-                        <div style="flex: {100 - percentage};" class="uncovered"></div>
+                        <div style="flex: {percentage};" class="{covered}"></div>
+                        <div style="flex: {100 - percentage};" class="{uncovered}"></div>
                         <div class="counts">{count}</div> <!-- Counts inside the progress bar -->
                     </div>
                 </div>
