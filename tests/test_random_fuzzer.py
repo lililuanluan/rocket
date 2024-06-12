@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+
 from protos import packet_pb2
 from xrpl_controller.strategies import RandomFuzzer
 
