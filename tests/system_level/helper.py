@@ -19,7 +19,7 @@ async def fetch_node_info(ws_port: int) -> Any | None:
         ws_port: the websocket server port to retrieve the node info from.
 
     Returns:
-        dict: A dictionary with the node info response.
+        A dictionary containing the node info if available, None otherwise.
     """
     async with AsyncWebsocketClient(f"ws://localhost:{ws_port}") as client:
         info = ServerInfo()

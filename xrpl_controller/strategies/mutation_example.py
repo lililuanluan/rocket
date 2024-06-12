@@ -7,7 +7,7 @@ from xrpl.core.keypairs.secp256k1 import SECP256K1
 from xrpl.utils.time_conversions import datetime_to_ripple_time
 
 from protos import packet_pb2, ripple_pb2
-from xrpl_controller.strategies.decoder import (
+from xrpl_controller.strategies.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
 )
@@ -28,11 +28,12 @@ class MutationExample(Strategy):
         Args:
             packet:  of the node
 
-        Returns: Tuple containing the final mutated packet [0] and the action [1]
+        Returns:
+            A tuple of the possible mutated message as bytes, and action as int
         """
         # Decode the packet to figure out the type and length
         try:
-            message, length = PacketEncoderDecoder.decode_packet(packet)
+            message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
         except DecodingNotSupportedError:
             return packet.data, 0
 
@@ -64,4 +65,4 @@ class MutationExample(Strategy):
         # Update the message signature to the new signature
         propose_set_msg.signature = signature
 
-        return PacketEncoderDecoder.encode_message(propose_set_msg), 0
+        return PacketEncoderDecoder.encode_message(propose_set_msg, message_type_no), 0

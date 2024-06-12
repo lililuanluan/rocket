@@ -1,7 +1,6 @@
 """This module contains the class that implements a Decoder."""
 
 import struct
-from functools import singledispatchmethod
 
 from google.protobuf.message import Message
 
@@ -14,7 +13,6 @@ class DecodingNotSupportedError(Exception):
     pass
 
 
-# noinspection PyNestedDecorators
 class PacketEncoderDecoder:
     """Class that implements a packet decoder."""
 
@@ -41,9 +39,10 @@ class PacketEncoderDecoder:
         Args:
             packet:  packet to decode
 
-        Returns:   tuple of message, type, length and private key
+        Returns:
+            tuple of the message, and message type
         """
-        length = struct.unpack("!I", packet.data[:4])[0]
+        # length = struct.unpack("!I", packet.data[:4])[0]
         message_type = struct.unpack("!H", packet.data[4:6])[0]
         if message_type not in PacketEncoderDecoder.message_type_map:
             raise DecodingNotSupportedError(
@@ -54,11 +53,10 @@ class PacketEncoderDecoder:
         message_class = PacketEncoderDecoder.message_type_map[message_type]
         message = message_class()
         message.ParseFromString(message_payload)
-        return message, length
+        return message, message_type
 
-    @singledispatchmethod
     @staticmethod
-    def encode_message(message) -> bytes:
+    def encode_message(message: Message, message_type: int) -> bytes:
         """
         Encode a message to its bytes representation, adding the correct headers.
 
@@ -66,21 +64,15 @@ class PacketEncoderDecoder:
 
         Args:
             message: message to encode
+            message_type: type of message
         """
-        raise NotImplementedError(
-            f"Please implement this method for type: {type(message)}"
-        )
-
-    @encode_message.register
-    @staticmethod
-    def _(message: ripple_pb2.TMProposeSet) -> bytes:
         # Serialize message to prepare sending to the interceptor
         serialized = message.SerializeToString()
 
         # Add headers containing the message length and type
         final_message = (
             int(len(serialized.hex()) / 2).to_bytes(4, "big")
-            + bytes.fromhex("0021")
+            + message_type.to_bytes(2, "big")
             + serialized
         )
         return final_message
