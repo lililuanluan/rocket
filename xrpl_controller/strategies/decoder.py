@@ -1,7 +1,8 @@
 """This module contains the class that implements a Decoder."""
 
 import struct
-from typing import Any
+
+from google.protobuf.message import Message
 
 from protos import packet_pb2, ripple_pb2
 
@@ -24,7 +25,8 @@ class PacketDecoder:
         42: ripple_pb2.TMGetObjectByHash,
     }
 
-    def decode_packet(self, packet: packet_pb2.Packet) -> tuple[Any, Any, Any]:
+    @staticmethod
+    def decode_packet(packet: packet_pb2.Packet) -> tuple[Message | bytes, int]:
         """
         Decodes the given packet into a tuple.
 
@@ -32,22 +34,15 @@ class PacketDecoder:
             packet:  packet to decode
 
         Returns:   tuple of message, type, length and private key
-
         """
-        print(f"Received packet {packet}")
-
         length = struct.unpack("!I", packet.data[:4])[0]
         message_type = struct.unpack("!H", packet.data[4:6])[0]
         message_payload = packet.data[6:]
-        print(f"length: {length}")
-        print(f"Message type {message_type}")
 
-        if message_type in self.message_type_map:
-            message_class = self.message_type_map[message_type]
+        if message_type in PacketDecoder.message_type_map:
+            message_class = PacketDecoder.message_type_map[message_type]
             message = message_class()
             message.ParseFromString(message_payload)
-            print(f"deserealised: {message}")
-            print(f"type of message: {type(message)})")
-            return message, message_type, length
-        else:
-            raise Exception("Invalid message type")
+            return message, length
+
+        return packet.data, length

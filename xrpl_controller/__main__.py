@@ -1,11 +1,11 @@
 """Entry point of the application, run with python -m xrpl_controller."""
 
 from xrpl_controller.strategies import Strategy
-from xrpl_controller.strategies.propose_mutation_strategy import Handling
+from xrpl_controller.strategies.mutation_example import MutationExample
 
 from .packet_server import serve
 
 if __name__ == "__main__":
-    strategy: Strategy = Handling(0.01, 0.04, 1, 150)
+    strategy: Strategy = MutationExample()
     serve(strategy)
     print("Controller Module started.")

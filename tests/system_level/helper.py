@@ -3,6 +3,7 @@
 import os
 import stat
 import subprocess
+from typing import Any
 
 from git import Repo
 from loguru import logger
@@ -10,7 +11,7 @@ from xrpl.asyncio.clients import AsyncWebsocketClient
 from xrpl.models import ServerInfo
 
 
-async def fetch_node_info(ws_port: int) -> dict:
+async def fetch_node_info(ws_port: int) -> Any | None:
     """
     Fetch the node info from the websocket server at a specific port.
 

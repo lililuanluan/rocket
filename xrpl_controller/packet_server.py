@@ -72,7 +72,6 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 data=data,
             )
 
-        print(f"data being sent {data}")
         return packet_pb2.PacketAck(data=data, action=action)
 
     def send_validator_node_info(
