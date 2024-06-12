@@ -1,4 +1,7 @@
 """This module is responsible for defining the Strategy interface."""
+import json
+import warnings
+
 import yaml
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
@@ -10,11 +13,12 @@ from xrpl_controller.validator_node_info import ValidatorNode
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, auto_partition: bool = True, keep_action_log: bool = True):
+    def __init__(self, config_file: str = None, auto_partition: bool = True, keep_action_log: bool = True):
         """
         Initialize the Strategy interface with needed attributes.
 
         Args:
+            config_file (str): The filename of a strategy configuration file.
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions. Defaults to True.
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
         """
@@ -25,14 +29,16 @@ class Strategy(ABC):
         self.communication_matrix: list[list[bool]] = []
         self.auto_partition = auto_partition
         self.keep_action_log = keep_action_log
-        self.fields = {}
+        self.params = {}
 
-        with open("xrpl_controller/strategies/configs/" + self.__class__.__name__ + ".yaml", "r") as f:
-            config = yaml.safe_load(f)
-            for field in config["fields"]:
-                self.fields[field['name']] = field['value']
+        config_file = config_file + ".json" if config_file is not None and not config_file.endswith('.json') else config_file
+        config_path = "xrpl_controller/strategies/configs/" + (self.__class__.__name__ + ".json" if config_file is None else config_file)
 
-            print("Initialized Strategy Fields:", self.fields)
+        with open(config_path, "r") as f:
+            config = json.load(f)
+            for param in config.keys():
+                self.params[param] = config.get(param)
+            print("Initialized strategy parameters from configuration file:\n\t", self.params)
 
     def partition_network(self, partitions: list[list[int]]):
         """

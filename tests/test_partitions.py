@@ -35,7 +35,7 @@ node_2 = ValidatorNode(
 
 def test_init():
     """Test whether Strategy attributes get initialized correctly."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     assert strategy.validator_node_list == []
     assert strategy.node_amount == 0
     assert strategy.network_partitions == []
@@ -46,7 +46,7 @@ def test_init():
 
 def test_update_network():
     """Test whether Strategy attributes get updated correctly with update_network function."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     assert strategy.validator_node_list == [node_0, node_1, node_2]
     assert strategy.node_amount == 3
@@ -61,7 +61,7 @@ def test_update_network():
 
 def test_partition_network_0():
     """Test whether Strategy attributes get updated correctly when partition_network is called. Formation 0."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[10], [11, 12]])
     assert strategy.network_partitions == [[10], [11, 12]]
