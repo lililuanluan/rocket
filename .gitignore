@@ -1,6 +1,7 @@
 .temp-interceptor
 .gitlab-ci-local
 
+interceptor
 logs
 
 # Sphinx
