@@ -107,7 +107,7 @@ The log contains the timestamp when the action was taken on a packet, the action
 
 
 ### Adding new strategies
-To add a new strategy, you need to create a new file in the `strategies` folder with a class that inherits from the `Strategy` class. This class should implement the `handle_packet` method.
+To add a new strategy, a new file has to be created in the `strategies` directory containing a class which inherits from the `Strategy` class. This class should implement the `handle_packet` method and should call `super.__init__(...)` in its own `__init__` method.
 
 #### Configuration files
 Users are able to create new configuration files for strategies, these are categorized under network configurations and strategy parameter configurations.
@@ -117,6 +117,7 @@ See `RandomFuzzer.yaml` for an example configuration. The configuration files to
 When no configuration files are given, or when `None` is given, then the Strategy will automatically fall back to the default configurations.
 Strategy's parameters get placed in a dictionary, namely `self.params`. Example: A configuration file is used with one field `field1`. To access this field, `self.params['field1']` should be used.
 Users are free to parse the dictionary into class attributes, this is not done automatically. Network configurations get communicated to the Network Packet Interceptor module automatically.
+All configuration files must be in the `yaml` format.
 
 #### Network Partitions
 Newly created `Strategy`'s should call `super().__init__()` to initialize needed fields to support network partitions.
@@ -128,4 +129,4 @@ The user can apply partitions manually by using
 Any other network partition-related field should not be modified by the user themselves. Custom partitions can be realized by modifying the boolean matrix `self.communication_matrix`, although it is not recommended to do so manually.
 
 ### System-level Automated Testing
-We have included some system-level automated tests. These can be run using `python -m tests.system_level`. Make sure Docker is running before you start the tests, to ensure correct execution.
+System-level automated tests have been included in the codebase. These can be run using `python -m tests.system_level`. Make sure Docker is running before the tests are started, to ensure correct execution.
