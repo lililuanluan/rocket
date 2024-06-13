@@ -4,9 +4,11 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
 import base58
+from loguru import logger
 
-from protos import packet_pb2
+from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import MAX_U32, flatten
+from xrpl_controller.interceptor_manager import InterceptorManager
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
@@ -29,6 +31,11 @@ class Strategy(ABC):
         self.communication_matrix: list[list[bool]] = []
         self.auto_partition = auto_partition
         self.keep_action_log = keep_action_log
+
+        self.interceptor_manager = InterceptorManager()
+        self.prev_network_event = 0
+        self.network_event_changes = 0
+        self.ledger_seq = 0
 
     def partition_network(self, partitions: list[list[int]]):
         """
@@ -103,7 +110,7 @@ class Strategy(ABC):
         Args:
             validator_node_list (list[ValidatorNode]): The list with (new) validator node information
         """
-        print("Updating the strategy's network information")
+        logger.info("Updating the strategy's network information")
         self.validator_node_list = validator_node_list
         self.public_to_private_key_map.clear()
         self.node_amount = len(validator_node_list)
@@ -128,6 +135,15 @@ class Strategy(ABC):
             self.public_to_private_key_map[decoded_pub_key.hex()] = (
                 decoded_priv_key.hex()
             )
+
+    def update_status(self, status: ripple_pb2.TMStatusChange):
+        """Update the strategy's state variables, when a new TMStatusChange is received."""
+        if self.prev_network_event != status.newEvent:
+            self.prev_network_event = status.newEvent
+            self.network_event_changes += 1
+            self.ledger_seq = status.ledgerSeq
+            if self.ledger_seq == 5:
+                self.interceptor_manager.restart()
 
     @abstractmethod
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:

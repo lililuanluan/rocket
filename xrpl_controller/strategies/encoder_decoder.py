@@ -67,7 +67,7 @@ class PacketEncoderDecoder:
         return message
 
     @staticmethod
-    def decode_packet(packet: packet_pb2.Packet) -> tuple[Message | bytes, int]:
+    def decode_packet(packet: packet_pb2.Packet) -> tuple[Message, int]:
         """
         Decodes the given packet into a tuple.
 

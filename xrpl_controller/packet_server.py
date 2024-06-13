@@ -1,15 +1,20 @@
 """This module is responsible for receiving the incoming packets from the interceptor and returning a response."""
 
 import datetime
+import struct
 from concurrent import futures
 from typing import List
 
 import grpc
 import tomllib
 
-from protos import packet_pb2, packet_pb2_grpc
+from protos import packet_pb2, packet_pb2_grpc, ripple_pb2
 from xrpl_controller.core import format_datetime
 from xrpl_controller.csv_logger import ActionLogger
+from xrpl_controller.strategies.encoder_decoder import (
+    DecodingNotSupportedError,
+    PacketEncoderDecoder,
+)
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -54,6 +59,16 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 "Sending port should not be the same as receiving port. "
                 f"from_port == to_port == {request.from_port}"
             )
+
+        message_type = struct.unpack("!H", request.data[4:6])[0]
+        if message_type == 34:
+            try:
+                message, _ = PacketEncoderDecoder.decode_packet(request)
+                if isinstance(message, ripple_pb2.TMStatusChange):
+                    self.strategy.update_status(message)
+            except DecodingNotSupportedError:
+                pass
+
         (data, action) = self.strategy.handle_packet(request)
 
         action = (
@@ -169,6 +184,7 @@ def serve(strategy: Strategy):
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
+    strategy.interceptor_manager.start_new()
     server.wait_for_termination()
 
 

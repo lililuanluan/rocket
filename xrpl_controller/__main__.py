@@ -8,4 +8,3 @@ from .packet_server import serve
 if __name__ == "__main__":
     strategy: Strategy = MutationExample()
     serve(strategy)
-    print("Controller Module started.")
