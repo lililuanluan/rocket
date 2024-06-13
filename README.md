@@ -109,6 +109,15 @@ The log contains the timestamp when the action was taken on a packet, the action
 ### Adding new strategies
 To add a new strategy, you need to create a new file in the `strategies` folder with a class that inherits from the `Strategy` class. This class should implement the `handle_packet` method.
 
+#### Configuration files
+Users are able to create new configuration files for strategies, these are categorized under network configurations and strategy parameter configurations.
+The configurations have to be specified as yaml files, and will default to `default-strategy-config.yaml` and `default-network-config.yaml`.
+The network configurations have to contain all fields which are also specified in the default file. Strategy parameter configurations can contain anything, as long as all fields are specified subsequently.
+See `RandomFuzzer.yaml` for an example configuration. The configuration files to be used can be specified when calling `super.__init__` in the constructor classes of child classes of `Strategy`.
+When no configuration files are given, or when `None` is given, then the Strategy will automatically fall back to the default configurations.
+Strategy's parameters get placed in a dictionary, namely `self.params`. Example: A configuration file is used with one field `field1`. To access this field, `self.params['field1']` should be used.
+Users are free to parse the dictionary into class attributes, this is not done automatically. Network configurations get communicated to the Network Packet Interceptor module automatically.
+
 #### Network Partitions
 Newly created `Strategy`'s should call `super().__init__()` to initialize needed fields to support network partitions.
 Use `self.partition_network(partition: list[list[int]])` to partition the network using the validators' peer ports as id's in the partitions.
