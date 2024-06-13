@@ -6,10 +6,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from xrpl_controller.core import MAX_U32
 from xrpl_controller.validator_node_info import ValidatorNode
 
-action_log_columns = ["timestamp", "action", "from_port", "to_port", "data"]
+action_log_columns = [
+    "timestamp",
+    "action",
+    "from_port",
+    "to_port",
+    "message type",
+    "original data",
+    "possibly mutated data",
+]
 
 
 class CSVLogger:
@@ -93,30 +100,37 @@ class ActionLogger(CSVLogger):
             directory=directory,
         )
 
-    def log_action(self, action: int, from_port: int, to_port: int, data: bytes):
+    def log_action(
+        self,
+        action: int,
+        from_port: int,
+        to_port: int,
+        message_type: str,
+        original_data: str,
+        possibly_mutated_data: str,
+    ):
         """
-        Log an action according to a specific column format.
+        Log an action to the csv file.
 
         Args:
-            action (int): Action.
-            from_port (int): Port of sending peer.
-            to_port (int): Port of receiving peer.
-            data (bytes): Data bytes.
-        """
-        formatted_action = (
-            "send"
-            if action == 0
-            else "drop"
-            if action == MAX_U32
-            else f"delay:{action}ms"
-        )
+            action: action to be logged.
+            from_port: from_port of the message.
+            to_port: to_port of the message.
+            message_type: the message type as defined in the ripple.proto
+            original_data: the message's original data.
+            possibly_mutated_data: the message's possibly mutated data.
 
+        Returns:
+            None
+        """
         self.writer.writerow(
             [
                 datetime.now(),
-                formatted_action,
+                action,
                 from_port,
                 to_port,
-                data.hex(),
+                message_type,
+                original_data,
+                possibly_mutated_data,
             ]
         )

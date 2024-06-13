@@ -32,17 +32,38 @@ def test_action_log():
     path_nodes = f"{base_dir}/{timestamp_str}/node_info.csv"
 
     logger = ActionLogger("TEST_ACTION_LOG_DIR/" + timestamp_str, [node])
-    logger.log_action(0, 0, 1, bytes([255, 255]))
-    logger.log_action(3, 0, 1, bytes([255, 255]))
-    logger.log_action(MAX_U32, 0, 1, bytes([255, 255]))
+    logger.log_action(0, 0, 1, "propose", "orig data", "new date")
+    logger.log_action(3, 0, 1, "validate", "orig data", "new date")
+    logger.log_action(MAX_U32, 0, 1, "close", "orig data", "new date")
     logger.close()
 
     with open(path_actions) as file:
         csv_reader = csv.reader(file)
         assert next(csv_reader) == action_log_columns
-        assert next(csv_reader)[1:] == ["send", "0", "1", "ffff"]
-        assert next(csv_reader)[1:] == ["delay:3ms", "0", "1", "ffff"]
-        assert next(csv_reader)[1:] == ["drop", "0", "1", "ffff"]
+        assert next(csv_reader)[1:] == [
+            "0",
+            "0",
+            "1",
+            "propose",
+            "orig data",
+            "new date",
+        ]
+        assert next(csv_reader)[1:] == [
+            "3",
+            "0",
+            "1",
+            "validate",
+            "orig data",
+            "new date",
+        ]
+        assert next(csv_reader)[1:] == [
+            MAX_U32.__str__(),
+            "0",
+            "1",
+            "close",
+            "orig data",
+            "new date",
+        ]
 
     with open(path_nodes) as file:
         csv_reader = csv.reader(file)

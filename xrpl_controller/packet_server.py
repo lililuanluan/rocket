@@ -8,8 +8,10 @@ import grpc
 import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
+from protos.packet_pb2 import Packet
 from xrpl_controller.core import format_datetime
 from xrpl_controller.csv_logger import ActionLogger
+from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -33,7 +35,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         self.strategy = strategy
         self.logger: ActionLogger | None = None
 
-    def send_packet(self, request, context):
+    def send_packet(self, request: packet_pb2.Packet, context):
         """
         This function receives the packet from the interceptor and passes it to the controller.
 
@@ -54,7 +56,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 "Sending port should not be the same as receiving port. "
                 f"from_port == to_port == {request.from_port}"
             )
-        (data, action) = self.strategy.handle_packet(request)
+
+        (new_data, action) = self.strategy.handle_packet(request)
 
         action = (
             self.strategy.apply_network_partition(
@@ -64,17 +67,30 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             else action
         )
 
-        if self.strategy.keep_action_log:
-            if not self.logger:
-                raise RuntimeError("Logger was not initialized")
-            self.logger.log_action(
-                action=action,
-                from_port=request.from_port,
-                to_port=request.to_port,
-                data=data,
-            )
+        if not self.strategy.keep_action_log:
+            return packet_pb2.PacketAck(data=new_data, action=action)
 
-        return packet_pb2.PacketAck(data=data, action=action)
+        if not self.logger:
+            raise RuntimeError("Logger was not initialized")
+
+        original_packet_deco = PacketEncoderDecoder.decode_packet(request)
+        new_packet = Packet(
+            data=new_data, from_port=request.from_port, to_port=request.to_port
+        )
+        new_packet_deco = PacketEncoderDecoder.decode_packet(new_packet)
+
+        self.logger.log_action(
+            action=action,
+            from_port=request.from_port,
+            to_port=request.to_port,
+            message_type=PacketEncoderDecoder.message_type_map[
+                original_packet_deco[1]
+            ].__name__,
+            original_data=original_packet_deco[0].__str__().replace("\n", "; "),
+            possibly_mutated_data=new_packet_deco[0].__str__().replace("\n", "; "),
+        )
+
+        return packet_pb2.PacketAck(data=new_data, action=action)
 
     def send_validator_node_info(
         self, request_iterator, context
