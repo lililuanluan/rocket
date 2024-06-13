@@ -122,7 +122,9 @@ The application will automatically drop messages sent between 2 nodes if communi
 Every `Strategy` instance keeps track of previously sent messages sent between every node pair. The stored information includes the last sent message in bytes, the processed version of the last message, and the action that was taken on that message.
 The method `self.check_previous_message(peer_from_port: int, peer_to_port: int, message:bytes)` can be used which returns a tuple which also indicates whether the previous message was identical to the current message.
 In case that the previous message was indeed identical, then the second entry of the tuple contains the processed version of the previous message and the action that was taken.
-This functionality can be used to quickly perform the same actions on identical messages, which can done automatically by setting the `auto_parse_identical` field in `Strategy`.
+This functionality can be used to quickly perform the same actions on identical messages, which can be done automatically by setting the `auto_parse_identical` field in `Strategy`.
+When `auto_parse_identical` is set to `False`, then the strategy will not keep track of any previously sent messages.
+This functionality is useful when XRPL validator nodes resend messages to their peers, this functionality makes sure that those resends are automatically parsed so that the same actions will be taken on such messages.
 
 ### System-level Automated Testing
 We have included some system-level automated tests. These can be run using `python -m tests.system_level`. Make sure Docker is running before you start the tests, to ensure correct execution.
