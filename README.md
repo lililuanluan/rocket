@@ -125,7 +125,7 @@ We have included some system-level automated tests. These can be run using `pyth
 To generate testing reports, you can run the following command:
 ```console
 pytest tests/ --cov=xrpl_controller --cov-branch --cov-report json:coverage_reports/coverage.json --ignore=tests/system_level
-python -m coverage_script.py
+python coverage_script.py
 ```
 You can specify which tests to run by changing the path in the first command, for example to only run the unit tests you can use `tests/unit/`.
 To produce the actual interactive report, you can run the command with the additional argument `--cov-report html:coverage_reports/html/` which will generate a html report in the `coverage_reports` directory.
