@@ -50,3 +50,8 @@ def format_datetime(time: datetime) -> str:
         str: Formatted time
     """
     return time.strftime("%Y_%m_%d_%Hh%Mm")
+
+
+def timestamp_ms(timestamp: datetime) -> int:
+    """Transform datetime to a timestamp. Amount of milliseconds since epoch (January 1, 1970)."""
+    return int(timestamp.timestamp() * 1000)

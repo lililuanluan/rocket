@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from xrpl_controller.core import MAX_U32
+from xrpl_controller.core import MAX_U32, timestamp_ms
 from xrpl_controller.validator_node_info import ValidatorNode
 
 action_log_columns = ["timestamp", "action", "from_port", "to_port", "data"]
@@ -99,7 +99,7 @@ class ActionLogger(CSVLogger):
         from_port: int,
         to_port: int,
         data: bytes,
-        custom_timestamp: float | None = None,
+        custom_timestamp: int | None = None,
     ):
         """
         Log an action according to a specific column format.
@@ -109,7 +109,7 @@ class ActionLogger(CSVLogger):
             from_port (int): Port of sending peer.
             to_port (int): Port of receiving peer.
             data (bytes): Data bytes.
-            custom_timestamp (datetime | None): Custom timestamp.
+            custom_timestamp (int | None): Custom timestamp.
         """
         formatted_action = (
             "send"
@@ -119,9 +119,10 @@ class ActionLogger(CSVLogger):
             else f"delay:{action}ms"
         )
 
+        # Note: timestamp is milliseconds since epoch (January 1, 1970)
         self.writer.writerow(
             [
-                datetime.now().timestamp()
+                timestamp_ms(datetime.now())
                 if custom_timestamp is None
                 else custom_timestamp,
                 formatted_action,
