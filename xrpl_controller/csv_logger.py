@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from xrpl_controller.core import MAX_U32, timestamp_ms
+from xrpl_controller.core import MAX_U32
 from xrpl_controller.validator_node_info import ValidatorNode
 
 action_log_columns = ["timestamp", "action", "from_port", "to_port", "data"]
@@ -122,7 +122,7 @@ class ActionLogger(CSVLogger):
         # Note: timestamp is milliseconds since epoch (January 1, 1970)
         self.writer.writerow(
             [
-                timestamp_ms(datetime.now())
+                int(datetime.now().timestamp() * 1000)
                 if custom_timestamp is None
                 else custom_timestamp,
                 formatted_action,
