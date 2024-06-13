@@ -14,7 +14,7 @@ class RandomFuzzer(Strategy):
     def __init__(
         self,
         network_config_file: str | None = None,
-        strategy_config_file: str = "RandomFuzzer.json",
+        strategy_config_file: str = "RandomFuzzer.yaml",
     ):
         """
         Initializes the random fuzzer.

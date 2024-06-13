@@ -5,16 +5,16 @@
 # validator_1 -> 60001
 # validator_2 -> 60002
 #
-base_port_peer = 60000
+base_port_peer: 60000
 # base_port_ws -> the node's Websocket API starting port
-base_port_ws = 61000
+base_port_ws: 61000
 # base_port_ws_admin -> the node's Websocket API (with admin methods) starting port
-base_port_ws_admin = 62000
+base_port_ws_admin: 62000
 # base_port_rpc -> the node's JSON RPC starting port
-base_port_rpc = 63000
+base_port_rpc: 63000
 
 # The number of validator nodes to configure and start
-number_of_nodes = 3
+number_of_nodes: 3
 
 # A 2-dimensional array containing the groups of node indices that should be connected
 # to each other. Some examples for 3 nodes:
@@ -22,4 +22,4 @@ number_of_nodes = 3
 # [[0, 1], [1, 2]] -> 1 partition, node 0 <-> node 1 | node 1 <-> node 2 | node 0 <-X-> node 2
 # All nodes have a direct connection except node 0 and node 2.
 #
-network_partition = [[0, 1, 2]]
+network_partition: [[0, 1, 2]]

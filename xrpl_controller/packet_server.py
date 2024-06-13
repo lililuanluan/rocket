@@ -132,7 +132,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
     def get_config(self, request, context):
         """
-        This function sends the config specified in `default-default-network-config.toml`, to the interceptor.
+        This function sends the config specified in `default-network-config.yaml`, to the interceptor.
 
         Args:
             request: The request containing the Config.

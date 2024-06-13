@@ -1,14 +1,12 @@
 """This module is responsible for defining the Strategy interface."""
 
-import json
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
 import base58
-import tomllib
 
 from protos import packet_pb2
-from xrpl_controller.core import MAX_U32, flatten
+from xrpl_controller.core import MAX_U32, flatten, yaml_to_dict
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
@@ -41,41 +39,23 @@ class Strategy(ABC):
         self.keep_action_log = keep_action_log
         self.params = {}
 
-        str_config_file = (
-            strategy_config_file + ".json"
-            if strategy_config_file is not None
-            and not strategy_config_file.endswith(".json")
-            else strategy_config_file
+        str_conf_directory = "./xrpl_controller/strategies/configs/"
+        self.params = yaml_to_dict(
+            strategy_config_file, str_conf_directory, "default-strategy-config.yaml"
         )
-        config_path = "./xrpl_controller/strategies/configs/" + (
-            "default-strategy-config.json"
-            if str_config_file is None
-            else str_config_file
+        print(
+            "Initialized strategy parameters from configuration file:\n\t",
+            self.params,
         )
 
-        with open(config_path, "rb") as f:
-            self.params = json.load(f)
-            print(
-                "Initialized strategy parameters from configuration file:\n\t",
-                self.params,
-            )
-
-        ntw_config_file = (
-            network_config_file + ".toml"
-            if network_config_file is not None and network_config_file.endswith(".toml")
-            else network_config_file
+        ntw_conf_directory = "./xrpl_controller/network_configs/"
+        self.network_config = yaml_to_dict(
+            network_config_file, ntw_conf_directory, "default-network-config.yaml"
         )
-        network_config_path = "./xrpl_controller/network_configs/" + (
-            "default-network-config.toml"
-            if ntw_config_file is None
-            else ntw_config_file
+        print(
+            "Initialized strategy network configuration from configuration file:\n\t",
+            self.network_config,
         )
-        with open(network_config_path, "rb") as f:
-            self.network_config = tomllib.load(f)
-            print(
-                "Initialized strategy network configuration from configuration file:\n\t",
-                self.network_config,
-            )
 
     def partition_network(self, partitions: list[list[int]]):
         """

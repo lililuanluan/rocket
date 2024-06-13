@@ -1,8 +1,9 @@
 """Tests for the RandomFuzzer class."""
 
-import json
 import os
 from pathlib import Path
+
+import yaml
 
 from protos import packet_pb2
 from xrpl_controller.strategies import RandomFuzzer
@@ -178,10 +179,10 @@ def create_test_config(filename, drop_prob, delay_prob, min, max, seed=None):
         "seed": seed,
     }
 
-    with open("./xrpl_controller/strategies/configs/" + filename + ".json", "w") as f:
-        json.dump(cfg, f, indent=4)
+    with open("./xrpl_controller/strategies/configs/" + filename + ".yaml", "w") as f:
+        yaml.dump(cfg, f, indent=4)
 
 
 def remove_test_config(filename):
     """Remove test config file."""
-    os.remove("./xrpl_controller/strategies/configs/" + filename + ".json")
+    os.remove("./xrpl_controller/strategies/configs/" + filename + ".yaml")
