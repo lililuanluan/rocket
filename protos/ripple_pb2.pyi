@@ -48,6 +48,10 @@ class _MessageTypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._En
     mtPROOF_PATH_RESPONSE: _MessageType.ValueType  # 58
     mtREPLAY_DELTA_REQ: _MessageType.ValueType  # 59
     mtREPLAY_DELTA_RESPONSE: _MessageType.ValueType  # 60
+    mtGET_PEER_SHARD_INFO_V2: _MessageType.ValueType  # 61
+    mtPEER_SHARD_INFO_V2: _MessageType.ValueType  # 62
+    mtHAVE_TRANSACTIONS: _MessageType.ValueType  # 63
+    mtTRANSACTIONS: _MessageType.ValueType  # 64
 
 class MessageType(_MessageType, metaclass=_MessageTypeEnumTypeWrapper):
     """Unused numbers in the list below may have been used previously. Please don't
@@ -78,6 +82,10 @@ mtPROOF_PATH_REQ: MessageType.ValueType  # 57
 mtPROOF_PATH_RESPONSE: MessageType.ValueType  # 58
 mtREPLAY_DELTA_REQ: MessageType.ValueType  # 59
 mtREPLAY_DELTA_RESPONSE: MessageType.ValueType  # 60
+mtGET_PEER_SHARD_INFO_V2: MessageType.ValueType  # 61
+mtPEER_SHARD_INFO_V2: MessageType.ValueType  # 62
+mtHAVE_TRANSACTIONS: MessageType.ValueType  # 63
+mtTRANSACTIONS: MessageType.ValueType  # 64
 global___MessageType = MessageType
 
 class _TransactionStatus:
@@ -312,9 +320,9 @@ class TMManifest(google.protobuf.message.Message):
     stobject: builtins.bytes
     """A Manifest object in the Ripple serialization format."""
     def __init__(
-            self,
-            *,
-            stobject: builtins.bytes | None = ...,
+        self,
+        *,
+        stobject: builtins.bytes | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["stobject", b"stobject"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["stobject", b"stobject"]) -> None: ...
@@ -332,10 +340,10 @@ class TMManifests(google.protobuf.message.Message):
     @property
     def list(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TMManifest]: ...
     def __init__(
-            self,
-            *,
-            list: collections.abc.Iterable[global___TMManifest] | None = ...,
-            history: builtins.bool | None = ...,
+        self,
+        *,
+        list: collections.abc.Iterable[global___TMManifest] | None = ...,
+        history: builtins.bool | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["history", b"history"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["history", b"history", "list", b"list"]) -> None: ...
@@ -362,13 +370,13 @@ class TMClusterNode(google.protobuf.message.Message):
     nodeName: builtins.str
     address: builtins.str
     def __init__(
-            self,
-            *,
-            publicKey: builtins.str | None = ...,
-            reportTime: builtins.int | None = ...,
-            nodeLoad: builtins.int | None = ...,
-            nodeName: builtins.str | None = ...,
-            address: builtins.str | None = ...,
+        self,
+        *,
+        publicKey: builtins.str | None = ...,
+        reportTime: builtins.int | None = ...,
+        nodeLoad: builtins.int | None = ...,
+        nodeName: builtins.str | None = ...,
+        address: builtins.str | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["address", b"address", "nodeLoad", b"nodeLoad", "nodeName", b"nodeName", "publicKey", b"publicKey", "reportTime", b"reportTime"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["address", b"address", "nodeLoad", b"nodeLoad", "nodeName", b"nodeName", "publicKey", b"publicKey", "reportTime", b"reportTime"]) -> None: ...
@@ -389,11 +397,11 @@ class TMLoadSource(google.protobuf.message.Message):
     count: builtins.int
     """number of connections"""
     def __init__(
-            self,
-            *,
-            name: builtins.str | None = ...,
-            cost: builtins.int | None = ...,
-            count: builtins.int | None = ...,
+        self,
+        *,
+        name: builtins.str | None = ...,
+        cost: builtins.int | None = ...,
+        count: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["cost", b"cost", "count", b"count", "name", b"name"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["cost", b"cost", "count", b"count", "name", b"name"]) -> None: ...
@@ -413,80 +421,14 @@ class TMCluster(google.protobuf.message.Message):
     @property
     def loadSources(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TMLoadSource]: ...
     def __init__(
-            self,
-            *,
-            clusterNodes: collections.abc.Iterable[global___TMClusterNode] | None = ...,
-            loadSources: collections.abc.Iterable[global___TMLoadSource] | None = ...,
+        self,
+        *,
+        clusterNodes: collections.abc.Iterable[global___TMClusterNode] | None = ...,
+        loadSources: collections.abc.Iterable[global___TMLoadSource] | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["clusterNodes", b"clusterNodes", "loadSources", b"loadSources"]) -> None: ...
 
 global___TMCluster = TMCluster
-
-@typing.final
-class TMGetShardInfo(google.protobuf.message.Message):
-    """Request info on shards held"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    HOPS_FIELD_NUMBER: builtins.int
-    LASTLINK_FIELD_NUMBER: builtins.int
-    PEERCHAIN_FIELD_NUMBER: builtins.int
-    hops: builtins.int
-    """number of hops to travel"""
-    lastLink: builtins.bool
-    """true if last link in the peer chain"""
-    @property
-    def peerchain(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
-        """IDs used to route messages"""
-
-    def __init__(
-            self,
-            *,
-            hops: builtins.int | None = ...,
-            lastLink: builtins.bool | None = ...,
-            peerchain: collections.abc.Iterable[builtins.int] | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["hops", b"hops", "lastLink", b"lastLink"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["hops", b"hops", "lastLink", b"lastLink", "peerchain", b"peerchain"]) -> None: ...
-
-global___TMGetShardInfo = TMGetShardInfo
-
-@typing.final
-class TMShardInfo(google.protobuf.message.Message):
-    """Info about shards held"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    SHARDINDEXES_FIELD_NUMBER: builtins.int
-    NODEPUBKEY_FIELD_NUMBER: builtins.int
-    ENDPOINT_FIELD_NUMBER: builtins.int
-    LASTLINK_FIELD_NUMBER: builtins.int
-    PEERCHAIN_FIELD_NUMBER: builtins.int
-    shardIndexes: builtins.str
-    """rangeSet of shard indexes"""
-    nodePubKey: builtins.bytes
-    """The node's public key"""
-    endpoint: builtins.str
-    """ipv6 or ipv4 address"""
-    lastLink: builtins.bool
-    """true if last link in the peer chain"""
-    @property
-    def peerchain(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
-        """IDs used to route messages"""
-
-    def __init__(
-            self,
-            *,
-            shardIndexes: builtins.str | None = ...,
-            nodePubKey: builtins.bytes | None = ...,
-            endpoint: builtins.str | None = ...,
-            lastLink: builtins.bool | None = ...,
-            peerchain: collections.abc.Iterable[builtins.int] | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["endpoint", b"endpoint", "lastLink", b"lastLink", "nodePubKey", b"nodePubKey", "shardIndexes", b"shardIndexes"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["endpoint", b"endpoint", "lastLink", b"lastLink", "nodePubKey", b"nodePubKey", "peerchain", b"peerchain", "shardIndexes", b"shardIndexes"]) -> None: ...
-
-global___TMShardInfo = TMShardInfo
 
 @typing.final
 class TMLink(google.protobuf.message.Message):
@@ -498,9 +440,9 @@ class TMLink(google.protobuf.message.Message):
     nodePubKey: builtins.bytes
     """node public key"""
     def __init__(
-            self,
-            *,
-            nodePubKey: builtins.bytes | None = ...,
+        self,
+        *,
+        nodePubKey: builtins.bytes | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["nodePubKey", b"nodePubKey"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["nodePubKey", b"nodePubKey"]) -> None: ...
@@ -525,11 +467,11 @@ class TMGetPeerShardInfo(google.protobuf.message.Message):
         """public keys used to route messages"""
 
     def __init__(
-            self,
-            *,
-            hops: builtins.int | None = ...,
-            lastLink: builtins.bool | None = ...,
-            peerChain: collections.abc.Iterable[global___TMLink] | None = ...,
+        self,
+        *,
+        hops: builtins.int | None = ...,
+        lastLink: builtins.bool | None = ...,
+        peerChain: collections.abc.Iterable[global___TMLink] | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["hops", b"hops", "lastLink", b"lastLink"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["hops", b"hops", "lastLink", b"lastLink", "peerChain", b"peerChain"]) -> None: ...
@@ -560,18 +502,125 @@ class TMPeerShardInfo(google.protobuf.message.Message):
         """public keys used to route messages"""
 
     def __init__(
-            self,
-            *,
-            shardIndexes: builtins.str | None = ...,
-            nodePubKey: builtins.bytes | None = ...,
-            endpoint: builtins.str | None = ...,
-            lastLink: builtins.bool | None = ...,
-            peerChain: collections.abc.Iterable[global___TMLink] | None = ...,
+        self,
+        *,
+        shardIndexes: builtins.str | None = ...,
+        nodePubKey: builtins.bytes | None = ...,
+        endpoint: builtins.str | None = ...,
+        lastLink: builtins.bool | None = ...,
+        peerChain: collections.abc.Iterable[global___TMLink] | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["endpoint", b"endpoint", "lastLink", b"lastLink", "nodePubKey", b"nodePubKey", "shardIndexes", b"shardIndexes"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["endpoint", b"endpoint", "lastLink", b"lastLink", "nodePubKey", b"nodePubKey", "peerChain", b"peerChain", "shardIndexes", b"shardIndexes"]) -> None: ...
 
 global___TMPeerShardInfo = TMPeerShardInfo
+
+@typing.final
+class TMPublicKey(google.protobuf.message.Message):
+    """Peer public key"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    PUBLICKEY_FIELD_NUMBER: builtins.int
+    publicKey: builtins.bytes
+    def __init__(
+        self,
+        *,
+        publicKey: builtins.bytes | None = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["publicKey", b"publicKey"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["publicKey", b"publicKey"]) -> None: ...
+
+global___TMPublicKey = TMPublicKey
+
+@typing.final
+class TMGetPeerShardInfoV2(google.protobuf.message.Message):
+    """Request peer shard information"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    PEERCHAIN_FIELD_NUMBER: builtins.int
+    RELAYS_FIELD_NUMBER: builtins.int
+    relays: builtins.int
+    """Remaining times to relay"""
+    @property
+    def peerChain(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TMPublicKey]:
+        """Peer public keys used to route messages"""
+
+    def __init__(
+        self,
+        *,
+        peerChain: collections.abc.Iterable[global___TMPublicKey] | None = ...,
+        relays: builtins.int | None = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["relays", b"relays"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["peerChain", b"peerChain", "relays", b"relays"]) -> None: ...
+
+global___TMGetPeerShardInfoV2 = TMGetPeerShardInfoV2
+
+@typing.final
+class TMPeerShardInfoV2(google.protobuf.message.Message):
+    """Peer shard information"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class TMIncomplete(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        SHARDINDEX_FIELD_NUMBER: builtins.int
+        STATE_FIELD_NUMBER: builtins.int
+        PROGRESS_FIELD_NUMBER: builtins.int
+        shardIndex: builtins.int
+        state: builtins.int
+        progress: builtins.int
+        """State completion percent, 1 - 100"""
+        def __init__(
+            self,
+            *,
+            shardIndex: builtins.int | None = ...,
+            state: builtins.int | None = ...,
+            progress: builtins.int | None = ...,
+        ) -> None: ...
+        def HasField(self, field_name: typing.Literal["progress", b"progress", "shardIndex", b"shardIndex", "state", b"state"]) -> builtins.bool: ...
+        def ClearField(self, field_name: typing.Literal["progress", b"progress", "shardIndex", b"shardIndex", "state", b"state"]) -> None: ...
+
+    TIMESTAMP_FIELD_NUMBER: builtins.int
+    INCOMPLETE_FIELD_NUMBER: builtins.int
+    FINALIZED_FIELD_NUMBER: builtins.int
+    PUBLICKEY_FIELD_NUMBER: builtins.int
+    SIGNATURE_FIELD_NUMBER: builtins.int
+    PEERCHAIN_FIELD_NUMBER: builtins.int
+    timestamp: builtins.int
+    """Message creation time"""
+    finalized: builtins.str
+    """Verified immutable shards (RangeSet)"""
+    publicKey: builtins.bytes
+    """Public key of node that authored the shard info"""
+    signature: builtins.bytes
+    """Digital signature of node that authored the shard info"""
+    @property
+    def incomplete(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TMPeerShardInfoV2.TMIncomplete]:
+        """Incomplete shards being acquired or verified"""
+
+    @property
+    def peerChain(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TMPublicKey]:
+        """Peer public keys used to route messages"""
+
+    def __init__(
+        self,
+        *,
+        timestamp: builtins.int | None = ...,
+        incomplete: collections.abc.Iterable[global___TMPeerShardInfoV2.TMIncomplete] | None = ...,
+        finalized: builtins.str | None = ...,
+        publicKey: builtins.bytes | None = ...,
+        signature: builtins.bytes | None = ...,
+        peerChain: collections.abc.Iterable[global___TMPublicKey] | None = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["finalized", b"finalized", "publicKey", b"publicKey", "signature", b"signature", "timestamp", b"timestamp"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["finalized", b"finalized", "incomplete", b"incomplete", "peerChain", b"peerChain", "publicKey", b"publicKey", "signature", b"signature", "timestamp", b"timestamp"]) -> None: ...
+
+global___TMPeerShardInfoV2 = TMPeerShardInfoV2
 
 @typing.final
 class TMTransaction(google.protobuf.message.Message):
@@ -587,17 +636,33 @@ class TMTransaction(google.protobuf.message.Message):
     deferred: builtins.bool
     """not applied to open ledger"""
     def __init__(
-            self,
-            *,
-            rawTransaction: builtins.bytes | None = ...,
-            status: global___TransactionStatus.ValueType | None = ...,
-            receiveTimestamp: builtins.int | None = ...,
-            deferred: builtins.bool | None = ...,
+        self,
+        *,
+        rawTransaction: builtins.bytes | None = ...,
+        status: global___TransactionStatus.ValueType | None = ...,
+        receiveTimestamp: builtins.int | None = ...,
+        deferred: builtins.bool | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["deferred", b"deferred", "rawTransaction", b"rawTransaction", "receiveTimestamp", b"receiveTimestamp", "status", b"status"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["deferred", b"deferred", "rawTransaction", b"rawTransaction", "receiveTimestamp", b"receiveTimestamp", "status", b"status"]) -> None: ...
 
 global___TMTransaction = TMTransaction
+
+@typing.final
+class TMTransactions(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    TRANSACTIONS_FIELD_NUMBER: builtins.int
+    @property
+    def transactions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TMTransaction]: ...
+    def __init__(
+        self,
+        *,
+        transactions: collections.abc.Iterable[global___TMTransaction] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["transactions", b"transactions"]) -> None: ...
+
+global___TMTransactions = TMTransactions
 
 @typing.final
 class TMStatusChange(google.protobuf.message.Message):
@@ -620,16 +685,16 @@ class TMStatusChange(google.protobuf.message.Message):
     firstSeq: builtins.int
     lastSeq: builtins.int
     def __init__(
-            self,
-            *,
-            newStatus: global___NodeStatus.ValueType | None = ...,
-            newEvent: global___NodeEvent.ValueType | None = ...,
-            ledgerSeq: builtins.int | None = ...,
-            ledgerHash: builtins.bytes | None = ...,
-            ledgerHashPrevious: builtins.bytes | None = ...,
-            networkTime: builtins.int | None = ...,
-            firstSeq: builtins.int | None = ...,
-            lastSeq: builtins.int | None = ...,
+        self,
+        *,
+        newStatus: global___NodeStatus.ValueType | None = ...,
+        newEvent: global___NodeEvent.ValueType | None = ...,
+        ledgerSeq: builtins.int | None = ...,
+        ledgerHash: builtins.bytes | None = ...,
+        ledgerHashPrevious: builtins.bytes | None = ...,
+        networkTime: builtins.int | None = ...,
+        firstSeq: builtins.int | None = ...,
+        lastSeq: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["firstSeq", b"firstSeq", "lastSeq", b"lastSeq", "ledgerHash", b"ledgerHash", "ledgerHashPrevious", b"ledgerHashPrevious", "ledgerSeq", b"ledgerSeq", "networkTime", b"networkTime", "newEvent", b"newEvent", "newStatus", b"newStatus"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["firstSeq", b"firstSeq", "lastSeq", b"lastSeq", "ledgerHash", b"ledgerHash", "ledgerHashPrevious", b"ledgerHashPrevious", "ledgerSeq", b"ledgerSeq", "networkTime", b"networkTime", "newEvent", b"newEvent", "newStatus", b"newStatus"]) -> None: ...
@@ -673,18 +738,18 @@ class TMProposeSet(google.protobuf.message.Message):
         """not required if number is large"""
 
     def __init__(
-            self,
-            *,
-            proposeSeq: builtins.int | None = ...,
-            currentTxHash: builtins.bytes | None = ...,
-            nodePubKey: builtins.bytes | None = ...,
-            closeTime: builtins.int | None = ...,
-            signature: builtins.bytes | None = ...,
-            previousledger: builtins.bytes | None = ...,
-            addedTransactions: collections.abc.Iterable[builtins.bytes] | None = ...,
-            removedTransactions: collections.abc.Iterable[builtins.bytes] | None = ...,
-            checkedSignature: builtins.bool | None = ...,
-            hops: builtins.int | None = ...,
+        self,
+        *,
+        proposeSeq: builtins.int | None = ...,
+        currentTxHash: builtins.bytes | None = ...,
+        nodePubKey: builtins.bytes | None = ...,
+        closeTime: builtins.int | None = ...,
+        signature: builtins.bytes | None = ...,
+        previousledger: builtins.bytes | None = ...,
+        addedTransactions: collections.abc.Iterable[builtins.bytes] | None = ...,
+        removedTransactions: collections.abc.Iterable[builtins.bytes] | None = ...,
+        checkedSignature: builtins.bool | None = ...,
+        hops: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["checkedSignature", b"checkedSignature", "closeTime", b"closeTime", "currentTxHash", b"currentTxHash", "hops", b"hops", "nodePubKey", b"nodePubKey", "previousledger", b"previousledger", "proposeSeq", b"proposeSeq", "signature", b"signature"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["addedTransactions", b"addedTransactions", "checkedSignature", b"checkedSignature", "closeTime", b"closeTime", "currentTxHash", b"currentTxHash", "hops", b"hops", "nodePubKey", b"nodePubKey", "previousledger", b"previousledger", "proposeSeq", b"proposeSeq", "removedTransactions", b"removedTransactions", "signature", b"signature"]) -> None: ...
@@ -700,10 +765,10 @@ class TMHaveTransactionSet(google.protobuf.message.Message):
     status: global___TxSetStatus.ValueType
     hash: builtins.bytes
     def __init__(
-            self,
-            *,
-            status: global___TxSetStatus.ValueType | None = ...,
-            hash: builtins.bytes | None = ...,
+        self,
+        *,
+        status: global___TxSetStatus.ValueType | None = ...,
+        hash: builtins.bytes | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["hash", b"hash", "status", b"status"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["hash", b"hash", "status", b"status"]) -> None: ...
@@ -725,12 +790,12 @@ class TMValidatorList(google.protobuf.message.Message):
     signature: builtins.bytes
     version: builtins.int
     def __init__(
-            self,
-            *,
-            manifest: builtins.bytes | None = ...,
-            blob: builtins.bytes | None = ...,
-            signature: builtins.bytes | None = ...,
-            version: builtins.int | None = ...,
+        self,
+        *,
+        manifest: builtins.bytes | None = ...,
+        blob: builtins.bytes | None = ...,
+        signature: builtins.bytes | None = ...,
+        version: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["blob", b"blob", "manifest", b"manifest", "signature", b"signature", "version", b"version"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["blob", b"blob", "manifest", b"manifest", "signature", b"signature", "version", b"version"]) -> None: ...
@@ -750,11 +815,11 @@ class ValidatorBlobInfo(google.protobuf.message.Message):
     blob: builtins.bytes
     signature: builtins.bytes
     def __init__(
-            self,
-            *,
-            manifest: builtins.bytes | None = ...,
-            blob: builtins.bytes | None = ...,
-            signature: builtins.bytes | None = ...,
+        self,
+        *,
+        manifest: builtins.bytes | None = ...,
+        blob: builtins.bytes | None = ...,
+        signature: builtins.bytes | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["blob", b"blob", "manifest", b"manifest", "signature", b"signature"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["blob", b"blob", "manifest", b"manifest", "signature", b"signature"]) -> None: ...
@@ -775,11 +840,11 @@ class TMValidatorListCollection(google.protobuf.message.Message):
     @property
     def blobs(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___ValidatorBlobInfo]: ...
     def __init__(
-            self,
-            *,
-            version: builtins.int | None = ...,
-            manifest: builtins.bytes | None = ...,
-            blobs: collections.abc.Iterable[global___ValidatorBlobInfo] | None = ...,
+        self,
+        *,
+        version: builtins.int | None = ...,
+        manifest: builtins.bytes | None = ...,
+        blobs: collections.abc.Iterable[global___ValidatorBlobInfo] | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["manifest", b"manifest", "version", b"version"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["blobs", b"blobs", "manifest", b"manifest", "version", b"version"]) -> None: ...
@@ -802,11 +867,11 @@ class TMValidation(google.protobuf.message.Message):
     hops: builtins.int
     """Number of hops traveled"""
     def __init__(
-            self,
-            *,
-            validation: builtins.bytes | None = ...,
-            checkedSignature: builtins.bool | None = ...,
-            hops: builtins.int | None = ...,
+        self,
+        *,
+        validation: builtins.bytes | None = ...,
+        checkedSignature: builtins.bool | None = ...,
+        hops: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["checkedSignature", b"checkedSignature", "hops", b"hops", "validation", b"validation"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["checkedSignature", b"checkedSignature", "hops", b"hops", "validation", b"validation"]) -> None: ...
@@ -832,10 +897,10 @@ class TMEndpoints(google.protobuf.message.Message):
         endpoint: builtins.str
         hops: builtins.int
         def __init__(
-                self,
-                *,
-                endpoint: builtins.str | None = ...,
-                hops: builtins.int | None = ...,
+            self,
+            *,
+            endpoint: builtins.str | None = ...,
+            hops: builtins.int | None = ...,
         ) -> None: ...
         def HasField(self, field_name: typing.Literal["endpoint", b"endpoint", "hops", b"hops"]) -> builtins.bool: ...
         def ClearField(self, field_name: typing.Literal["endpoint", b"endpoint", "hops", b"hops"]) -> None: ...
@@ -849,10 +914,10 @@ class TMEndpoints(google.protobuf.message.Message):
     @property
     def endpoints_v2(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TMEndpoints.TMEndpointv2]: ...
     def __init__(
-            self,
-            *,
-            version: builtins.int | None = ...,
-            endpoints_v2: collections.abc.Iterable[global___TMEndpoints.TMEndpointv2] | None = ...,
+        self,
+        *,
+        version: builtins.int | None = ...,
+        endpoints_v2: collections.abc.Iterable[global___TMEndpoints.TMEndpointv2] | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["version", b"version"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["endpoints_v2", b"endpoints_v2", "version", b"version"]) -> None: ...
@@ -874,13 +939,13 @@ class TMIndexedObject(google.protobuf.message.Message):
     data: builtins.bytes
     ledgerSeq: builtins.int
     def __init__(
-            self,
-            *,
-            hash: builtins.bytes | None = ...,
-            nodeID: builtins.bytes | None = ...,
-            index: builtins.bytes | None = ...,
-            data: builtins.bytes | None = ...,
-            ledgerSeq: builtins.int | None = ...,
+        self,
+        *,
+        hash: builtins.bytes | None = ...,
+        nodeID: builtins.bytes | None = ...,
+        index: builtins.bytes | None = ...,
+        data: builtins.bytes | None = ...,
+        ledgerSeq: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["data", b"data", "hash", b"hash", "index", b"index", "ledgerSeq", b"ledgerSeq", "nodeID", b"nodeID"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["data", b"data", "hash", b"hash", "index", b"index", "ledgerSeq", b"ledgerSeq", "nodeID", b"nodeID"]) -> None: ...
@@ -904,6 +969,7 @@ class TMGetObjectByHash(google.protobuf.message.Message):
         otSTATE_NODE: TMGetObjectByHash._ObjectType.ValueType  # 4
         otCAS_OBJECT: TMGetObjectByHash._ObjectType.ValueType  # 5
         otFETCH_PACK: TMGetObjectByHash._ObjectType.ValueType  # 6
+        otTRANSACTIONS: TMGetObjectByHash._ObjectType.ValueType  # 7
 
     class ObjectType(_ObjectType, metaclass=_ObjectTypeEnumTypeWrapper): ...
     otUNKNOWN: TMGetObjectByHash.ObjectType.ValueType  # 0
@@ -913,6 +979,7 @@ class TMGetObjectByHash(google.protobuf.message.Message):
     otSTATE_NODE: TMGetObjectByHash.ObjectType.ValueType  # 4
     otCAS_OBJECT: TMGetObjectByHash.ObjectType.ValueType  # 5
     otFETCH_PACK: TMGetObjectByHash.ObjectType.ValueType  # 6
+    otTRANSACTIONS: TMGetObjectByHash.ObjectType.ValueType  # 7
 
     TYPE_FIELD_NUMBER: builtins.int
     QUERY_FIELD_NUMBER: builtins.int
@@ -934,14 +1001,14 @@ class TMGetObjectByHash(google.protobuf.message.Message):
         """the specific objects requested"""
 
     def __init__(
-            self,
-            *,
-            type: global___TMGetObjectByHash.ObjectType.ValueType | None = ...,
-            query: builtins.bool | None = ...,
-            seq: builtins.int | None = ...,
-            ledgerHash: builtins.bytes | None = ...,
-            fat: builtins.bool | None = ...,
-            objects: collections.abc.Iterable[global___TMIndexedObject] | None = ...,
+        self,
+        *,
+        type: global___TMGetObjectByHash.ObjectType.ValueType | None = ...,
+        query: builtins.bool | None = ...,
+        seq: builtins.int | None = ...,
+        ledgerHash: builtins.bytes | None = ...,
+        fat: builtins.bool | None = ...,
+        objects: collections.abc.Iterable[global___TMIndexedObject] | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["fat", b"fat", "ledgerHash", b"ledgerHash", "query", b"query", "seq", b"seq", "type", b"type"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["fat", b"fat", "ledgerHash", b"ledgerHash", "objects", b"objects", "query", b"query", "seq", b"seq", "type", b"type"]) -> None: ...
@@ -958,10 +1025,10 @@ class TMLedgerNode(google.protobuf.message.Message):
     nodeid: builtins.bytes
     """missing for ledger base data"""
     def __init__(
-            self,
-            *,
-            nodedata: builtins.bytes | None = ...,
-            nodeid: builtins.bytes | None = ...,
+        self,
+        *,
+        nodedata: builtins.bytes | None = ...,
+        nodeid: builtins.bytes | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["nodedata", b"nodedata", "nodeid", b"nodeid"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["nodedata", b"nodedata", "nodeid", b"nodeid"]) -> None: ...
@@ -992,16 +1059,16 @@ class TMGetLedger(google.protobuf.message.Message):
     @property
     def nodeIDs(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.bytes]: ...
     def __init__(
-            self,
-            *,
-            itype: global___TMLedgerInfoType.ValueType | None = ...,
-            ltype: global___TMLedgerType.ValueType | None = ...,
-            ledgerHash: builtins.bytes | None = ...,
-            ledgerSeq: builtins.int | None = ...,
-            nodeIDs: collections.abc.Iterable[builtins.bytes] | None = ...,
-            requestCookie: builtins.int | None = ...,
-            queryType: global___TMQueryType.ValueType | None = ...,
-            queryDepth: builtins.int | None = ...,
+        self,
+        *,
+        itype: global___TMLedgerInfoType.ValueType | None = ...,
+        ltype: global___TMLedgerType.ValueType | None = ...,
+        ledgerHash: builtins.bytes | None = ...,
+        ledgerSeq: builtins.int | None = ...,
+        nodeIDs: collections.abc.Iterable[builtins.bytes] | None = ...,
+        requestCookie: builtins.int | None = ...,
+        queryType: global___TMQueryType.ValueType | None = ...,
+        queryDepth: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["itype", b"itype", "ledgerHash", b"ledgerHash", "ledgerSeq", b"ledgerSeq", "ltype", b"ltype", "queryDepth", b"queryDepth", "queryType", b"queryType", "requestCookie", b"requestCookie"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["itype", b"itype", "ledgerHash", b"ledgerHash", "ledgerSeq", b"ledgerSeq", "ltype", b"ltype", "nodeIDs", b"nodeIDs", "queryDepth", b"queryDepth", "queryType", b"queryType", "requestCookie", b"requestCookie"]) -> None: ...
@@ -1026,14 +1093,14 @@ class TMLedgerData(google.protobuf.message.Message):
     @property
     def nodes(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TMLedgerNode]: ...
     def __init__(
-            self,
-            *,
-            ledgerHash: builtins.bytes | None = ...,
-            ledgerSeq: builtins.int | None = ...,
-            type: global___TMLedgerInfoType.ValueType | None = ...,
-            nodes: collections.abc.Iterable[global___TMLedgerNode] | None = ...,
-            requestCookie: builtins.int | None = ...,
-            error: global___TMReplyError.ValueType | None = ...,
+        self,
+        *,
+        ledgerHash: builtins.bytes | None = ...,
+        ledgerSeq: builtins.int | None = ...,
+        type: global___TMLedgerInfoType.ValueType | None = ...,
+        nodes: collections.abc.Iterable[global___TMLedgerNode] | None = ...,
+        requestCookie: builtins.int | None = ...,
+        error: global___TMReplyError.ValueType | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["error", b"error", "ledgerHash", b"ledgerHash", "ledgerSeq", b"ledgerSeq", "requestCookie", b"requestCookie", "type", b"type"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["error", b"error", "ledgerHash", b"ledgerHash", "ledgerSeq", b"ledgerSeq", "nodes", b"nodes", "requestCookie", b"requestCookie", "type", b"type"]) -> None: ...
@@ -1072,12 +1139,12 @@ class TMPing(google.protobuf.message.Message):
     """know when we think we sent the ping"""
     netTime: builtins.int
     def __init__(
-            self,
-            *,
-            type: global___TMPing.pingType.ValueType | None = ...,
-            seq: builtins.int | None = ...,
-            pingTime: builtins.int | None = ...,
-            netTime: builtins.int | None = ...,
+        self,
+        *,
+        type: global___TMPing.pingType.ValueType | None = ...,
+        seq: builtins.int | None = ...,
+        pingTime: builtins.int | None = ...,
+        netTime: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["netTime", b"netTime", "pingTime", b"pingTime", "seq", b"seq", "type", b"type"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["netTime", b"netTime", "pingTime", b"pingTime", "seq", b"seq", "type", b"type"]) -> None: ...
@@ -1098,11 +1165,11 @@ class TMSquelch(google.protobuf.message.Message):
     squelchDuration: builtins.int
     """squelch duration in seconds"""
     def __init__(
-            self,
-            *,
-            squelch: builtins.bool | None = ...,
-            validatorPubKey: builtins.bytes | None = ...,
-            squelchDuration: builtins.int | None = ...,
+        self,
+        *,
+        squelch: builtins.bool | None = ...,
+        validatorPubKey: builtins.bytes | None = ...,
+        squelchDuration: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["squelch", b"squelch", "squelchDuration", b"squelchDuration", "validatorPubKey", b"validatorPubKey"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["squelch", b"squelch", "squelchDuration", b"squelchDuration", "validatorPubKey", b"validatorPubKey"]) -> None: ...
@@ -1120,11 +1187,11 @@ class TMProofPathRequest(google.protobuf.message.Message):
     ledgerHash: builtins.bytes
     type: global___TMLedgerMapType.ValueType
     def __init__(
-            self,
-            *,
-            key: builtins.bytes | None = ...,
-            ledgerHash: builtins.bytes | None = ...,
-            type: global___TMLedgerMapType.ValueType | None = ...,
+        self,
+        *,
+        key: builtins.bytes | None = ...,
+        ledgerHash: builtins.bytes | None = ...,
+        type: global___TMLedgerMapType.ValueType | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["key", b"key", "ledgerHash", b"ledgerHash", "type", b"type"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["key", b"key", "ledgerHash", b"ledgerHash", "type", b"type"]) -> None: ...
@@ -1149,14 +1216,14 @@ class TMProofPathResponse(google.protobuf.message.Message):
     @property
     def path(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.bytes]: ...
     def __init__(
-            self,
-            *,
-            key: builtins.bytes | None = ...,
-            ledgerHash: builtins.bytes | None = ...,
-            type: global___TMLedgerMapType.ValueType | None = ...,
-            ledgerHeader: builtins.bytes | None = ...,
-            path: collections.abc.Iterable[builtins.bytes] | None = ...,
-            error: global___TMReplyError.ValueType | None = ...,
+        self,
+        *,
+        key: builtins.bytes | None = ...,
+        ledgerHash: builtins.bytes | None = ...,
+        type: global___TMLedgerMapType.ValueType | None = ...,
+        ledgerHeader: builtins.bytes | None = ...,
+        path: collections.abc.Iterable[builtins.bytes] | None = ...,
+        error: global___TMReplyError.ValueType | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["error", b"error", "key", b"key", "ledgerHash", b"ledgerHash", "ledgerHeader", b"ledgerHeader", "type", b"type"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["error", b"error", "key", b"key", "ledgerHash", b"ledgerHash", "ledgerHeader", b"ledgerHeader", "path", b"path", "type", b"type"]) -> None: ...
@@ -1170,9 +1237,9 @@ class TMReplayDeltaRequest(google.protobuf.message.Message):
     LEDGERHASH_FIELD_NUMBER: builtins.int
     ledgerHash: builtins.bytes
     def __init__(
-            self,
-            *,
-            ledgerHash: builtins.bytes | None = ...,
+        self,
+        *,
+        ledgerHash: builtins.bytes | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["ledgerHash", b"ledgerHash"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["ledgerHash", b"ledgerHash"]) -> None: ...
@@ -1193,14 +1260,30 @@ class TMReplayDeltaResponse(google.protobuf.message.Message):
     @property
     def transaction(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.bytes]: ...
     def __init__(
-            self,
-            *,
-            ledgerHash: builtins.bytes | None = ...,
-            ledgerHeader: builtins.bytes | None = ...,
-            transaction: collections.abc.Iterable[builtins.bytes] | None = ...,
-            error: global___TMReplyError.ValueType | None = ...,
+        self,
+        *,
+        ledgerHash: builtins.bytes | None = ...,
+        ledgerHeader: builtins.bytes | None = ...,
+        transaction: collections.abc.Iterable[builtins.bytes] | None = ...,
+        error: global___TMReplyError.ValueType | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["error", b"error", "ledgerHash", b"ledgerHash", "ledgerHeader", b"ledgerHeader"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["error", b"error", "ledgerHash", b"ledgerHash", "ledgerHeader", b"ledgerHeader", "transaction", b"transaction"]) -> None: ...
 
 global___TMReplayDeltaResponse = TMReplayDeltaResponse
+
+@typing.final
+class TMHaveTransactions(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    HASHES_FIELD_NUMBER: builtins.int
+    @property
+    def hashes(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.bytes]: ...
+    def __init__(
+        self,
+        *,
+        hashes: collections.abc.Iterable[builtins.bytes] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["hashes", b"hashes"]) -> None: ...
+
+global___TMHaveTransactions = TMHaveTransactions
