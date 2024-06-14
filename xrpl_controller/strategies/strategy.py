@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 import base58
 
 from protos import packet_pb2
-from xrpl_controller.core import MAX_U32, flatten, validate_ports
+from xrpl_controller.core import MAX_U32, flatten, validate_ports, validate_ids
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -18,6 +18,7 @@ class Strategy(ABC):
         self,
         auto_partition: bool = True,
         auto_parse_identical: bool = True,
+        auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
     ):
         """
@@ -32,12 +33,16 @@ class Strategy(ABC):
         self.validator_node_list: List[ValidatorNode] = []
         self.public_to_private_key_map: Dict[str, str] = {}
         self.node_amount: int = 0
-        self.port_dict: Dict[int, int] = {}
+        self.port_dict: dict[int, int] = {}
+        self.id_dict: dict[int, int] = {}
         self.auto_partition: bool = auto_partition
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical
-        if auto_parse_identical:
+        self.auto_parse_subsets = auto_parse_subsets
+        if auto_parse_identical or auto_parse_subsets:
             self.prev_message_action_matrix: list[list[MessageAction]] = []
+        if self.auto_parse_subsets:
+            self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.keep_action_log = keep_action_log
 
     def partition_network(self, partitions: list[list[int]]):
@@ -130,10 +135,21 @@ class Strategy(ABC):
         """
         self.partition_network([[node.peer.port for node in self.validator_node_list]])
 
+    def set_subsets_dict_entry(self, peer_id: int, subsets: list[list[int]] | list[int]):
+        assert self.auto_parse_subsets
+        self.subsets_dict[peer_id] = subsets
+
+    def set_subsets_dict(self, subsets_dict: dict[int, list[list[int]] | list[int]]):
+        assert self.auto_parse_subsets
+        self.subsets_dict = {peer_id: [] for peer_id in range(self.node_amount)}
+
+        for peer_id, subsets in subsets_dict.items():
+            self.set_subsets_dict_entry(peer_id, subsets)
+
     def set_message_action(
         self,
-        peer_from_port: int,
-        peer_to_port: int,
+        peer_from_id: int,
+        peer_to_id: int,
         initial_message: bytes,
         final_message: bytes,
         action: int,
@@ -142,8 +158,8 @@ class Strategy(ABC):
         Set an entry in the message_action_matrix.
 
         Args:
-            peer_from_port: Sender peer port.
-            peer_to_port: Receiving peer port.
+            peer_from_id: Sender peer id.
+            peer_to_id: Receiving peer id.
             initial_message: The pre-processed message.
             final_message: The (possibly mutated) processed message
             action: The taken action
@@ -151,16 +167,16 @@ class Strategy(ABC):
         Raises:
             ValueError: if peer_from_port is equal to peer_to_port or if any is negative
         """
-        assert self.auto_parse_identical
-        validate_ports(peer_from_port, peer_to_port)
-        self.prev_message_action_matrix[self.idx(peer_from_port)][
-            self.idx(peer_to_port)
+        assert self.auto_parse_identical or self.auto_parse_subsets
+        validate_ids(peer_from_id, peer_to_id)
+        self.prev_message_action_matrix[peer_from_id][
+            peer_to_id
         ].set_initial_message(initial_message).set_final_message(
             final_message
         ).set_action(action)
 
     def check_previous_message(
-        self, peer_from_port: int, peer_to_port: int, message: bytes
+        self, peer_from_id: int, peer_to_id: int, message: bytes
     ) -> tuple[bool, tuple[bytes, int]]:
         """
         Parse a message automatically to a final state with an action if it was matching to the previous message.
@@ -171,21 +187,43 @@ class Strategy(ABC):
             else: ...
 
         Args:
-            peer_from_port: Sender peer port.
-            peer_to_port: Receiving peer port.
+            peer_from_id: Sender peer port.
+            peer_to_id: Receiving peer port.
             message: The message to be checked for parsing
 
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
         """
-        assert self.auto_parse_identical
-        message_action = self.prev_message_action_matrix[self.idx(peer_from_port)][
-            self.idx(peer_to_port)
+        assert self.auto_parse_identical or self.auto_parse_subsets
+        message_action = self.prev_message_action_matrix[peer_from_id][
+            peer_to_id
         ]
         return message == message_action.initial_message, (
             message_action.final_message,
             message_action.action,
         )
+
+    def check_subset_entry(self, peer_from_id: int, peer_to_id: int, message: bytes, subset: list[int]) -> tuple[bool, tuple[bytes, int]]:
+        if peer_to_id in subset:
+            for peer_id in subset:
+                if (result := self.check_previous_message(peer_from_id, peer_id, message))[0]:
+                    self.set_message_action(
+                        peer_from_id, peer_to_id, message, result[1][0], result[1][1]
+                    )
+                    return result
+
+        return False, self.check_previous_message(peer_from_id, peer_to_id, message)[1]
+
+    def check_subsets(self, peer_from_id: int, peer_to_id: int, message: bytes) -> tuple[bool, tuple[bytes, int]]:
+        assert self.auto_parse_subsets
+
+        if len(self.subsets_dict[peer_from_id]) > 0 and isinstance(self.subsets_dict[peer_from_id][0], list):
+            for subset in self.subsets_dict[peer_from_id]:
+                if (result := self.check_subset_entry(peer_from_id, peer_to_id, message, subset))[0]:
+                    return result
+            return False, self.check_previous_message(peer_from_id, peer_to_id, message)[1]
+        else:
+            return self.check_subset_entry(peer_from_id, peer_to_id, message, self.subsets_dict[peer_from_id])
 
     def update_network(self, validator_node_list: List[ValidatorNode]):
         """
@@ -204,6 +242,12 @@ class Strategy(ABC):
                 [node.peer.port for node in validator_node_list]
             )
         }
+        self.id_dict = {
+            index: port
+            for index, port in enumerate(
+                [node.peer.port for node in validator_node_list]
+            )
+        }
 
         self.partition_network([[node.peer.port for node in validator_node_list]])
 
@@ -212,6 +256,9 @@ class Strategy(ABC):
                 [MessageAction() for _ in range(self.node_amount)]
                 for _ in range(self.node_amount)
             ]
+
+        if self.auto_parse_subsets:
+            self.subsets_dict = {peer_id: [] for peer_id in range(self.node_amount)}
 
         for node in self.validator_node_list:
             decoded_pub_key = base58.b58decode(
@@ -238,6 +285,9 @@ class Strategy(ABC):
         """
         return self.port_dict[port]
 
+    def port(self, peer_id: int) -> int:
+        return self.id_dict[peer_id]
+
     def process_packet(
         self,
         packet: packet_pb2.Packet,
@@ -251,16 +301,21 @@ class Strategy(ABC):
         Returns:
             Tuple[bytes, int]: The processed packet as bytes and an action in a tuple.
         """
+        peer_from_id = self.idx(packet.from_port)
+        peer_to_id = self.idx(packet.to_port)
+
         if (
             self.auto_parse_identical
-            and self.check_previous_message(
-                packet.from_port, packet.to_port, packet.data
-            )[0]
+            and (result := self.check_previous_message(
+                peer_from_id, peer_to_id, packet.data
+            ))[0]
         ):
-            (final_data, action) = self.check_previous_message(
-                packet.from_port, packet.to_port, packet.data
-            )[1]
-
+            (final_data, action) = result[1]
+        elif (
+            self.auto_parse_subsets
+            and (result := self.check_subsets(peer_from_id, peer_to_id, packet.data))[0]
+        ):
+            (final_data, action) = result[1]
         else:
             if self.auto_partition and not self.check_communication(
                 packet.from_port, packet.to_port
@@ -269,9 +324,9 @@ class Strategy(ABC):
             else:
                 (final_data, action) = self.handle_packet(packet)
 
-            if self.auto_parse_identical:
+            if self.auto_parse_identical or self.auto_parse_subsets:
                 self.set_message_action(
-                    packet.from_port, packet.to_port, packet.data, final_data, action
+                    peer_from_id, peer_to_id, packet.data, final_data, action
                 )
 
         return final_data, action

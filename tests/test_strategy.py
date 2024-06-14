@@ -35,6 +35,14 @@ node_2 = ValidatorNode(
     ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
 )
 
+node_3 = ValidatorNode(
+    SocketAddress("test_peer", 13),
+    SocketAddress("test-ws-pub", 23),
+    SocketAddress("test-ws-adm", 33),
+    SocketAddress("test-rpc", 43),
+    ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
+)
+
 
 def test_init():
     """Test whether Strategy attributes get initialized correctly."""
@@ -59,6 +67,8 @@ def test_update_network():
         [True, False, True],
         [True, True, False],
     ]
+
+    assert strategy.subsets_dict == {0: [], 1: [], 2: []}
 
     assert len(strategy.prev_message_action_matrix) == 3
     for row in strategy.prev_message_action_matrix:

@@ -19,6 +19,7 @@ class RandomFuzzer(Strategy):
         max_delay_ms: int,
         seed: int | None = None,
         auto_parse_identical: bool = True,
+        auto_parse_subsets: bool = True,
     ):
         """
         Initializes the random fuzzer.
@@ -30,11 +31,12 @@ class RandomFuzzer(Strategy):
             max_delay_ms: maximum number of milliseconds that will be delayed.
             seed: seed for random number generator. Defaults to -sys.maxsize to indicate no seeding.
             auto_parse_identical: whether to auto-parse identical packages per peer combination.
+            auto_parse_subsets: whether to auto-parse identical packages w.r.t. defined subsets
 
         Raises:
             ValueError: if the given probabilities or delays are invalid
         """
-        super().__init__(auto_parse_identical=auto_parse_identical)
+        super().__init__(auto_parse_identical=auto_parse_identical, auto_parse_subsets=auto_parse_subsets)
 
         if seed is not None:
             random.seed(seed)
