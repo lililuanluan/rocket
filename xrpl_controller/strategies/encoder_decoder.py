@@ -68,6 +68,7 @@ class PacketEncoderDecoder:
 
     @staticmethod
     def decode_packet(packet: packet_pb2.Packet) -> tuple[Message | bytes, int]:
+        print(f"packet: {packet}")
         """
         Decodes the given packet into a tuple.
 
@@ -79,6 +80,7 @@ class PacketEncoderDecoder:
         """
         # length = struct.unpack("!I", packet.data[:4])[0]
         message_type = struct.unpack("!H", packet.data[4:6])[0]
+        print(f"message_type: {message_type}")
         if message_type not in PacketEncoderDecoder.message_type_map:
             raise DecodingNotSupportedError(
                 f"Decoding of message type {message_type} not supported"
@@ -88,6 +90,7 @@ class PacketEncoderDecoder:
         message_class = PacketEncoderDecoder.message_type_map[message_type]
         message = message_class()
         message.ParseFromString(message_payload)
+        print(f"message: {message}")
         return message, message_type
 
     @staticmethod
@@ -106,6 +109,7 @@ class PacketEncoderDecoder:
 
         # Add headers containing the message length and type
         final_message = (
+
             int(len(serialized.hex()) / 2).to_bytes(4, "big")
             + message_type.to_bytes(2, "big")
             + serialized
