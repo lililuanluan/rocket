@@ -87,7 +87,7 @@ def test_auto_parsing_subsets():
 
 
 def test_auto_parsing_subsets_4_nodes():
-    """Same as previous test, just special case with 4 nodes."""
+    """Test edge cases where there are multiple subsets to be checked."""
     strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2, node_3])
     strategy.set_subsets_dict({2: [[0], [1, 3]]})
