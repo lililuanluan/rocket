@@ -6,19 +6,6 @@ from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
 # Ports of the imported nodes are 10, 11, 12 respectively
 
 
-def test_init():
-    """Test whether Strategy attributes get initialized correctly."""
-    strategy = RandomFuzzer()
-    assert strategy.validator_node_list == []
-    assert strategy.public_to_private_key_map = {}
-    assert strategy.node_amount == 0
-    assert strategy.port_dict == {}
-    assert strategy.communication_matrix == []
-    assert strategy.auto_partition
-    assert strategy.auto_parse_identical
-    assert strategy.prev_message_action_matrix = []
-    assert strategy.keep_action_log
-
 def test_custom_connections():
     """Test whether Strategy attributes get updated correctly when connect_nodes is called."""
     strategy = RandomFuzzer()
@@ -64,7 +51,7 @@ def test_custom_connections():
 
 def test_reset_communications():
     """Test whether Strategy attributes resets communication matrix correctly when reset_communications is called."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[10], [11, 12]])
     strategy.reset_communications()

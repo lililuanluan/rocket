@@ -9,7 +9,7 @@ from xrpl_controller.strategies import RandomFuzzer
 
 def test_auto_parsing():
     """Test the automatic parsing of identical subsequent messages."""
-    strategy = RandomFuzzer(0, 0, 0, 150)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     strategy.set_message_action(10, 11, b"test", b"mutated", 42)
     res = strategy.check_previous_message(10, 11, b"notest")
@@ -33,7 +33,7 @@ def test_auto_parsing():
 
 def test_auto_parsing_false():
     """Test whether attributes do not get saved when boolean is false."""
-    strategy = RandomFuzzer(0, 0, 0, 150, None, False)
+    strategy = RandomFuzzer(auto_parse_identical=False)
     assert not hasattr(strategy, "prev_message_action_matrix")
 
     strategy.update_network([node_0, node_1, node_2])
