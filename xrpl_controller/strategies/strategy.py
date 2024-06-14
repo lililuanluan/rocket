@@ -1,5 +1,6 @@
 """This module is responsible for defining the Strategy interface."""
 
+import threading
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
@@ -10,12 +11,54 @@ from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import MAX_U32, flatten
 from xrpl_controller.interceptor_manager import InterceptorManager
 from xrpl_controller.validator_node_info import ValidatorNode
+from enum import Enum
+
+
+class IterationType(ABC):
+    def __init__(self, interceptor_manager: InterceptorManager):
+        self._interceptor_manager = interceptor_manager
+
+    def init_interceptor(self):
+        self._interceptor_manager.start_new()
+
+
+class TimeBasedIteration(IterationType):
+    def __init__(self, interceptor_manager: InterceptorManager, timer_seconds: int):
+        super().__init__(interceptor_manager)
+        self._timer_seconds = timer_seconds
+
+    def start_timer(self):
+        timer = threading.Timer(self._timer_seconds, self._interceptor_manager.restart)
+        timer.start()
+
+
+class LedgerBasedIteration(IterationType):
+    def __init__(self, interceptor_manager: InterceptorManager, max_ledger_seq: int):
+        self.prev_network_event = 0
+        self.network_event_changes = 0
+        self.ledger_seq = 0
+
+        super().__init__(interceptor_manager)
+        self._max_ledger_seq = max_ledger_seq
+
+    def update_iteration(self, status: ripple_pb2.TMStatusChange):
+        if self.prev_network_event != status.newEvent:
+            self.prev_network_event = status.newEvent
+            self.network_event_changes += 1
+            self.ledger_seq = status.ledgerSeq
+            if self.ledger_seq == self._max_ledger_seq:
+                self._interceptor_manager.restart()
 
 
 class Strategy(ABC):
     """Class that defines the Strategy interface."""
 
-    def __init__(self, auto_partition: bool = True, keep_action_log: bool = True):
+    def __init__(
+        self,
+        auto_partition: bool = True,
+        keep_action_log: bool = True,
+        iteration_type: IterationType = TimeBasedIteration(InterceptorManager(), 5),
+    ):
         """
         Initialize the Strategy interface with needed attributes.
 
@@ -32,10 +75,7 @@ class Strategy(ABC):
         self.auto_partition = auto_partition
         self.keep_action_log = keep_action_log
 
-        self.interceptor_manager = InterceptorManager()
-        self.prev_network_event = 0
-        self.network_event_changes = 0
-        self.ledger_seq = 0
+        self.iteration_type = iteration_type
 
     def partition_network(self, partitions: list[list[int]]):
         """
@@ -136,14 +176,13 @@ class Strategy(ABC):
                 decoded_priv_key.hex()
             )
 
+        if isinstance(self.iteration_type, TimeBasedIteration):
+            self.iteration_type.start_timer()
+
     def update_status(self, status: ripple_pb2.TMStatusChange):
         """Update the strategy's state variables, when a new TMStatusChange is received."""
-        if self.prev_network_event != status.newEvent:
-            self.prev_network_event = status.newEvent
-            self.network_event_changes += 1
-            self.ledger_seq = status.ledgerSeq
-            if self.ledger_seq == 5:
-                self.interceptor_manager.restart()
+        if isinstance(self.iteration_type, LedgerBasedIteration):
+            self.iteration_type.update_iteration(status)
 
     @abstractmethod
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:

@@ -184,7 +184,7 @@ def serve(strategy: Strategy):
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
-    strategy.interceptor_manager.start_new()
+    strategy.iteration_type.init_interceptor()
     server.wait_for_termination()
 
 
