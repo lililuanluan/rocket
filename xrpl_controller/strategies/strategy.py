@@ -75,7 +75,7 @@ class Strategy(ABC):
 
     def connect_nodes(self, peer_port_1: int, peer_port_2: int):
         """
-        Connect 2 nodes using their ports, which allows for communication between them.
+        Connect 2 nodes using their ports, which allows communication between them.
 
         Args:
             peer_port_1 (int): Peer port 1.
@@ -90,7 +90,7 @@ class Strategy(ABC):
 
     def disconnect_nodes(self, peer_port_1: int, peer_port_2: int):
         """
-        Disconnect 2 nodes using their ports, which allows for communication between them.
+        Disconnect 2 nodes using their ports, which disallows communication between them.
 
         Args:
             peer_port_1 (int): Peer port 1.
