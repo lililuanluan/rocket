@@ -160,7 +160,7 @@ def serve(strategy: Strategy):
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
-    strategy.iteration_type.init_interceptor()
+    strategy.iteration_type.add_iteration()
     server.wait_for_termination()
 
 

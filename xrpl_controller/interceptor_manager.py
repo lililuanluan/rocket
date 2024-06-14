@@ -43,7 +43,12 @@ class InterceptorManager:
 
     def restart(self):
         """Stops and starts the xrpl-packet-interceptor subprocess."""
-        logger.info("Stopping interceptor")
         if self.process:
             self.process.terminate()
         self.start_new()
+
+    def stop(self):
+        """Stops the xrpl-packet-interceptor subprocess."""
+        logger.info("Stopping interceptor")
+        if self.process:
+            self.process.terminate()
