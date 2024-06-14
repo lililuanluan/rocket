@@ -19,6 +19,26 @@ def flatten(xss: list[list[int]]) -> list[int]:
     return [x for xs in xss for x in xs]
 
 
+def validate_ports(port_1: int, port_2: int):
+    """
+    Validate whether 2 ports are not equal to each other.
+
+    Args:
+        port_1: Port 1
+        port_2: Port 2
+
+    Raises:
+        ValueError: if the ports are equal or if any of the ports are negative.
+    """
+    if port_1 < 0 or port_2 < 0:
+        raise ValueError("Ports must be non-negative")
+
+    if port_1 == port_2:
+        raise ValueError(
+            f"Received ports can not be equal to each other, value: {port_1}."
+        )
+
+
 def format_datetime(time: datetime) -> str:
     """
     Format a datetime to a fixed format.
