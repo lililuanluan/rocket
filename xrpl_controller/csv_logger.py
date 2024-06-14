@@ -13,9 +13,9 @@ action_log_columns = [
     "action",
     "from_port",
     "to_port",
-    "message type",
-    "original data",
-    "possibly mutated data",
+    "message_type",
+    "original_data",
+    "possibly_mutated_data",
 ]
 
 
