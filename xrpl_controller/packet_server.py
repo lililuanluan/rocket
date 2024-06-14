@@ -5,7 +5,6 @@ from concurrent import futures
 from typing import List
 
 import grpc
-import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
 from protos.packet_pb2 import Packet
@@ -49,7 +48,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             the possibly modified packet and an action
 
         Raises:
-            ValueError: if from_port == to_port or if any is negative
+            ValueError: if request.from_port == request.to_port or if any is negative
         """
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
         validate_ports(request.from_port, request.to_port)
@@ -148,12 +147,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Returns:
             Config: The Config object.
         """
-        with open("network-config.toml", "rb") as f:
-            config = tomllib.load(f)
-
-        # Should be the line under, but does not pass on pipeline.
-        # partition_list: List[List[int]] = config.get("network_partition")
-        partition_list = config.get("network_partition")
+        config = self.strategy.network_config
+        partition_list: List[List[int]] = config.get("network_partition")
         partitions = map(lambda x: packet_pb2.Partition(nodes=x), partition_list)
 
         return packet_pb2.Config(
