@@ -1,7 +1,7 @@
 """Test the functionality which automatically parses identical subsequent messages."""
 
 from protos import packet_pb2
-from tests.test_strategy import node_0, node_1, node_2
+from tests.unit.test_strategy import node_0, node_1, node_2
 from xrpl_controller.strategies import RandomFuzzer
 
 # Ports of the imported nodes are 10, 11, 12 respectively

@@ -13,7 +13,7 @@ class RandomFuzzer(Strategy):
 
     def __init__(
         self,
-        network_config_file: str | None = None,
+        network_config_file: str = "default-network-config.yaml",
         strategy_config_file: str = "RandomFuzzer.yaml",
         auto_parse_identical: bool = True,
     ):

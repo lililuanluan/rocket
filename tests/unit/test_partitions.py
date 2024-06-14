@@ -1,6 +1,6 @@
 """Tests for network partitions functionality."""
 
-from tests.test_strategy import node_0, node_1, node_2
+from tests.unit.test_strategy import node_0, node_1, node_2
 from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
 
 # Ports of the imported nodes are 10, 11, 12 respectively

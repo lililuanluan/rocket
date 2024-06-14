@@ -15,32 +15,18 @@ def test_yaml_to_dict():
     create_test_config("TEST_YAML_DICT3", {"test3": [[1, 2, 3]]})
 
     assert (
-        yaml_to_dict("TEST_YAML_DICT2", "./xrpl_controller/strategies/configs/", "")
-        == {}
+        yaml_to_dict("TEST_YAML_DICT2", "./xrpl_controller/strategies/configs/") == {}
     )
+    assert yaml_to_dict("TEST_YAML_DICT", "./xrpl_controller/strategies/configs/") == {
+        "test": 2
+    }
     assert yaml_to_dict(
-        "TEST_YAML_DICT", "./xrpl_controller/strategies/configs/", ""
-    ) == {"test": 2}
-    assert yaml_to_dict(
-        "TEST_YAML_DICT.yaml", "./xrpl_controller/strategies/configs/", ""
-    ) == {"test": 2}
-
-    assert yaml_to_dict(
-        None, "./xrpl_controller/strategies/configs/", "TEST_YAML_DICT"
-    ) == {"test": 2}
-    assert yaml_to_dict(
-        None, "./xrpl_controller/strategies/configs", "TEST_YAML_DICT"
-    ) == {"test": 2}
-    assert yaml_to_dict(
-        None, "./xrpl_controller/strategies/configs/", "TEST_YAML_DICT.yaml"
-    ) == {"test": 2}
-    assert yaml_to_dict(
-        None, "./xrpl_controller/strategies/configs/", "TEST_YAML_DICT"
+        "TEST_YAML_DICT.yaml", "./xrpl_controller/strategies/configs"
     ) == {"test": 2}
 
-    assert yaml_to_dict(
-        "TEST_YAML_DICT3", "./xrpl_controller/strategies/configs/", "TEST_YAML_DICT"
-    ) == {"test3": [[1, 2, 3]]}
+    assert yaml_to_dict("TEST_YAML_DICT3", "./xrpl_controller/strategies/configs/") == {
+        "test3": [[1, 2, 3]]
+    }
 
     remove_test_config("TEST_YAML_DICT")
     remove_test_config("TEST_YAML_DICT2")

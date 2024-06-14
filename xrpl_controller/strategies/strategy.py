@@ -16,8 +16,8 @@ class Strategy(ABC):
 
     def __init__(
         self,
-        network_config_file: str | None = None,
-        strategy_config_file: str | None = None,
+        network_config_file: str = "default-network-config.yaml",
+        strategy_config_file: str = "default-strategy-config.yaml",
         auto_partition: bool = True,
         auto_parse_identical: bool = True,
         keep_action_log: bool = True,
@@ -46,7 +46,8 @@ class Strategy(ABC):
 
         str_conf_directory = "./xrpl_controller/strategies/configs/"
         self.params = yaml_to_dict(
-            strategy_config_file, str_conf_directory, "default-strategy-config.yaml"
+            strategy_config_file,
+            str_conf_directory,
         )
         print(
             "Initialized strategy parameters from configuration file:\n\t",
@@ -55,7 +56,8 @@ class Strategy(ABC):
 
         ntw_conf_directory = "./xrpl_controller/network_configs/"
         self.network_config = yaml_to_dict(
-            network_config_file, ntw_conf_directory, "default-network-config.yaml"
+            network_config_file,
+            ntw_conf_directory,
         )
         print(
             "Initialized strategy network configuration from configuration file:\n\t",
