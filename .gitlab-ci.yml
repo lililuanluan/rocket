@@ -28,14 +28,14 @@ test:
   script:
     - pip install tox
     - tox -e py # run unit tests
-  coverage: '/TOTAL.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  coverage: '/Branch coverage: (\d+\.\d+)%/'
   artifacts:
     when: always
     reports:
-      junit: junit-report.xml
+      junit: coverage_reports/junit-report.xml
       coverage_report:
         coverage_format: cobertura
-        path: coverage.xml
+        path: coverage_reports/coverage.xml
 
 lint:
   needs: []

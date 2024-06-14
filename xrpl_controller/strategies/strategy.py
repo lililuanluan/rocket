@@ -185,7 +185,9 @@ class Strategy(ABC):
             self.iteration_type.update_iteration(status)
 
     @abstractmethod
-    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
+    def handle_packet(
+        self, packet: packet_pb2.Packet
+    ) -> Tuple[bytes, int]:  # pragma: no cover
         """
         This method is responsible for returning a possibly mutated packet and an action.
 
