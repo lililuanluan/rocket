@@ -59,12 +59,25 @@ class PacketEncoderDecoder:
         Args:
             message: Message to be signed.
             private_key: Private key of the message in hex format.
+
+        Returns:
+            Message that is signed
         """
         raise NotImplementedError(f"No signing method implemented for {type(message)}.")
 
     @sign_message.register
     @staticmethod
     def _(message: TMProposeSet, private_key: str) -> TMProposeSet:
+        """
+        Method that takes in a proposeSet and does the hashing of it.
+
+        Args:
+            message: ProposeSet.
+            private_key: Private key of the message in hex format
+
+        Returns:
+            message that needs to be signed
+        """
         # Collect the fields used to originally sign the message
         bytes_to_sign = (
             b"\x50\x52\x50\x00"
