@@ -1,6 +1,7 @@
 """Contains functionality to easily interact with the network packet interceptor subprocess."""
 
 from subprocess import PIPE, Popen
+from sys import platform
 from threading import Thread
 
 from loguru import logger
@@ -17,15 +18,20 @@ class InterceptorManager:
     def __check_output(proc: Popen):
         stdout, stderr = proc.communicate()
         if stdout:
-            logger.info(stdout)
+            logger.debug(f"\n{stdout}")
         if stderr:
-            logger.info(stderr)
+            logger.debug(f"\n{stderr}")
 
     def start_new(self):
         """Starts the xrpl-packet-interceptor subprocess, and spawns a thread checking for output."""
+        file = (
+            "xrpl-packet-interceptor"
+            if platform != "Windows"
+            else "xrpl-packet-interceptor.exe"
+        )
         logger.info("Starting interceptor")
         self.process = Popen(
-            ["./xrpl-packet-interceptor"],
+            [f"./{file}"],
             cwd="./interceptor",
             stdin=PIPE,
             stdout=PIPE,

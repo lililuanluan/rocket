@@ -1,7 +1,9 @@
 .temp-interceptor
 .gitlab-ci-local
 
-interceptor
+interceptor/**/*
+!interceptor/README.md
+
 logs
 
 # Sphinx

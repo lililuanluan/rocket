@@ -2,6 +2,7 @@
 
 import threading
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 
 import base58
@@ -11,43 +12,87 @@ from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import MAX_U32, flatten
 from xrpl_controller.interceptor_manager import InterceptorManager
 from xrpl_controller.validator_node_info import ValidatorNode
-from enum import Enum
 
 
-class IterationType(ABC):
-    def __init__(self, interceptor_manager: InterceptorManager):
-        self._interceptor_manager = interceptor_manager
+class IterationType:
+    """Base class for defining iteration mechanisms."""
+
+    def __init__(self):
+        """Init Iteration Type with an InterceptorManager attached."""
+        self._interceptor_manager = InterceptorManager()
 
     def init_interceptor(self):
+        """Wrapper method to start the interceptor for the first time (on program initialization)."""
         self._interceptor_manager.start_new()
 
 
 class TimeBasedIteration(IterationType):
-    def __init__(self, interceptor_manager: InterceptorManager, timer_seconds: int):
-        super().__init__(interceptor_manager)
+    """Time based iteration type, restarts the interceptor process after a certain amount of seconds."""
+
+    def __init__(self, timer_seconds: int):
+        """
+        Init TimeBasedIteration with an InterceptorManager attached.
+
+        Args:
+            timer_seconds: the amount of seconds an iteration should take.
+        """
+        super().__init__()
         self._timer_seconds = timer_seconds
 
     def start_timer(self):
+        """Starts a thread which restarts the interceptor process after a set amount of seconds."""
         timer = threading.Timer(self._timer_seconds, self._interceptor_manager.restart)
         timer.start()
 
 
 class LedgerBasedIteration(IterationType):
-    def __init__(self, interceptor_manager: InterceptorManager, max_ledger_seq: int):
+    """Ledger based iteration type, restarts the interceptor process after a certain amount of validated ledgers."""
+
+    def __init__(self, max_ledger_seq: int):
+        """
+        Init LedgerBasedIteration with an InterceptorManager attached.
+
+        Args:
+            max_ledger_seq: The amount of ledgers to be validated in a single iteration.
+        """
+        super().__init__()
+
         self.prev_network_event = 0
         self.network_event_changes = 0
         self.ledger_seq = 0
+        self.prev_validation_time = datetime.now()
+        self.validation_time = timedelta()
 
-        super().__init__(interceptor_manager)
         self._max_ledger_seq = max_ledger_seq
 
+    def reset_values(self):
+        """Reset state variables, called when interceptor is restarted."""
+        self.prev_network_event = 0
+        self.network_event_changes = 0
+        self.ledger_seq = 0
+        self.prev_validation_time = datetime.now()
+        self.validation_time = timedelta()
+
     def update_iteration(self, status: ripple_pb2.TMStatusChange):
+        """
+        Update the iteration values, called when a TMStatusChange is received.
+
+        Args:
+            status: The TMStatusChange message received on the network.
+        """
         if self.prev_network_event != status.newEvent:
             self.prev_network_event = status.newEvent
             self.network_event_changes += 1
-            self.ledger_seq = status.ledgerSeq
+            if status.ledgerSeq > self.ledger_seq:
+                self.validation_time = datetime.now() - self.prev_validation_time
+                self.ledger_seq = status.ledgerSeq
+                self.prev_validation_time = datetime.now()
+                logger.info(
+                    f"Ledger {self.ledger_seq} validated, time elapsed: {self.validation_time}"
+                )
             if self.ledger_seq == self._max_ledger_seq:
                 self._interceptor_manager.restart()
+                self.reset_values()
 
 
 class Strategy(ABC):
@@ -57,7 +102,7 @@ class Strategy(ABC):
         self,
         auto_partition: bool = True,
         keep_action_log: bool = True,
-        iteration_type: IterationType = TimeBasedIteration(InterceptorManager(), 5),
+        iteration_type: IterationType | None = None,
     ):
         """
         Initialize the Strategy interface with needed attributes.
@@ -65,6 +110,7 @@ class Strategy(ABC):
         Args:
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions. Defaults to True.
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
+            iteration_type (IterationType, optional): Type of iteration logic to use.
         """
         self.validator_node_list: List[ValidatorNode] = []
         self.public_to_private_key_map: Dict[str, str] = {}
@@ -74,8 +120,9 @@ class Strategy(ABC):
         self.communication_matrix: list[list[bool]] = []
         self.auto_partition = auto_partition
         self.keep_action_log = keep_action_log
-
-        self.iteration_type = iteration_type
+        self.iteration_type = (
+            LedgerBasedIteration(5) if iteration_type is None else iteration_type
+        )
 
     def partition_network(self, partitions: list[list[int]]):
         """
