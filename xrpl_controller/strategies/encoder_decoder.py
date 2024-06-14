@@ -33,6 +33,21 @@ class PacketEncoderDecoder:
         35: ripple_pb2.TMHaveTransactionSet,
         41: ripple_pb2.TMValidation,
         42: ripple_pb2.TMGetObjectByHash,
+        # 50: Is not defined in proto file and has no corresponding class, but appears in enum.
+        # 51: Is not defined in proto file and has no corresponding class, but appears in enum.
+        52: ripple_pb2.TMGetPeerShardInfo,
+        53: ripple_pb2.TMPeerShardInfo,
+        54: ripple_pb2.TMValidatorList,
+        55: ripple_pb2.TMSquelch,
+        56: ripple_pb2.TMValidatorListCollection,
+        57: ripple_pb2.TMProofPathRequest,
+        58: ripple_pb2.TMProofPathResponse,
+        59: ripple_pb2.TMReplayDeltaRequest,
+        60: ripple_pb2.TMReplayDeltaResponse,
+        61: ripple_pb2.TMGetPeerShardInfoV2,
+        62: ripple_pb2.TMPeerShardInfoV2,
+        63: ripple_pb2.TMHaveTransactions,
+        64: ripple_pb2.TMTransactions,
     }
 
     @singledispatchmethod
