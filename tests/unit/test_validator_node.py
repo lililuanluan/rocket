@@ -1,6 +1,5 @@
 """Tests for ValidatorNode class."""
 
-
 from xrpl_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,
@@ -35,9 +34,3 @@ def test_to_string():
         "validator_key_data=ValidatorKeyData(status=status, validation_key=key, "
         "validation_private_key=K3Y, validation_public_key=PUB, validation_seed=T3ST))"
     )
-
-
-
-
-
-

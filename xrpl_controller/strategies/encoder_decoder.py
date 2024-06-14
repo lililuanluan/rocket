@@ -50,6 +50,13 @@ class PacketEncoderDecoder:
     @sign_message.register
     @staticmethod
     def _(message: TMProposeSet, private_key: str) -> TMProposeSet:
+        """
+        Method that returns a signed version of a message.
+
+        Args:
+            message: Message to be signed.
+            private_key: Private key of the message in hex format.
+        """
         # Collect the fields used to originally sign the message
         bytes_to_sign = (
             b"\x50\x52\x50\x00"
@@ -68,7 +75,6 @@ class PacketEncoderDecoder:
 
     @staticmethod
     def decode_packet(packet: packet_pb2.Packet) -> tuple[Message | bytes, int]:
-        print(f"packet: {packet}")
         """
         Decodes the given packet into a tuple.
 
@@ -78,6 +84,7 @@ class PacketEncoderDecoder:
         Returns:
             tuple of the message, and message type
         """
+        print(f"packet: {packet}")
         # length = struct.unpack("!I", packet.data[:4])[0]
         message_type = struct.unpack("!H", packet.data[4:6])[0]
         print(f"message_type: {message_type}")
@@ -109,7 +116,6 @@ class PacketEncoderDecoder:
 
         # Add headers containing the message length and type
         final_message = (
-
             int(len(serialized.hex()) / 2).to_bytes(4, "big")
             + message_type.to_bytes(2, "big")
             + serialized
