@@ -9,7 +9,7 @@ import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
 from protos.packet_pb2 import Packet
-from xrpl_controller.core import format_datetime
+from xrpl_controller.core import format_datetime, validate_ports
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.strategies.strategy import Strategy
@@ -35,7 +35,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         self.strategy = strategy
         self.logger: ActionLogger | None = None
 
-    def send_packet(self, request: packet_pb2.Packet, context):
+    def send_packet(self, request, context):
         """
         This function receives the packet from the interceptor and passes it to the controller.
 
@@ -51,21 +51,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Raises:
             ValueError: if from_port == to_port
         """
-        if request.from_port == request.to_port:
-            raise ValueError(
-                "Sending port should not be the same as receiving port. "
-                f"from_port == to_port == {request.from_port}"
-            )
+        timestamp = int(datetime.datetime.now().timestamp() * 1000)
+        validate_ports(request.from_port, request.to_port)
 
-        (new_data, action) = self.strategy.handle_packet(request)
-
-        action = (
-            self.strategy.apply_network_partition(
-                action, request.from_port, request.to_port
-            )
-            if self.strategy.auto_partition
-            else action
-        )
+        (new_data, action) = self.strategy.process_packet(request)
 
         if not self.strategy.keep_action_log:
             return packet_pb2.PacketAck(data=new_data, action=action)
@@ -88,6 +77,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ].__name__,
             original_data=original_packet_deco[0].__str__().replace("\n", "; "),
             possibly_mutated_data=new_packet_deco[0].__str__().replace("\n", "; "),
+            custom_timestamp=timestamp,
         )
 
         return packet_pb2.PacketAck(data=new_data, action=action)
@@ -161,7 +151,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         with open("network-config.toml", "rb") as f:
             config = tomllib.load(f)
 
-        partition_list: List[List[int]] = config.get("network_partition")
+        # Should be the line under, but does not pass on pipeline.
+        # partition_list: List[List[int]] = config.get("network_partition")
+        partition_list = config.get("network_partition")
         partitions = map(lambda x: packet_pb2.Partition(nodes=x), partition_list)
 
         return packet_pb2.Config(

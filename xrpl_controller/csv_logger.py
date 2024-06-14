@@ -108,9 +108,10 @@ class ActionLogger(CSVLogger):
         message_type: str,
         original_data: str,
         possibly_mutated_data: str,
+        custom_timestamp: int | None = None,
     ):
         """
-        Log an action to the csv file.
+        Log an action according to a specific column format.
 
         Args:
             action: action to be logged.
@@ -119,13 +120,17 @@ class ActionLogger(CSVLogger):
             message_type: the message type as defined in the ripple.proto
             original_data: the message's original data.
             possibly_mutated_data: the message's possibly mutated data.
+            custom_timestamp: a custom timestamp to log if desired.
 
         Returns:
             None
         """
+        # Note: timestamp is milliseconds since epoch (January 1, 1970)
         self.writer.writerow(
             [
-                datetime.now(),
+                int(datetime.now().timestamp() * 1000)
+                if custom_timestamp is None
+                else custom_timestamp,
                 action,
                 from_port,
                 to_port,
