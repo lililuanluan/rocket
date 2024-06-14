@@ -117,7 +117,6 @@ class Strategy(ABC):
         Raises:
             ValueError: If peer_from_port is equal to peer_to_port or if any is negative
         """
-        assert self.auto_parse_identical
         validate_ports(peer_from_port, peer_to_port)
         return self.communication_matrix[self.idx(peer_from_port)][
             self.idx(peer_to_port)
