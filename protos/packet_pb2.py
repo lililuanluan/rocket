@@ -20,21 +20,21 @@ _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'protos.packet_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    DESCRIPTOR._loaded_options = None
-    _globals['_PACKET']._serialized_start=31
-    _globals['_PACKET']._serialized_end=89
-    _globals['_PACKETACK']._serialized_start=91
-    _globals['_PACKETACK']._serialized_end=132
-    _globals['_VALIDATORNODEINFO']._serialized_start=135
-    _globals['_VALIDATORNODEINFO']._serialized_end=366
-    _globals['_VALIDATORNODEINFOACK']._serialized_start=368
-    _globals['_VALIDATORNODEINFOACK']._serialized_end=406
-    _globals['_GETCONFIG']._serialized_start=408
-    _globals['_GETCONFIG']._serialized_end=419
-    _globals['_PARTITION']._serialized_start=421
-    _globals['_PARTITION']._serialized_end=447
-    _globals['_CONFIG']._serialized_start=450
-    _globals['_CONFIG']._serialized_end=619
-    _globals['_PACKETSERVICE']._serialized_start=622
-    _globals['_PACKETSERVICE']._serialized_end=823
+  DESCRIPTOR._loaded_options = None
+  _globals['_PACKET']._serialized_start=31
+  _globals['_PACKET']._serialized_end=89
+  _globals['_PACKETACK']._serialized_start=91
+  _globals['_PACKETACK']._serialized_end=132
+  _globals['_VALIDATORNODEINFO']._serialized_start=135
+  _globals['_VALIDATORNODEINFO']._serialized_end=366
+  _globals['_VALIDATORNODEINFOACK']._serialized_start=368
+  _globals['_VALIDATORNODEINFOACK']._serialized_end=406
+  _globals['_GETCONFIG']._serialized_start=408
+  _globals['_GETCONFIG']._serialized_end=419
+  _globals['_PARTITION']._serialized_start=421
+  _globals['_PARTITION']._serialized_end=447
+  _globals['_CONFIG']._serialized_start=450
+  _globals['_CONFIG']._serialized_end=619
+  _globals['_PACKETSERVICE']._serialized_start=622
+  _globals['_PACKETSERVICE']._serialized_end=823
 # @@protoc_insertion_point(module_scope)

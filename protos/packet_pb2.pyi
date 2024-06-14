@@ -23,11 +23,11 @@ class Packet(google.protobuf.message.Message):
     from_port: builtins.int
     to_port: builtins.int
     def __init__(
-            self,
-            *,
-            data: builtins.bytes = ...,
-            from_port: builtins.int = ...,
-            to_port: builtins.int = ...,
+        self,
+        *,
+        data: builtins.bytes = ...,
+        from_port: builtins.int = ...,
+        to_port: builtins.int = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["data", b"data", "from_port", b"from_port", "to_port", b"to_port"]) -> None: ...
 
@@ -42,10 +42,10 @@ class PacketAck(google.protobuf.message.Message):
     data: builtins.bytes
     action: builtins.int
     def __init__(
-            self,
-            *,
-            data: builtins.bytes = ...,
-            action: builtins.int = ...,
+        self,
+        *,
+        data: builtins.bytes = ...,
+        action: builtins.int = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["action", b"action", "data", b"data"]) -> None: ...
 
@@ -74,17 +74,17 @@ class ValidatorNodeInfo(google.protobuf.message.Message):
     validation_public_key: builtins.str
     validation_seed: builtins.str
     def __init__(
-            self,
-            *,
-            peer_port: builtins.int = ...,
-            ws_public_port: builtins.int = ...,
-            ws_admin_port: builtins.int = ...,
-            rpc_port: builtins.int = ...,
-            status: builtins.str = ...,
-            validation_key: builtins.str = ...,
-            validation_private_key: builtins.str = ...,
-            validation_public_key: builtins.str = ...,
-            validation_seed: builtins.str = ...,
+        self,
+        *,
+        peer_port: builtins.int = ...,
+        ws_public_port: builtins.int = ...,
+        ws_admin_port: builtins.int = ...,
+        rpc_port: builtins.int = ...,
+        status: builtins.str = ...,
+        validation_key: builtins.str = ...,
+        validation_private_key: builtins.str = ...,
+        validation_public_key: builtins.str = ...,
+        validation_seed: builtins.str = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["peer_port", b"peer_port", "rpc_port", b"rpc_port", "status", b"status", "validation_key", b"validation_key", "validation_private_key", b"validation_private_key", "validation_public_key", b"validation_public_key", "validation_seed", b"validation_seed", "ws_admin_port", b"ws_admin_port", "ws_public_port", b"ws_public_port"]) -> None: ...
 
@@ -97,9 +97,9 @@ class ValidatorNodeInfoAck(google.protobuf.message.Message):
     STATUS_FIELD_NUMBER: builtins.int
     status: builtins.str
     def __init__(
-            self,
-            *,
-            status: builtins.str = ...,
+        self,
+        *,
+        status: builtins.str = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["status", b"status"]) -> None: ...
 
@@ -110,7 +110,7 @@ class GetConfig(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     def __init__(
-            self,
+        self,
     ) -> None: ...
 
 global___GetConfig = GetConfig
@@ -123,9 +123,9 @@ class Partition(google.protobuf.message.Message):
     @property
     def nodes(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
     def __init__(
-            self,
-            *,
-            nodes: collections.abc.Iterable[builtins.int] | None = ...,
+        self,
+        *,
+        nodes: collections.abc.Iterable[builtins.int] | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["nodes", b"nodes"]) -> None: ...
 
@@ -149,14 +149,14 @@ class Config(google.protobuf.message.Message):
     @property
     def partitions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Partition]: ...
     def __init__(
-            self,
-            *,
-            base_port_peer: builtins.int = ...,
-            base_port_ws: builtins.int = ...,
-            base_port_ws_admin: builtins.int = ...,
-            base_port_rpc: builtins.int = ...,
-            number_of_nodes: builtins.int = ...,
-            partitions: collections.abc.Iterable[global___Partition] | None = ...,
+        self,
+        *,
+        base_port_peer: builtins.int = ...,
+        base_port_ws: builtins.int = ...,
+        base_port_ws_admin: builtins.int = ...,
+        base_port_rpc: builtins.int = ...,
+        number_of_nodes: builtins.int = ...,
+        partitions: collections.abc.Iterable[global___Partition] | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["base_port_peer", b"base_port_peer", "base_port_rpc", b"base_port_rpc", "base_port_ws", b"base_port_ws", "base_port_ws_admin", b"base_port_ws_admin", "number_of_nodes", b"number_of_nodes", "partitions", b"partitions"]) -> None: ...
 

@@ -40,20 +40,20 @@ class PacketServiceStub(object):
             channel: A grpc.Channel.
         """
         self.send_packet = channel.unary_unary(
-            '/packet.PacketService/send_packet',
-            request_serializer=protos_dot_packet__pb2.Packet.SerializeToString,
-            response_deserializer=protos_dot_packet__pb2.PacketAck.FromString,
-            _registered_method=True)
+                '/packet.PacketService/send_packet',
+                request_serializer=protos_dot_packet__pb2.Packet.SerializeToString,
+                response_deserializer=protos_dot_packet__pb2.PacketAck.FromString,
+                _registered_method=True)
         self.send_validator_node_info = channel.stream_unary(
-            '/packet.PacketService/send_validator_node_info',
-            request_serializer=protos_dot_packet__pb2.ValidatorNodeInfo.SerializeToString,
-            response_deserializer=protos_dot_packet__pb2.ValidatorNodeInfoAck.FromString,
-            _registered_method=True)
+                '/packet.PacketService/send_validator_node_info',
+                request_serializer=protos_dot_packet__pb2.ValidatorNodeInfo.SerializeToString,
+                response_deserializer=protos_dot_packet__pb2.ValidatorNodeInfoAck.FromString,
+                _registered_method=True)
         self.get_config = channel.unary_unary(
-            '/packet.PacketService/get_config',
-            request_serializer=protos_dot_packet__pb2.GetConfig.SerializeToString,
-            response_deserializer=protos_dot_packet__pb2.Config.FromString,
-            _registered_method=True)
+                '/packet.PacketService/get_config',
+                request_serializer=protos_dot_packet__pb2.GetConfig.SerializeToString,
+                response_deserializer=protos_dot_packet__pb2.Config.FromString,
+                _registered_method=True)
 
 
 class PacketServiceServicer(object):
@@ -80,43 +80,43 @@ class PacketServiceServicer(object):
 
 def add_PacketServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        'send_packet': grpc.unary_unary_rpc_method_handler(
-            servicer.send_packet,
-            request_deserializer=protos_dot_packet__pb2.Packet.FromString,
-            response_serializer=protos_dot_packet__pb2.PacketAck.SerializeToString,
-        ),
-        'send_validator_node_info': grpc.stream_unary_rpc_method_handler(
-            servicer.send_validator_node_info,
-            request_deserializer=protos_dot_packet__pb2.ValidatorNodeInfo.FromString,
-            response_serializer=protos_dot_packet__pb2.ValidatorNodeInfoAck.SerializeToString,
-        ),
-        'get_config': grpc.unary_unary_rpc_method_handler(
-            servicer.get_config,
-            request_deserializer=protos_dot_packet__pb2.GetConfig.FromString,
-            response_serializer=protos_dot_packet__pb2.Config.SerializeToString,
-        ),
+            'send_packet': grpc.unary_unary_rpc_method_handler(
+                    servicer.send_packet,
+                    request_deserializer=protos_dot_packet__pb2.Packet.FromString,
+                    response_serializer=protos_dot_packet__pb2.PacketAck.SerializeToString,
+            ),
+            'send_validator_node_info': grpc.stream_unary_rpc_method_handler(
+                    servicer.send_validator_node_info,
+                    request_deserializer=protos_dot_packet__pb2.ValidatorNodeInfo.FromString,
+                    response_serializer=protos_dot_packet__pb2.ValidatorNodeInfoAck.SerializeToString,
+            ),
+            'get_config': grpc.unary_unary_rpc_method_handler(
+                    servicer.get_config,
+                    request_deserializer=protos_dot_packet__pb2.GetConfig.FromString,
+                    response_serializer=protos_dot_packet__pb2.Config.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-        'packet.PacketService', rpc_method_handlers)
+            'packet.PacketService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
     server.add_registered_method_handlers('packet.PacketService', rpc_method_handlers)
 
 
-# This class is part of an EXPERIMENTAL API.
+ # This class is part of an EXPERIMENTAL API.
 class PacketService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def send_packet(request,
-                    target,
-                    options=(),
-                    channel_credentials=None,
-                    call_credentials=None,
-                    insecure=False,
-                    compression=None,
-                    wait_for_ready=None,
-                    timeout=None,
-                    metadata=None):
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
@@ -135,15 +135,15 @@ class PacketService(object):
 
     @staticmethod
     def send_validator_node_info(request_iterator,
-                                 target,
-                                 options=(),
-                                 channel_credentials=None,
-                                 call_credentials=None,
-                                 insecure=False,
-                                 compression=None,
-                                 wait_for_ready=None,
-                                 timeout=None,
-                                 metadata=None):
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.stream_unary(
             request_iterator,
             target,
@@ -162,15 +162,15 @@ class PacketService(object):
 
     @staticmethod
     def get_config(request,
-                   target,
-                   options=(),
-                   channel_credentials=None,
-                   call_credentials=None,
-                   insecure=False,
-                   compression=None,
-                   wait_for_ready=None,
-                   timeout=None,
-                   metadata=None):
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
