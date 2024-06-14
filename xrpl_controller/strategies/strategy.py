@@ -236,6 +236,8 @@ class Strategy(ABC):
         Returns:
             A tuple indicating success along with final message and action.
         """
+        # For the subset which peer_to_id is in, check whether an identical message can be found.
+        # If one is found, we automatically parse it to the processed version with its action.
         if peer_to_id in subset:
             for peer_id in subset:
                 if (
@@ -243,6 +245,8 @@ class Strategy(ABC):
                         peer_from_id, peer_id, message
                     )
                 )[0]:
+                    # result is a tuple[bool, tuple[bytes, int]]
+                    # The second tuple contains the processed message and an action
                     self.set_message_action(
                         peer_from_id, peer_to_id, message, result[1][0], result[1][1]
                     )
@@ -266,9 +270,12 @@ class Strategy(ABC):
         """
         assert self.auto_parse_subsets
 
+        # self.subsets_dict[peer_from_id] can contain a 1- or 2-dimensional integer list
+        # We first check whether the list is 2-dimensional, if so, we handle the entry accordingly
         if len(self.subsets_dict[peer_from_id]) > 0 and isinstance(
             self.subsets_dict[peer_from_id][0], list
         ):
+            # We have to parse the list to a list[list[int]] type to suppress tox
             for subset in parse_to_2d_list_of_ints(self.subsets_dict[peer_from_id]):
                 if (
                     result := self.check_subset_entry(
@@ -280,6 +287,8 @@ class Strategy(ABC):
                 peer_from_id, peer_to_id, message
             )[1]
         else:
+            # In this branch, we know for certain that self.subsets_dict[peer_from_id] is 1-dimensional
+            # We have to parse the list to a list[int] type to suppress tox
             return self.check_subset_entry(
                 peer_from_id,
                 peer_to_id,
@@ -375,6 +384,10 @@ class Strategy(ABC):
         peer_from_id = self.idx(packet.from_port)
         peer_to_id = self.idx(packet.to_port)
 
+        # Check for identical previous messages or for identical messages within broadcasts.
+        # This uses booleans to check whether the functionality has to be applied automatically.
+        # First check whether we want to automatically parse resent messages,
+        # then we check whether we want to perform identical actions for defined subsets of processes
         if (
             self.auto_parse_identical
             and (
@@ -386,8 +399,12 @@ class Strategy(ABC):
             self.auto_parse_subsets
             and (result := self.check_subsets(peer_from_id, peer_to_id, packet.data))[0]
         ):
+            # If result[0] is True, then result[1] will contain usable data
             (final_data, action) = result[1]
+
+        # Handle the packet regularly
         else:
+            # If no communication is allowed by partitions, then we drop immediately
             if self.auto_partition and not self.check_communication(
                 packet.from_port, packet.to_port
             ):
@@ -395,6 +412,7 @@ class Strategy(ABC):
             else:
                 (final_data, action) = self.handle_packet(packet)
 
+            # This is needed to keep track of previously sent messages
             if self.auto_parse_identical or self.auto_parse_subsets:
                 self.set_message_action(
                     peer_from_id, peer_to_id, packet.data, final_data, action
