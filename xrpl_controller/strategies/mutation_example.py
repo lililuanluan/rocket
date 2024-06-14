@@ -1,6 +1,9 @@
 """This module contains the class that implements a handling."""
 
+from datetime import datetime
 from typing import Tuple
+
+from xrpl.utils import datetime_to_ripple_time
 
 from protos import packet_pb2, ripple_pb2
 from xrpl_controller.strategies.encoder_decoder import (
@@ -36,6 +39,9 @@ class MutationExample(Strategy):
         # check whether message is of type TMProposeSet
         if not isinstance(message, ripple_pb2.TMProposeSet):
             return packet.data, 0
+
+        # Mutate the closeTime of each message
+        message.closeTime = datetime_to_ripple_time(datetime.now())
 
         # Sign the message
         signed_message = PacketEncoderDecoder.sign_message(

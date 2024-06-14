@@ -49,7 +49,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             the possibly modified packet and an action
 
         Raises:
-            ValueError: if from_port == to_port
+            ValueError: if from_port == to_port or if any is negative
         """
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
         validate_ports(request.from_port, request.to_port)
