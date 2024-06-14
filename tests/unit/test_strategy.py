@@ -3,7 +3,6 @@
 from encodings.utf_8 import encode
 
 from protos import packet_pb2
-from tests.unit.test_random_fuzzer import create_test_config, remove_test_config
 from xrpl_controller.core import MAX_U32
 from xrpl_controller.strategies import RandomFuzzer
 from xrpl_controller.validator_node_info import (
@@ -75,8 +74,10 @@ def test_update_network():
 
 def test_process_message():
     """Test for process_message function."""
-    create_test_config("TEST_PROCESS_MESSAGE", 0, 0.6, 10, 150, 10)
-    strategy = RandomFuzzer(strategy_config_file="TEST_PROCESS_MESSAGE")
+    strategy = RandomFuzzer(
+        strategy_config_file="TEST_PROCESS_MESSAGE",
+        strategy_config_directory="./tests/integration/test_configs/random_fuzzer/",
+    )
     strategy.update_network([node_0, node_1, node_2])
     packet_ack = packet_pb2.Packet(data=b"test", from_port=10, to_port=11)
     assert strategy.process_packet(packet_ack) == (b"test", 119)
@@ -103,5 +104,3 @@ def test_process_message():
     for _ in range(100):
         packet_ack = packet_pb2.Packet(data=b"test", from_port=10, to_port=12)
         assert strategy.process_packet(packet_ack) == result
-
-    remove_test_config("TEST_PROCESS_MESSAGE")
