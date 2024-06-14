@@ -8,7 +8,7 @@ import base58
 from loguru import logger
 
 from protos import packet_pb2, ripple_pb2
-from xrpl_controller.core import MAX_U32, flatten, validate_ports
+from xrpl_controller.core import MAX_U32, flatten, validate_ports, yaml_to_dict
 from xrpl_controller.iteration_type import (
     IterationType,
     LedgerBasedIteration,
@@ -27,6 +27,8 @@ class Strategy(ABC):
 
     def __init__(
         self,
+        network_config_file: str = "default-network-config.yaml",
+        strategy_config_file: str = "default-strategy-config.yaml",
         auto_partition: bool = True,
         auto_parse_identical: bool = True,
         keep_action_log: bool = True,
@@ -36,7 +38,9 @@ class Strategy(ABC):
         Initialize the Strategy interface with needed fields.
 
         Args:
-            auto_partition (bool, optional): Whether the strategy automatically applies network partitions.
+            network_config_file (str): The filename of a network configuration file
+            strategy_config_file (str): The filename of a strategy configuration file.
+            auto_partition (bool, optional): Whether the strategy will auto-apply network partitions.
             auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
             Defaults to True.
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
@@ -54,6 +58,27 @@ class Strategy(ABC):
         self.keep_action_log = keep_action_log
         self.iteration_type = (
             LedgerBasedIteration(10, 5) if iteration_type is None else iteration_type
+        )
+        self.params = {}
+
+        str_conf_directory = "./xrpl_controller/strategies/configs/"
+        self.params = yaml_to_dict(
+            strategy_config_file,
+            str_conf_directory,
+        )
+        logger.info(
+            "Initialized strategy parameters from configuration file:\n\t",
+            self.params,
+        )
+
+        ntw_conf_directory = "./xrpl_controller/network_configs/"
+        self.network_config = yaml_to_dict(
+            network_config_file,
+            ntw_conf_directory,
+        )
+        logger.info(
+            "Initialized strategy network configuration from configuration file:\n\t",
+            self.network_config,
         )
 
     def partition_network(self, partitions: list[list[int]]):

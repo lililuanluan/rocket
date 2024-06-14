@@ -3,6 +3,7 @@
 from encodings.utf_8 import encode
 
 from protos import packet_pb2
+from tests.unit.test_random_fuzzer import create_test_config, remove_test_config
 from xrpl_controller.core import MAX_U32
 from xrpl_controller.strategies import RandomFuzzer
 from xrpl_controller.validator_node_info import (
@@ -38,18 +39,21 @@ node_2 = ValidatorNode(
 
 def test_init():
     """Test whether Strategy attributes get initialized correctly."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     assert strategy.validator_node_list == []
+    assert strategy.public_to_private_key_map == {}
     assert strategy.node_amount == 0
     assert strategy.port_dict == {}
     assert strategy.communication_matrix == []
+    assert strategy.auto_partition
     assert strategy.auto_parse_identical
     assert strategy.prev_message_action_matrix == []
+    assert strategy.keep_action_log
 
 
 def test_update_network():
     """Test whether Strategy attributes get updated correctly with update_network function."""
-    strategy = RandomFuzzer(0.1, 0.1, 10, 150, 10)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     assert strategy.validator_node_list == [node_0, node_1, node_2]
     assert strategy.node_amount == 3
@@ -71,7 +75,8 @@ def test_update_network():
 
 def test_process_message():
     """Test for process_message function."""
-    strategy = RandomFuzzer(0, 0.6, 10, 150, 10)
+    create_test_config("TEST_PROCESS_MESSAGE", 0, 0.6, 10, 150, 10)
+    strategy = RandomFuzzer(strategy_config_file="TEST_PROCESS_MESSAGE")
     strategy.update_network([node_0, node_1, node_2])
     packet_ack = packet_pb2.Packet(data=b"testtest", from_port=10, to_port=11)
     assert strategy.process_packet(packet_ack) == (b"testtest", 119)
@@ -98,3 +103,5 @@ def test_process_message():
     for _ in range(100):
         packet_ack = packet_pb2.Packet(data=b"testtest", from_port=10, to_port=12)
         assert strategy.process_packet(packet_ack) == result
+
+    remove_test_config("TEST_PROCESS_MESSAGE")
