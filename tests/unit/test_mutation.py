@@ -104,8 +104,8 @@ def test_mutation_decoding_not_support():
     message_type = 99
     encoded_packet = packet_pb2.Packet(
         data=b"\x00\x00\x00\x0b"
-        + message_type.to_bytes(2, "big")
-        + b"\x08\x01\x12\x06\x08\x02\x10\x00"
+             + message_type.to_bytes(2, "big")
+             + b"\x08\x01\x12\x06\x08\x02\x10\x00"
     )
 
     result_data, action = strategy.handle_packet(encoded_packet)
@@ -140,17 +140,15 @@ def test_mutation_propose_correct_signature_change():
     assert pub_key[1:34] == message.nodePubKey
 
     msg = (
-        b"\x50\x52\x50\x00"
-        + message.proposeSeq.to_bytes(4, "big")
-        + message.closeTime.to_bytes(4, "big")
-        + message.previousledger
-        + message.currentTxHash
+            b"\x50\x52\x50\x00"
+            + message.proposeSeq.to_bytes(4, "big")
+            + message.closeTime.to_bytes(4, "big")
+            + message.previousledger
+            + message.currentTxHash
     )
 
     priv_key = base58.b58decode(private_key, alphabet=base58.RIPPLE_ALPHABET)
     bs58_key = priv_key[1:33]
-
-    # 43bf1a26b1190ba95c246a7d528a70f2edf668a68367bf60e261bbb845d9b775
 
     final_sig = SECP256K1.sign(msg, bs58_key.hex())
 
