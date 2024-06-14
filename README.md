@@ -106,8 +106,8 @@ This action log makes use of the `CSVLogger`'s child class `ActionLogger` which 
 The log contains the timestamp when the action was taken on a packet, the action, sender peer port, receiver peer port, and the packet data as a hex string.
 
 
-### Adding new strategies
-To add a new strategy, a new file has to be created in the `strategies` directory containing a class which inherits from the `Strategy` class. This class should implement the `handle_packet` method and should call `super.__init__(...)` in its own `__init__` method.
+### Constructing New Strategies
+To add a new strategy, you need to create a new file in the `strategies` folder with a class that inherits from the `Strategy` class. This class should implement the `handle_packet` method.
 
 #### Configuration files
 Users are able to create new configuration files for strategies, these are categorized under network configurations and strategy parameter configurations.
@@ -123,10 +123,18 @@ All configuration files must be in the `yaml` format.
 Newly created `Strategy`'s should call `super().__init__()` to initialize needed fields to support network partitions.
 Use `self.partition_network(partition: list[list[int]])` to partition the network using the validators' peer ports as id's in the partitions.
 Example usage with a network of 3 nodes with peer ports `0`, `1`, and `2` respectively where `0` will be isolated and `1` and `2` will be in the same partition: `self.partition_network([[0], [1, 2]])`.
-The user has the choice to set automatic network partition application using the boolean field `self.auto_partition`, this defaults to `True`.
-The user can apply partitions manually by using 
-`self.apply_network_partition(action: int, peer_from_port: int, peer_to_port: int)` which will transform an arbitrary action to a `drop` action when `peer_from_port` is not in the same partition as `peer_to_port`.
-Any other network partition-related field should not be modified by the user themselves. Custom partitions can be realized by modifying the boolean matrix `self.communication_matrix`, although it is not recommended to do so manually.
+The user can check the communication between 2 nodes manually by using 
+`self.check_communication(peer_from_port: int, peer_to_port: int)` which will return a boolean which indicates whether communication is possible between the 2 ports.
+To create custom partitions, the functions `self.connect(peer_port_1, peer_port_2)` and `self.disconnect(peer_port_1, peer_port_2)` can be used.
+The application will automatically drop messages sent between 2 nodes if communication is closed between those nodes.
+
+#### Identical Subsequent Messages
+Every `Strategy` instance keeps track of previously sent messages sent between every node pair. The stored information includes the last sent message in bytes, the processed version of the last message, and the action that was taken on that message.
+The method `self.check_previous_message(peer_from_port: int, peer_to_port: int, message:bytes)` can be used which returns a tuple which also indicates whether the previous message was identical to the current message.
+In case that the previous message was indeed identical, then the second entry of the tuple contains the processed version of the previous message and the action that was taken.
+This functionality can be used to quickly perform the same actions on identical messages, which can be done automatically by setting the `auto_parse_identical` field in `Strategy`.
+When `auto_parse_identical` is set to `False`, then the strategy will not keep track of any previously sent messages.
+This functionality is useful when XRPL validator nodes resend messages to their peers, this functionality makes sure that those resends are automatically parsed so that the same actions will be taken on such messages.
 
 ### System-level Automated Testing
 We have included some system-level automated tests. These can be run using `python -m tests.system_level`. Make sure Docker is running before you start the tests, to ensure correct execution.

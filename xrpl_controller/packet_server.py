@@ -7,7 +7,7 @@ from typing import List
 import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.core import format_datetime
+from xrpl_controller.core import format_datetime, validate_ports
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import (
@@ -46,22 +46,12 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             the possibly modified packet and an action
 
         Raises:
-            ValueError: if from_port == to_port
+            ValueError: if request.from_port == request.to_port or if any is negative
         """
-        if request.from_port == request.to_port:
-            raise ValueError(
-                "Sending port should not be the same as receiving port. "
-                f"from_port == to_port == {request.from_port}"
-            )
-        (data, action) = self.strategy.handle_packet(request)
+        timestamp = int(datetime.datetime.now().timestamp() * 1000)
+        validate_ports(request.from_port, request.to_port)
 
-        action = (
-            self.strategy.apply_network_partition(
-                action, request.from_port, request.to_port
-            )
-            if self.strategy.auto_partition
-            else action
-        )
+        (data, action) = self.strategy.process_packet(request)
 
         if self.strategy.keep_action_log:
             if not self.logger:
@@ -71,6 +61,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                 from_port=request.from_port,
                 to_port=request.to_port,
                 data=data,
+                custom_timestamp=timestamp,
             )
 
         return packet_pb2.PacketAck(data=data, action=action)
