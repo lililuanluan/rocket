@@ -12,11 +12,16 @@ from xrpl_controller.interceptor_manager import InterceptorManager
 class IterationType:
     """Base class for defining iteration mechanisms."""
 
-    def __init__(self, max_iterations: int):
+    def __init__(
+        self, max_iterations: int, interceptor_manager: InterceptorManager | None = None
+    ):
         """Init Iteration Type with an InterceptorManager attached."""
         self._max_iterations = max_iterations
         self._cur_iteration = 0
-        self._interceptor_manager = InterceptorManager()
+
+        self._interceptor_manager = (
+            InterceptorManager() if interceptor_manager is None else interceptor_manager
+        )
 
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops when max_iterations is reached."""
@@ -38,15 +43,21 @@ class IterationType:
 class TimeBasedIteration(IterationType):
     """Time based iteration type, restarts the interceptor process after a certain amount of seconds."""
 
-    def __init__(self, max_iterations: int, timer_seconds: int):
+    def __init__(
+        self,
+        max_iterations: int,
+        timer_seconds: int,
+        interceptor_manager: InterceptorManager | None = None,
+    ):
         """
         Init TimeBasedIteration with an InterceptorManager attached.
 
         Args:
             max_iterations: Maximum number of iterations.
             timer_seconds: the amount of seconds an iteration should take.
+            interceptor_manager: InterceptorManager attached to this iteration type.
         """
-        super().__init__(max_iterations)
+        super().__init__(max_iterations, interceptor_manager)
         self._timer_seconds = timer_seconds
 
     def start_timer(self):
@@ -58,15 +69,21 @@ class TimeBasedIteration(IterationType):
 class LedgerBasedIteration(IterationType):
     """Ledger based iteration type, restarts the interceptor process after a certain amount of validated ledgers."""
 
-    def __init__(self, max_iterations: int, max_ledger_seq: int):
+    def __init__(
+        self,
+        max_iterations: int,
+        max_ledger_seq: int,
+        interceptor_manager: InterceptorManager | None = None,
+    ):
         """
         Init LedgerBasedIteration with an InterceptorManager attached.
 
         Args:
             max_iterations: The amount of iterations to run the test process for.
             max_ledger_seq: The amount of ledgers to be validated in a single iteration.
+            interceptor_manager: InterceptorManager attached to this iteration type.
         """
-        super().__init__(max_iterations)
+        super().__init__(max_iterations, interceptor_manager)
 
         self.prev_network_event = 0
         self.network_event_changes = 0
