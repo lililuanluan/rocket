@@ -5,11 +5,12 @@ from concurrent import futures
 from typing import List
 
 import grpc
-import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
+from protos.packet_pb2 import Packet
 from xrpl_controller.core import format_datetime, validate_ports_or_ids
 from xrpl_controller.csv_logger import ActionLogger
+from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -52,20 +53,33 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
         validate_ports_or_ids(request.from_port, request.to_port)
 
-        (data, action) = self.strategy.process_packet(request)
+        (new_data, action) = self.strategy.process_packet(request)
 
-        if self.strategy.keep_action_log:
-            if not self.logger:
-                raise RuntimeError("Logger was not initialized")
-            self.logger.log_action(
-                action=action,
-                from_port=request.from_port,
-                to_port=request.to_port,
-                data=data,
-                custom_timestamp=timestamp,
-            )
+        if not self.strategy.keep_action_log:
+            return packet_pb2.PacketAck(data=new_data, action=action)
 
-        return packet_pb2.PacketAck(data=data, action=action)
+        if not self.logger:
+            raise RuntimeError("Logger was not initialized")
+
+        original_packet_deco = PacketEncoderDecoder.decode_packet(request)
+        new_packet = Packet(
+            data=new_data, from_port=request.from_port, to_port=request.to_port
+        )
+        new_packet_deco = PacketEncoderDecoder.decode_packet(new_packet)
+
+        self.logger.log_action(
+            action=action,
+            from_port=request.from_port,
+            to_port=request.to_port,
+            message_type=PacketEncoderDecoder.message_type_map[
+                original_packet_deco[1]
+            ].__name__,
+            original_data=original_packet_deco[0].__str__().replace("\n", "; "),
+            possibly_mutated_data=new_packet_deco[0].__str__().replace("\n", "; "),
+            custom_timestamp=timestamp,
+        )
+
+        return packet_pb2.PacketAck(data=new_data, action=action)
 
     def send_validator_node_info(
         self, request_iterator, context
@@ -133,9 +147,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Returns:
             Config: The Config object.
         """
-        with open("network-config.toml", "rb") as f:
-            config = tomllib.load(f)
-
+        config = self.strategy.network_config
         partition_list: List[List[int]] = config.get("network_partition")
         partitions = map(lambda x: packet_pb2.Partition(nodes=x), partition_list)
 

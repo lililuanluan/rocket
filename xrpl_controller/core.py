@@ -1,6 +1,9 @@
 """Core module."""
 
 from datetime import datetime
+from typing import Any
+
+import yaml
 
 # The delay value which indicated a drop. This is the max value of an u32 datatype in Rust.
 MAX_U32 = 2**32 - 1
@@ -96,3 +99,41 @@ def parse_to_2d_list_of_ints(lst: list[list[int]] | list[int]):
         return lst
 
     raise ValueError("Given argument is not a 2D integer list.")
+
+
+def format_filename(filename: str, filetype: str) -> str:
+    """
+    Format a filename, ensuring it ends with a certain filetype extension.
+
+    Args:
+        filename: Filename.
+        filetype: File extension.
+
+    Returns:
+        Formatted filename.
+    """
+    filetype = "." + filetype if not filetype.startswith(".") else filetype
+    return filename + filetype if not filename.endswith(filetype) else filename
+
+
+def yaml_to_dict(filename: str, directory: str) -> dict[str, Any]:
+    """
+    Read a yaml file into a dictionary.
+
+    Args:
+        filename: Name of the yaml file.
+        directory: Directory where the yaml file is located.
+
+    Returns:
+        A dictionary containing all fields in the yaml file.
+    """
+    filename = format_filename(filename, "yaml")
+
+    directory = directory + "/" if not directory.endswith("/") else directory
+    path = directory + filename
+
+    with open(path, "rb") as f:
+        result: dict[str, Any] = yaml.safe_load(f)
+        result = result if result is not None else {}
+
+    return result

@@ -1,7 +1,7 @@
 """Test the functionality which automatically parses identical subsequent messages."""
 
 from protos import packet_pb2
-from tests.test_strategy import node_0, node_1, node_2, node_3
+from tests.unit.test_strategy import node_0, node_1, node_2, node_3
 from xrpl_controller.strategies import RandomFuzzer
 
 # Ports of the imported nodes are 10, 11, 12 respectively
@@ -9,7 +9,7 @@ from xrpl_controller.strategies import RandomFuzzer
 
 def test_auto_parsing():
     """Test the automatic parsing of identical subsequent messages."""
-    strategy = RandomFuzzer(0, 0, 0, 150)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
     strategy.set_message_action(0, 1, b"test", b"mutated", 42)
     res = strategy.check_previous_message(0, 1, b"notest")
@@ -33,7 +33,7 @@ def test_auto_parsing():
 
 def test_auto_parsing_false():
     """Test whether attributes do not get saved when boolean is false."""
-    strategy = RandomFuzzer(0, 0, 0, 150, None, False, False)
+    strategy = RandomFuzzer(auto_parse_identical=False, auto_parse_subsets=False)
     assert not hasattr(strategy, "prev_message_action_matrix")
     assert not hasattr(strategy, "subsets_dict")
 
@@ -65,7 +65,7 @@ def test_auto_parsing_false():
 
 def test_auto_parsing_subsets():
     """Test auto parsing subsets functionality."""
-    strategy = RandomFuzzer(0, 0, 0, 150)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2])
 
     # Node 2 will sends same messages to node 0 and node 1 if possible
@@ -88,7 +88,7 @@ def test_auto_parsing_subsets():
 
 def test_auto_parsing_subsets_4_nodes():
     """Same as previous test, just special case with 4 nodes."""
-    strategy = RandomFuzzer(0, 0, 0, 150)
+    strategy = RandomFuzzer()
     strategy.update_network([node_0, node_1, node_2, node_3])
     strategy.set_subsets_dict({2: [[0], [1, 3]]})
     assert strategy.subsets_dict == {0: [], 1: [], 2: [[0], [1, 3]], 3: []}
