@@ -84,10 +84,8 @@ class PacketEncoderDecoder:
         Returns:
             tuple of the message, and message type
         """
-        print(f"packet: {packet}")
         # length = struct.unpack("!I", packet.data[:4])[0]
         message_type = struct.unpack("!H", packet.data[4:6])[0]
-        print(f"message_type: {message_type}")
         if message_type not in PacketEncoderDecoder.message_type_map:
             raise DecodingNotSupportedError(
                 f"Decoding of message type {message_type} not supported"
@@ -97,7 +95,6 @@ class PacketEncoderDecoder:
         message_class = PacketEncoderDecoder.message_type_map[message_type]
         message = message_class()
         message.ParseFromString(message_payload)
-        print(f"message: {message}")
         return message, message_type
 
     @staticmethod

@@ -96,8 +96,6 @@ def test_decode_packet():
     assert message_type == message_no
     assert message_check == message
 
-    print("Basic decoding test passed.")
-
 
 def test_decode_unknown_packet():
     """Tests a decoding of a packet that is an unknown type."""
@@ -108,10 +106,9 @@ def test_decode_unknown_packet():
         + b"\x08\x01\x12\x06\x08\x02\x10\x00"
     )
 
-    with pytest.raises(DecodingNotSupportedError):
+    with pytest.raises(DecodingNotSupportedError) as excinfo:
         PacketEncoderDecoder.decode_packet(encoded_packet)
-
-    print("Basic decoding test passed.")
+    assert "Decoding of message type 99 not supported" in str(excinfo.value)
 
 
 def test_decode_different_message_type():
@@ -141,8 +138,6 @@ def test_decode_different_message_type():
     assert decoded_message_type == message_type
     assert decoded_message == message
 
-    print("Different message type decoding test passed.")
-
 
 def test_signature_correct_with_propose():
     """Tests signature is correct with a propose message."""
@@ -160,8 +155,6 @@ def test_signature_correct_with_propose():
 
     priv_key = base58.b58decode(private_key, alphabet=base58.RIPPLE_ALPHABET)
     bs58_key = priv_key[1:33]
-
-    print(bs58_key.hex())
 
     PacketEncoderDecoder.sign_message(message, bs58_key.hex())
 
@@ -190,8 +183,6 @@ def test_signature_error():
 
     priv_key = base58.b58decode(private_key, alphabet=base58.RIPPLE_ALPHABET)
     bs58_key = priv_key[1:33]
-
-    print(bs58_key.hex())
 
     with pytest.raises(NotImplementedError) as excinfo:
         PacketEncoderDecoder.sign_message(message, bs58_key.hex())

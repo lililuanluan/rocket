@@ -8,7 +8,9 @@ from protos.packet_pb2 import Packet
 from protos.ripple_pb2 import TMProposeSet
 from xrpl_controller.strategies import Strategy
 from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
-from xrpl_controller.strategies.mutation_example import MutationExample
+from xrpl_controller.strategies.mutation_example import (
+    MutationExample,
+)
 
 
 def test_mutation_propose():
@@ -27,8 +29,6 @@ def test_mutation_propose():
 
     priv_key = base58.b58decode(private_key, alphabet=base58.RIPPLE_ALPHABET)
     bs58_key = priv_key[1:33]
-
-    print(bs58_key.hex())
 
     strategy.public_to_private_key_map = {message.nodePubKey.hex(): bs58_key.hex()}
 
@@ -71,13 +71,6 @@ def test_no_mutation_not_propose():
     message.rawTransaction = b"\x01" * 32
     message.status = 1
 
-    private_key = "pauPK4Fv9bYGGmbrhgzDTMZqENpe63bdWvnWfm3gbXovnvSfvdJ"
-
-    priv_key = base58.b58decode(private_key, alphabet=base58.RIPPLE_ALPHABET)
-    bs58_key = priv_key[1:33]
-
-    print(bs58_key.hex())
-
     # Encode the message into a packet
     encoded_data = PacketEncoderDecoder.encode_message(message, 30)
     packet: Packet = packet_pb2.Packet(
@@ -105,6 +98,22 @@ def test_no_mutation_not_propose():
     assert mutated_message.status == message.status
 
 
+def test_mutation_decoding_not_support():
+    """Tests a decoding of a packet that is an unknown type."""
+    strategy: Strategy = MutationExample()
+    message_type = 99
+    encoded_packet = packet_pb2.Packet(
+        data=b"\x00\x00\x00\x0b"
+        + message_type.to_bytes(2, "big")
+        + b"\x08\x01\x12\x06\x08\x02\x10\x00"
+    )
+
+    result_data, action = strategy.handle_packet(encoded_packet)
+
+    assert result_data == encoded_packet.data
+    assert action == 0
+
+
 def test_mutation_propose_correct_signature_change():
     """Test for checking the signature is different from original after mutating a packet."""
     strategy: Strategy = MutationExample()
@@ -121,10 +130,6 @@ def test_mutation_propose_correct_signature_change():
     # and then an assert that the message signatures are different becasue
     # the mutation has been applied
     org_sig: bytes = message.signature
-
-    print()
-
-    print("o:", org_sig.hex())
 
     private_key = "pnQoFmvY9rq819fBSPiy9daGk6yYRWBrYZcY7GmxHwyrWZpKGjV"
 
@@ -143,18 +148,12 @@ def test_mutation_propose_correct_signature_change():
     )
 
     priv_key = base58.b58decode(private_key, alphabet=base58.RIPPLE_ALPHABET)
-    print("lenpriv", len(priv_key))
     bs58_key = priv_key[1:33]
-
-    print(bs58_key.hex())
 
     # 43bf1a26b1190ba95c246a7d528a70f2edf668a68367bf60e261bbb845d9b775
 
     final_sig = SECP256K1.sign(msg, bs58_key.hex())
 
-    print(len(org_sig), len(final_sig))
-
-    print("f:", final_sig.hex())
     assert org_sig == final_sig
 
     strategy.public_to_private_key_map = {message.nodePubKey.hex(): bs58_key.hex()}
