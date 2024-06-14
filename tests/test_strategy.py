@@ -62,6 +62,7 @@ def test_update_network():
     assert strategy.validator_node_list == [node_0, node_1, node_2]
     assert strategy.node_amount == 3
     assert strategy.port_dict == {10: 0, 11: 1, 12: 2}
+    assert strategy.id_dict == {0: 10, 1: 11, 2: 12}
     assert strategy.communication_matrix == [
         [False, True, True],
         [True, False, True],

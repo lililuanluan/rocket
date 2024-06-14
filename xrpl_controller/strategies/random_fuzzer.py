@@ -36,7 +36,10 @@ class RandomFuzzer(Strategy):
         Raises:
             ValueError: if the given probabilities or delays are invalid
         """
-        super().__init__(auto_parse_identical=auto_parse_identical, auto_parse_subsets=auto_parse_subsets)
+        super().__init__(
+            auto_parse_identical=auto_parse_identical,
+            auto_parse_subsets=auto_parse_subsets,
+        )
 
         if seed is not None:
             random.seed(seed)

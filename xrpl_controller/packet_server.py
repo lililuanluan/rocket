@@ -8,7 +8,7 @@ import grpc
 import tomllib
 
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.core import format_datetime, validate_ports
+from xrpl_controller.core import format_datetime, validate_ports_or_ids
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import (
@@ -50,7 +50,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ValueError: if request.from_port == request.to_port or if any is negative
         """
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
-        validate_ports(request.from_port, request.to_port)
+        validate_ports_or_ids(request.from_port, request.to_port)
 
         (data, action) = self.strategy.process_packet(request)
 

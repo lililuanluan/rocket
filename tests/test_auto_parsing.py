@@ -43,7 +43,7 @@ def test_auto_parsing_false():
 
     # Following 2 calls should throw an assertion errors, so this is a work-around
     try:
-        strategy.set_message_action(10, 11, b"test", b"mutated", 42)
+        strategy.set_message_action(0, 1, b"test", b"mutated", 42)
         raise ValueError()
     except AssertionError:
         pass
@@ -51,7 +51,7 @@ def test_auto_parsing_false():
         raise AssertionError() from None
 
     try:
-        strategy.check_previous_message(10, 11, b"test")
+        strategy.check_previous_message(0, 1, b"test")
         raise ValueError()
     except AssertionError:
         pass
@@ -64,6 +64,7 @@ def test_auto_parsing_false():
 
 
 def test_auto_parsing_subsets():
+    """Test auto parsing subsets functionality."""
     strategy = RandomFuzzer(0, 0, 0, 150)
     strategy.update_network([node_0, node_1, node_2])
 
@@ -86,6 +87,7 @@ def test_auto_parsing_subsets():
 
 
 def test_auto_parsing_subsets_4_nodes():
+    """Same as previous test, just special case with 4 nodes."""
     strategy = RandomFuzzer(0, 0, 0, 150)
     strategy.update_network([node_0, node_1, node_2, node_3])
     strategy.set_subsets_dict({2: [[0], [1, 3]]})
@@ -94,11 +96,3 @@ def test_auto_parsing_subsets_4_nodes():
     strategy.set_message_action(2, 0, b"test", b"mutated", 42)
     strategy.set_message_action(2, 1, b"test", b"mutated2", 42)
     assert strategy.check_subsets(2, 3, b"test") == (True, (b"mutated2", 42))
-
-
-
-
-
-
-
-
