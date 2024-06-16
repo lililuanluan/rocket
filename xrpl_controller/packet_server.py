@@ -175,7 +175,7 @@ def serve(strategy: Strategy):
     server.wait_for_termination()
 
 
-def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:
+def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:  # pragma: no cover
     """
     This function starts the server and listens for incoming packets.
 
