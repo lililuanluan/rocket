@@ -52,6 +52,7 @@ def test_ledger_based_iteration_add_done():
     interceptor_manager = InterceptorManager()
     interceptor_manager.restart = MagicMock()
     interceptor_manager.stop = MagicMock()
+    interceptor_manager.cleanup_docker_containers = MagicMock()
 
     iteration = LedgerBasedIteration(1, 10, interceptor_manager)
     iteration.add_iteration()
@@ -59,6 +60,7 @@ def test_ledger_based_iteration_add_done():
 
     interceptor_manager.restart.assert_called_once()
     interceptor_manager.stop.assert_called_once()
+    interceptor_manager.cleanup_docker_containers.assert_called_once()
 
 
 def test_ledger_based_iteration_update():
