@@ -82,7 +82,7 @@ class Strategy(ABC):
         Set the network partition and update the communication matrix. This overrides any preceding communications.
 
         Args:
-            partitions (list[list[int]]): List containing the network partitions (as lists of port numbers).
+            partitions (list[list[int]]): List containing the network partitions (as lists of peer ID's).
 
         Raises:
             ValueError: if given partitions are invalid
@@ -90,7 +90,7 @@ class Strategy(ABC):
         flattened_partitions = flatten(partitions)
         if (
             set(flattened_partitions)
-            != set([node.peer.port for node in self.validator_node_list])
+            != set([peer_id for peer_id in range(len(self.validator_node_list))])
             or len(flattened_partitions) != self.node_amount
         ):
             raise ValueError(
@@ -104,60 +104,58 @@ class Strategy(ABC):
         for partition in partitions:
             for i in range(len(partition)):
                 for j in range(i + 1, len(partition)):
-                    idx_1 = self.idx(partition[i])
-                    idx_2 = self.idx(partition[j])
+                    peer_id_1 = partition[i]
+                    peer_id_2 = partition[j]
 
-                    self.communication_matrix[idx_1][idx_2] = True
-                    self.communication_matrix[idx_2][idx_1] = True
+                    self.communication_matrix[peer_id_1][peer_id_2] = True
+                    self.communication_matrix[peer_id_2][peer_id_1] = True
 
-    def connect_nodes(self, peer_port_1: int, peer_port_2: int):
+    def connect_nodes(self, peer_id_1: int, peer_id_2: int):
         """
-        Connect 2 nodes using their ports, which allows communication between them.
+        Connect 2 nodes using their ID's, which allows communication between them.
 
         Args:
-            peer_port_1 (int): Peer port 1.
-            peer_port_2 (int): Peer port 2.
+            peer_id_1 (int): Peer ID 1.
+            peer_id_2 (int): Peer ID 2.
 
         Raises:
-            ValueError: If peer_port_1 is equal to peer_port_2 or if any is negative
+            ValueError: If peer_id_1 is equal to peer_id_2 or if any is negative
         """
-        validate_ports_or_ids(peer_port_1, peer_port_2)
-        self.communication_matrix[self.idx(peer_port_1)][self.idx(peer_port_2)] = True
-        self.communication_matrix[self.idx(peer_port_2)][self.idx(peer_port_1)] = True
+        validate_ports_or_ids(peer_id_1, peer_id_2)
+        self.communication_matrix[peer_id_1][peer_id_2] = True
+        self.communication_matrix[peer_id_2][peer_id_1] = True
 
-    def disconnect_nodes(self, peer_port_1: int, peer_port_2: int):
+    def disconnect_nodes(self, peer_id_1: int, peer_id_2: int):
         """
-        Disconnect 2 nodes using their ports, which disallows communication between them.
+        Disconnect 2 nodes using their ID's, which disallows communication between them.
 
         Args:
-            peer_port_1 (int): Peer port 1.
-            peer_port_2 (int): Peer port 2.
+            peer_id_1 (int): Peer ID 1.
+            peer_id_2 (int): Peer ID 2.
 
         Raises:
-            ValueError: If peer_port_1 is equal to peer_port_2 or if any is negative
+            ValueError: If peer_id_1 is equal to peer_id_2 or if any is negative
         """
-        validate_ports_or_ids(peer_port_1, peer_port_2)
-        self.communication_matrix[self.idx(peer_port_1)][self.idx(peer_port_2)] = False
-        self.communication_matrix[self.idx(peer_port_2)][self.idx(peer_port_1)] = False
+        validate_ports_or_ids(peer_id_1, peer_id_2)
+        self.communication_matrix[peer_id_1][peer_id_2] = False
+        self.communication_matrix[peer_id_2][peer_id_1] = False
 
-    def check_communication(self, peer_from_port: int, peer_to_port: int) -> bool:
+    def check_communication(self, peer_from_id: int, peer_to_id: int) -> bool:
         """
-        Check whether 2 ports can communicate with each other.
+        Check whether 2 peers can communicate with each other using their ID's.
 
         Args:
-            peer_from_port (int): The peer port from where the message was sent.
-            peer_to_port (int): The peer port to where the message was sent.
+            peer_from_id (int): The peer ID from where the message was sent.
+            peer_to_id (int): The peer ID to where the message was sent.
 
         Returns:
-            bool: A boolean indicating whether communication is permitted between the 2 given ports.
+            bool: A boolean indicating whether communication is permitted between the 2 given ID's.
 
         Raises:
-            ValueError: If peer_from_port is equal to peer_to_port or if any is negative
+            ValueError: If peer_from_id is equal to peer_to_id or if any is negative
         """
-        validate_ports_or_ids(peer_from_port, peer_to_port)
-        return self.communication_matrix[self.idx(peer_from_port)][
-            self.idx(peer_to_port)
-        ]
+        validate_ports_or_ids(peer_from_id, peer_to_id)
+        return self.communication_matrix[peer_from_id][peer_to_id]
 
     def reset_communications(self):
         """
@@ -165,7 +163,9 @@ class Strategy(ABC):
 
         This method uses partition_network to rebuild the communication matrix in a correct way.
         """
-        self.partition_network([[node.peer.port for node in self.validator_node_list]])
+        self.partition_network(
+            [[peer_id for peer_id in range(len(self.validator_node_list))]]
+        )
 
     def set_subsets_dict_entry(
         self, peer_id: int, subsets: list[list[int]] | list[int]
@@ -205,14 +205,14 @@ class Strategy(ABC):
         Set an entry in the message_action_matrix.
 
         Args:
-            peer_from_id: Sender peer id.
-            peer_to_id: Receiving peer id.
+            peer_from_id: Sender peer ID.
+            peer_to_id: Receiving peer ID.
             initial_message: The pre-processed message.
             final_message: The (possibly mutated) processed message
             action: The taken action
 
         Raises:
-            ValueError: if peer_from_port is equal to peer_to_port or if any is negative
+            ValueError: if peer_from_id is equal to peer_to_id or if any is negative
         """
         assert self.auto_parse_identical or self.auto_parse_subsets
         validate_ports_or_ids(peer_from_id, peer_to_id)
@@ -232,8 +232,8 @@ class Strategy(ABC):
             else: ...
 
         Args:
-            peer_from_id: Sender peer port.
-            peer_to_id: Receiving peer port.
+            peer_from_id: Sender peer ID.
+            peer_to_id: Receiving peer ID.
             message: The message to be checked for parsing
 
         Returns:
@@ -253,8 +253,8 @@ class Strategy(ABC):
         Check a subset for identical messages.
 
         Args:
-            peer_from_id: Sender peer port.
-            peer_to_id: Receiving peer port.
+            peer_from_id: Sender peer ID.
+            peer_to_id: Receiving peer ID.
             message: The message to be checked for parsing
             subset: The subset of ID's to check
 
@@ -286,8 +286,8 @@ class Strategy(ABC):
         Check multiple subsets for identical messages.
 
         Args:
-            peer_from_id: Sender peer port.
-            peer_to_id: Receiving peer port.
+            peer_from_id: Sender peer ID.
+            peer_to_id: Receiving peer ID.
             message: The message to be checked for parsing
 
         Returns:
@@ -345,7 +345,9 @@ class Strategy(ABC):
             )
         }
 
-        self.partition_network([[node.peer.port for node in validator_node_list]])
+        self.partition_network(
+            [[peer_id for peer_id in range(len(validator_node_list))]]
+        )
 
         if self.auto_parse_identical:
             self.prev_message_action_matrix = [
@@ -374,19 +376,19 @@ class Strategy(ABC):
         Transform a port to its corresponding index.
 
         Args:
-            port: The port of which the index/id is needed.
+            port: The port of which the corresponding peer ID is needed.
 
         Returns:
-            int: The corresponding index
+            int: The corresponding peer ID
         """
         return self.port_dict[port]
 
     def port(self, peer_id: int) -> int:
         """
-        Transform an id to its corresponding port.
+        Transform a peer ID to its corresponding port.
 
         Args:
-            peer_id: the id of which the port is needed
+            peer_id: the peer ID of which the port is needed
 
         Returns:
             The corresponding port
@@ -431,7 +433,7 @@ class Strategy(ABC):
         else:
             # If no communication is allowed by partitions, then we drop immediately
             if self.auto_partition and not self.check_communication(
-                packet.from_port, packet.to_port
+                peer_from_id, peer_to_id
             ):
                 (final_data, action) = (packet.data, MAX_U32)
             else:

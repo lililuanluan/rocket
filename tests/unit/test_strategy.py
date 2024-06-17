@@ -104,7 +104,7 @@ def test_process_message():
     assert strategy.prev_message_action_matrix[0][1].final_message == b"test2"
 
     # Check whether messages get dropped automatically through auto partition
-    strategy.partition_network([[10, 11], [12]])
+    strategy.partition_network([[0, 1], [2]])
     for i in range(100):
         msg = encode("test" + str(i))[0]  # Just arbitrary encoding
         packet_ack = packet_pb2.Packet(data=msg, from_port=10, to_port=12)
