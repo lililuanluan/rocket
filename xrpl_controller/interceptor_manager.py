@@ -15,7 +15,6 @@ class InterceptorManager:
     def __init__(self):
         """Initialize the InterceptorManager, with None for the process variable."""
         self.process: Popen | None = None
-        self.docker_client: DockerClient = docker.from_env()
 
     @staticmethod
     def __check_output(proc: Popen):
@@ -24,6 +23,14 @@ class InterceptorManager:
             logger.debug(f"\n{stdout}")
         if stderr:
             logger.debug(f"\n{stderr}")
+
+    @staticmethod
+    def cleanup_docker_containers():
+        """Stop the validator containers."""
+        docker_client: DockerClient = docker.from_env()
+        for c in docker_client.containers.list():
+            if "validator_" in c.name:
+                c.stop()
 
     def start_new(self):
         """Starts the xrpl-packet-interceptor subprocess, and spawns a thread checking for output."""
@@ -58,9 +65,3 @@ class InterceptorManager:
                 self.process.wait(timeout=5.0)
             except TimeoutExpired:
                 self.process.terminate()
-
-    def cleanup_docker_containers(self):
-        """Stop the validator containers."""
-        for c in self.docker_client.containers.list():
-            if "validator_" in c.name:
-                c.stop()
