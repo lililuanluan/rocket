@@ -50,10 +50,8 @@ class Strategy(ABC):
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical
         self.auto_parse_subsets = auto_parse_subsets
-        if auto_parse_identical or auto_parse_subsets:
-            self.prev_message_action_matrix: list[list[MessageAction]] = []
-        if self.auto_parse_subsets:
-            self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
+        self.prev_message_action_matrix: list[list[MessageAction]] = []
+        self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.keep_action_log = keep_action_log
         self.params = {}
 
