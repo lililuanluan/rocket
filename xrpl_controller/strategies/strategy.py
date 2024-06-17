@@ -67,8 +67,7 @@ class Strategy(ABC):
             str_conf_directory,
         )
         logger.info(
-            "Initialized strategy parameters from configuration file:\n\t",
-            self.params,
+            f"Initialized strategy parameters from configuration file:\n\t{self.params}"
         )
 
         ntw_conf_directory = "./xrpl_controller/network_configs/"
@@ -77,8 +76,7 @@ class Strategy(ABC):
             ntw_conf_directory,
         )
         logger.info(
-            "Initialized strategy network configuration from configuration file:\n\t",
-            self.network_config,
+            f"Initialized strategy network configuration from configuration file:\n\t{self.network_config}"
         )
 
     def partition_network(self, partitions: list[list[int]]):

@@ -1,47 +1,67 @@
 # XRPL controller module
 
-## Getting Started
-See the related repository [xrpl-packet-interceptor](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor) for the interceptor module.
+## Usage
 
 ### Pre-Requisites
-- Install Python 3.12
+- Python 3.12
+- A compiled binary of the [xrpl-packet-interceptor](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor)
 
-## How to run
-1. Clone this repository and the packet interceptor repository
-2. Make a strategy in the controller and pass it as parameter to the serve method in main
-3. Configure the ports and amount of validator nodes to use in the interceptor in the `network-config.toml` file
-4. Run the controller
-5. Run the interceptor
-
-Below is a guide on how to run the controller module. Refer to the interceptor repository for instructions on how to run the interceptor module.
-
-### Linux
+### Get the code
 ```console
-user@laptop:~$ git clone git@gitlab.ewi.tudelft.nl:cse2000-software-project/2023-2024/cluster-q/13d/xrpl-controller-module.git
-user@laptop:~$ cd xrpl-controller-module
-user@laptop:~$ python -m venv .venv               # Recommended: create a virtual environment
-user@laptop:~$ source .venv/bin/activate          # Activate the virtual env
-user@laptop:~$ pip install -r requirements.txt    # Install requirements
-user@laptop:~$ python3 -m xrpl_controller         # Runs the application
+git clone git@gitlab.ewi.tudelft.nl:cse2000-software-project/2023-2024/cluster-q/13d/xrpl-controller-module.git
+cd xrpl-controller-module
 ```
 
+### Prepare the Interceptor executable
+Place the xrpl-packet-interceptor executable in the `interceptor/` subfolder, located in the root of this repository.
 
-### Windows
-```console
-PS > git clone git@gitlab.ewi.tudelft.nl:cse2000-software-project/2023-2024/cluster-q/13d/xrpl-controller-module.git
-PS > cd xrpl-controller-module
-PS > python -m venv .venv               # Recommended: create a virtual environment
-PS > ./.venv/Scripts/activate           # Activate the virtual env
-PS > pip install -r requirements.txt    # Install requirements
-PS > python3 -m xrpl_controller         # Runs the application
+On Linux/macOS, make sure the executable is called `xrpl-packet-interceptor`. For windows, make sure it is called `xrpl-packet-interceptor.exe`
+
+### Configure the application
+The controller module has a few configuration files/steps you need to be aware of. 
+
+#### Change the Strategy
+The strategy can be changed by editing the `xrpl_controller/__main__.py` file. It is as simple as importing the desired strategy, and passing the initialized Strategy class to the `serve` method. An example highlighting the initialization of the RandomFuzzer is seen below.
+
+```python
+from xrpl_controller.strategies import Strategy
+from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
+
+from xrpl_controller.packet_server import serve
+
+if __name__ == "__main__":
+    strategy: Strategy = RandomFuzzer()
+    serve(strategy)
 ```
 
-It is recommended to create a Virtual Environment using the command (executed in the root of the repository): `python -m venv .venv` This command will create a virtual environment in a subfolder `.venv`, pyCharm should automatically pick this up and use it by default.
+#### Adjust the network configuration
+The general configuration options of the validator node network can be changed in the `xrpl_controller/network_configs/default-network-config.yaml` file. Documentation on the various configuration options are included in the file.
+
+#### Adjust the strategy configuration
+The configuration options for the specified strategy (RandomFuzzer in this example) can be found under `xrpl_controller/strategies/configs/RandomFuzzer.yaml`.
+
+### How to run
+
+#### Linux
+```console
+python -m venv .venv               # (optional) Create a virtual environment
+source .venv/bin/activate          # (optional) Activate the environment
+pip install -r requirements.txt    # Install requirements
+python3 -m xrpl_controller         # Runs the application
+```
+
+#### Windows
+```console
+python -m venv .venv               # (optional) Create a virtual environment
+./.venv/Scripts/activate           # (optional) Activate the environment
+pip install -r requirements.txt    # Install requirements
+python3 -m xrpl_controller         # Runs the application
+```
 
 ## How to contribute
 1. Create a new branch from `main`
 2. Make your changes
-3. Make sure the pipeline passes
+3. Make sure the pipeline passes locally
 4. Push your branch to the repository
 5. Create a merge request to `main`
 
@@ -57,14 +77,9 @@ Current included stages:
 To run the different pipeline stages, excluding the automatic documentation generation, [tox](https://tox.wiki/en/4.15.0/user_guide.html) is used.
 `tox` makes sure every stage of the pipeline runs in a separate environment, which eliminates interference. Another benefit of `tox` is the ability to execute the `tox` command in a local terminal, which will run unit testing, type checking, linting and style checking locally, meaning you do not have to push your changes to GitLab to check whether the pipeline will fail or pass.
 
-#### Linux
+#### Linux, Windows & macOS
 ```console
-user@laptop:~$ tox                                # Runs pipeline locally (without documentation generation)
-```
-
-#### Windows
-```console
-PS > tox                                # Runs pipeline locally (without documentation generation)
+tox     # Run the pipeline locally (excluding documentation generation)
 ```
 
 ### Documentation Generation
@@ -74,8 +89,8 @@ Below you can find how to generate documentation locally
 
 #### Linux
 ```console
-user@laptop:~$ cd docs
-user@laptop:~$ make clean && make html
+cd docs
+make clean && make html
 ```
 
 #### Windows
@@ -85,15 +100,14 @@ PS > ./make.bat clean
 PS > ./make.bat html
 ```
 
-The documentation website files should now be in `docs/_build/html`. Then, inside this folder, you can open `index.html` with your browser.
+The documentation website files should now be in `docs/_build/html`. Then, inside this folder, you can open `index.html` with your browser to view the documentation locally.
 
-### gRPC
-If you want to make changes to a .proto file it is important that you make the exact same changes in the corresponding file in the interceptor and regenerate the necessary files both in the controller and interceptor. 
+### Protocol Buffers (gRPC)
+If you want to make changes to a .proto file it is important that you make the exact same changes in the corresponding file in the interceptor repository and regenerate the necessary files both in the controller and interceptor. 
 - For the controller run:
 ```
-python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. protos/packet.proto
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. protos/<filename.proto>
 ```
-- For the interceptor you can just rebuild.
 
 
 ### Logging
@@ -104,7 +118,6 @@ Action logs can be kept track of by using the `keep_log` boolean argument in the
 an action log (csv) will be kept under the `logs/action_logs/[start_time]` directory along with a csv file containing the information of the validator nodes which were used during logging process. 
 This action log makes use of the `CSVLogger`'s child class `ActionLogger` which is dedicated to logging actions. 
 The log contains the timestamp when the action was taken on a packet, the action, sender peer port, receiver peer port, and the packet data as a hex string.
-
 
 ### Constructing New Strategies
 To add a new strategy, you need to create a new file in the `strategies` folder with a class that inherits from the `Strategy` class. This class should implement the `handle_packet` method.
