@@ -12,6 +12,7 @@ from xrpl_controller.strategies.encoder_decoder import (
 )
 
 
+# TODO: make a method to create a TMProposeSet message.
 def test_encode_message():
     """Tests a basic encoded message."""
     message = TMProposeSet()
