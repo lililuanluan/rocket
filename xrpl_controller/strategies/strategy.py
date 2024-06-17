@@ -85,7 +85,7 @@ class Strategy(ABC):
             partitions (list[list[int]]): List containing the network partitions (as lists of peer ID's).
 
         Raises:
-            ValueError: if given partitions are invalid
+            ValueError: if given partitions are invalid.
         """
         flattened_partitions = flatten(partitions)
         if (
@@ -119,7 +119,7 @@ class Strategy(ABC):
             peer_id_2 (int): Peer ID 2.
 
         Raises:
-            ValueError: If peer_id_1 is equal to peer_id_2 or if any is negative
+            ValueError: if peer_id_1 is equal to peer_id_2 or if any is negative.
         """
         validate_ports_or_ids(peer_id_1, peer_id_2)
         self.communication_matrix[peer_id_1][peer_id_2] = True
@@ -134,7 +134,7 @@ class Strategy(ABC):
             peer_id_2 (int): Peer ID 2.
 
         Raises:
-            ValueError: If peer_id_1 is equal to peer_id_2 or if any is negative
+            ValueError: if peer_id_1 is equal to peer_id_2 or if any is negative.
         """
         validate_ports_or_ids(peer_id_1, peer_id_2)
         self.communication_matrix[peer_id_1][peer_id_2] = False
@@ -152,7 +152,7 @@ class Strategy(ABC):
             bool: A boolean indicating whether communication is permitted between the 2 given ID's.
 
         Raises:
-            ValueError: If peer_from_id is equal to peer_to_id or if any is negative
+            ValueError: if peer_from_id is equal to peer_to_id or if any is negative.
         """
         validate_ports_or_ids(peer_from_id, peer_to_id)
         return self.communication_matrix[peer_from_id][peer_to_id]
@@ -176,8 +176,14 @@ class Strategy(ABC):
         Args:
             peer_id (int): The peer ID.
             subsets (list[list[int]]): The list of subsets.
+
+        Raises:
+            ValueError: If auto_parse_subsets is False.
         """
-        assert self.auto_parse_subsets
+        if not self.auto_parse_subsets:
+            raise ValueError(
+                "auto_parse_subsets must be set to True when calling set_subsets_dict_entry."
+            )
         self.subsets_dict[peer_id] = subsets
 
     def set_subsets_dict(self, subsets_dict: dict[int, list[list[int]] | list[int]]):
@@ -186,8 +192,15 @@ class Strategy(ABC):
 
         Args:
             subsets_dict: The new dictionaries, a 'map' of ID's to subsets of ID's, to be used.
+
+        Raise:
+            ValueError: if auto_parse_subsets is False.
         """
-        assert self.auto_parse_subsets
+        if not self.auto_parse_subsets:
+            raise ValueError(
+                "auto_parse_subsets must be set to True when calling set_subsets_dict."
+            )
+
         self.subsets_dict = {peer_id: [] for peer_id in range(self.node_amount)}
 
         for peer_id, subsets in subsets_dict.items():
@@ -212,9 +225,13 @@ class Strategy(ABC):
             action: The taken action
 
         Raises:
-            ValueError: if peer_from_id is equal to peer_to_id or if any is negative
+            ValueError: if auto_parse_identical and auto_parse_subsets are False, and if peer_from_id is equal to peer_to_id or if any is negative
         """
-        assert self.auto_parse_identical or self.auto_parse_subsets
+        if not (self.auto_parse_identical or self.auto_parse_subsets):
+            raise ValueError(
+                "auto_parse_subsets must be set to True when calling set_message_action."
+            )
+
         validate_ports_or_ids(peer_from_id, peer_to_id)
         self.prev_message_action_matrix[peer_from_id][peer_to_id].set_initial_message(
             initial_message
@@ -238,8 +255,15 @@ class Strategy(ABC):
 
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
+
+        Raises:
+            ValueError: if auto_parse_identical and auto_parse_subsets are False.
         """
-        assert self.auto_parse_identical or self.auto_parse_subsets
+        if not (self.auto_parse_identical or self.auto_parse_subsets):
+            raise ValueError(
+                "auto_parse_subsets or auto_parse_identical must be set to True when calling check_previous_message."
+            )
+
         message_action = self.prev_message_action_matrix[peer_from_id][peer_to_id]
         return message == message_action.initial_message, (
             message_action.final_message,
@@ -292,8 +316,14 @@ class Strategy(ABC):
 
         Returns:
             A tuple indicating success along with final message and action.
+
+        Raises:
+            ValueError: if auto_parse_identical is False.
         """
-        assert self.auto_parse_subsets
+        if not self.auto_parse_subsets:
+            raise ValueError(
+                "auto_parse_subsets must be set to True when calling check_subsets."
+            )
 
         # self.subsets_dict[peer_from_id] can contain a 1- or 2-dimensional integer list
         # We first check whether the list is 2-dimensional, if so, we handle the entry accordingly

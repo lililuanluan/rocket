@@ -1,5 +1,7 @@
 """Test the functionality which automatically parses identical subsequent messages."""
 
+import pytest
+
 from protos import packet_pb2
 from tests.unit.test_strategy import node_0, node_1, node_2, node_3
 from xrpl_controller.strategies import RandomFuzzer
@@ -24,11 +26,8 @@ def test_auto_parsing():
     assert not res3[0]
     assert res3[1] == (b"", -1)
 
-    try:
+    with pytest.raises(ValueError):
         strategy.set_message_action(0, 0, b"test", b"mutated", 42)
-        raise AssertionError()
-    except ValueError:
-        pass
 
 
 def test_auto_parsing_false():
@@ -41,22 +40,11 @@ def test_auto_parsing_false():
     assert not hasattr(strategy, "prev_message_action_matrix")
     assert not hasattr(strategy, "subsets_dict")
 
-    # Following 2 calls should throw an assertion errors, so this is a work-around
-    try:
+    with pytest.raises(ValueError):
         strategy.set_message_action(0, 1, b"test", b"mutated", 42)
-        raise ValueError()
-    except AssertionError:
-        pass
-    except ValueError():
-        raise AssertionError() from None
 
-    try:
+    with pytest.raises(ValueError):
         strategy.check_previous_message(0, 1, b"test")
-        raise ValueError()
-    except AssertionError:
-        pass
-    except ValueError():
-        raise AssertionError() from None
 
     packet_ack = packet_pb2.Packet(data=b"test", from_port=10, to_port=11)
     strategy.process_packet(packet_ack)
