@@ -14,7 +14,7 @@ base_port_ws_admin: 62000
 base_port_rpc: 63000
 
 # The number of validator nodes to configure and start
-number_of_nodes: "vir"
+number_of_nodes: 3
 
 # A 2-dimensional array containing the groups of node indices that should be connected
 # to each other. Some examples for 3 nodes:
