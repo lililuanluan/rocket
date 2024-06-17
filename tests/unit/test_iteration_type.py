@@ -61,17 +61,6 @@ def test_ledger_based_iteration_add_done():
     interceptor_manager.stop.assert_called_once()
 
 
-def test_iteration_init_interceptor():
-    """Tests the initialization of Interceptor."""
-    interceptor_manager = InterceptorManager()
-    interceptor_manager.start_new = MagicMock()
-
-    iteration = LedgerBasedIteration(1, 10, interceptor_manager)
-    iteration.init_interceptor()
-
-    interceptor_manager.start_new.assert_called_once()
-
-
 def test_ledger_based_iteration_update():
     """Tests updating LedgerBasedIteration with new status change."""
     status_msg = TMStatusChange(

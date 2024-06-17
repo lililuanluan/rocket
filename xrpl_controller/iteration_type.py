@@ -35,10 +35,6 @@ class IterationType:
             )
             self._interceptor_manager.stop()
 
-    def init_interceptor(self):
-        """Wrapper method to start the interceptor for the first time (on program initialization)."""
-        self._interceptor_manager.start_new()
-
 
 class TimeBasedIteration(IterationType):
     """Time based iteration type, restarts the interceptor process after a certain amount of seconds."""
