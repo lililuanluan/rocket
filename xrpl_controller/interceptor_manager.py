@@ -26,8 +26,8 @@ class InterceptorManager:
         """Starts the xrpl-packet-interceptor subprocess, and spawns a thread checking for output."""
         file = (
             "xrpl-packet-interceptor"
-            if platform != "Windows"
-            else "xrpl-packet-interceptor.exe"
+            if platform != "win32"
+            else "/interceptor/xrpl-packet-interceptor.exe"
         )
         logger.info("Starting interceptor")
         self.process = Popen(
