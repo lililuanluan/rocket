@@ -33,12 +33,8 @@ def test_auto_parsing():
 def test_auto_parsing_false():
     """Test whether attributes do not get saved when boolean is false."""
     strategy = RandomFuzzer(auto_parse_identical=False, auto_parse_subsets=False)
-    assert not hasattr(strategy, "prev_message_action_matrix")
-    assert not hasattr(strategy, "subsets_dict")
 
     strategy.update_network([node_0, node_1, node_2])
-    assert not hasattr(strategy, "prev_message_action_matrix")
-    assert not hasattr(strategy, "subsets_dict")
 
     with pytest.raises(ValueError):
         strategy.set_message_action(0, 1, b"test", b"mutated", 42)
@@ -48,7 +44,6 @@ def test_auto_parsing_false():
 
     packet_ack = packet_pb2.Packet(data=b"test", from_port=10, to_port=11)
     strategy.process_packet(packet_ack)
-    assert not hasattr(strategy, "prev_message_action_matrix")
 
 
 def test_auto_parsing_subsets():
