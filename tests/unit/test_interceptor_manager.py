@@ -1,6 +1,9 @@
 """Tests for the InterceptorManager class."""
 
-from unittest.mock import Mock, patch
+from subprocess import Popen, TimeoutExpired
+from unittest.mock import MagicMock, Mock, patch
+
+from docker.models.containers import Container
 
 from xrpl_controller.interceptor_manager import InterceptorManager
 
@@ -70,3 +73,50 @@ def test_check_output_no_stdout_stderr():
         interceptor_manager = InterceptorManager()
         interceptor_manager.start_new()
     mock_popen.communicate.assert_called_once()
+
+
+def test_cleanup_docker():
+    """Test cleaning up docker containers."""
+    mock_docker_client = Mock()
+    mock_container1 = MagicMock(spec=Container)
+    mock_container1.name = "validator_1"
+    mock_container2 = MagicMock(spec=Container)
+    mock_container2.name = "other_container"
+    mock_container3 = MagicMock(spec=Container)
+    mock_container3.name = "validator_2"
+
+    mock_container1.stop = MagicMock(return_value=None)
+    mock_container2.stop = MagicMock(return_value=None)
+    mock_container3.stop = MagicMock(return_value=None)
+
+    mock_docker_client.containers.list.return_value = [
+        mock_container1,
+        mock_container2,
+        mock_container3,
+    ]
+
+    with patch("docker.from_env", return_value=mock_docker_client):
+        interceptor_manager = InterceptorManager()
+        interceptor_manager.cleanup_docker_containers()
+
+    mock_container1.stop.assert_called_once()
+    mock_container2.stop.assert_not_called()
+    mock_container3.stop.assert_called_once()
+
+
+def test_stop_ungraceful():
+    """Test whether the stop behavior functions correctly on a timeout."""
+    mock_popen = Mock(spec=Popen)
+    mock_popen.communicate.return_value = (None, None)
+
+    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen_class:
+        mock_popen_class.return_value = mock_popen
+        interceptor_manager = InterceptorManager()
+        interceptor_manager.process = mock_popen
+
+        mock_popen.wait.side_effect = TimeoutExpired(cmd="", timeout=5.0)
+
+        interceptor_manager.stop()
+
+        assert mock_popen.terminate.call_count == 2
+        mock_popen.wait.assert_called_once_with(timeout=5.0)

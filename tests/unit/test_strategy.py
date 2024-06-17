@@ -1,11 +1,14 @@
 """Tests for Strategy class."""
 
 from encodings.utf_8 import encode
+from unittest.mock import MagicMock
 
-from protos import packet_pb2
+from protos import packet_pb2, ripple_pb2
 from tests.unit.test_random_fuzzer import create_test_config, remove_test_config
 from xrpl_controller.core import MAX_U32
+from xrpl_controller.iteration_type import LedgerBasedIteration, TimeBasedIteration
 from xrpl_controller.strategies import RandomFuzzer
+from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,
@@ -36,6 +39,19 @@ node_2 = ValidatorNode(
     ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
 )
 
+status_msg = ripple_pb2.TMStatusChange(
+    newStatus=2,
+    newEvent=1,
+    ledgerSeq=3,
+    ledgerHash=b"abcdef",
+    ledgerHashPrevious=b"123456",
+    networkTime=1000,
+    firstSeq=0,
+    lastSeq=2,
+)
+
+ping_message = ripple_pb2.TMPing(type=0, seq=1, pingTime=9000, netTime=8999)
+
 
 def test_init():
     """Test whether Strategy attributes get initialized correctly."""
@@ -53,7 +69,10 @@ def test_init():
 
 def test_update_network():
     """Test whether Strategy attributes get updated correctly with update_network function."""
-    strategy = RandomFuzzer()
+    time_iter = TimeBasedIteration(5, 30)
+    time_iter.start_timer = MagicMock()
+
+    strategy = RandomFuzzer(iteration_type=time_iter)
     strategy.update_network([node_0, node_1, node_2])
     assert strategy.validator_node_list == [node_0, node_1, node_2]
     assert strategy.node_amount == 3
@@ -71,6 +90,8 @@ def test_update_network():
             assert item.initial_message == b""
             assert item.final_message == b""
             assert item.action == -1
+
+    time_iter.start_timer.assert_called_once()
 
 
 def test_process_message():
@@ -105,3 +126,50 @@ def test_process_message():
         assert strategy.process_packet(packet_ack) == result
 
     remove_test_config("TEST_PROCESS_MESSAGE")
+
+
+def test_process_message_type_34():
+    """Test whether processing a packet of type 34 (StatusChange) calls the correct methods."""
+    ledger_iter = LedgerBasedIteration(5, 10)
+    ledger_iter.update_iteration = MagicMock()
+
+    strategy = RandomFuzzer(iteration_type=ledger_iter)
+    strategy.update_network([node_0, node_1, node_2])
+    # strategy.update_status = MagicMock()
+
+    packet_data = PacketEncoderDecoder.encode_message(status_msg, 34)
+    packet = packet_pb2.Packet(from_port=10, to_port=11, data=packet_data)
+    strategy.process_packet(packet)
+    ledger_iter.update_iteration.assert_called_once()
+
+
+def test_negative_process_message_type_34():
+    """Test whether processing a packet of type 34 (StatusChange), with time iteration should not call method."""
+    time_iter = TimeBasedIteration(5, 30)
+    time_iter.start_timer = MagicMock()
+    time_iter.update_iteration = MagicMock()
+
+    strategy = RandomFuzzer(iteration_type=time_iter)
+    strategy.update_network([node_0, node_1, node_2])
+    # strategy.update_status = MagicMock()
+
+    packet_data = PacketEncoderDecoder.encode_message(status_msg, 34)
+    packet = packet_pb2.Packet(from_port=10, to_port=11, data=packet_data)
+    strategy.process_packet(packet)
+    time_iter.update_iteration.assert_not_called()
+
+
+def test_process_message_type_not_supported():
+    """Test whether processing a packet of type 60, does not call update_iteration."""
+    ledger_iter = LedgerBasedIteration(5, 10)
+    ledger_iter.update_iteration = MagicMock()
+
+    strategy = RandomFuzzer(iteration_type=ledger_iter)
+    strategy.update_network([node_0, node_1, node_2])
+    strategy.update_status = MagicMock()
+
+    packet_data = PacketEncoderDecoder.encode_message(ping_message, 60)
+    packet = packet_pb2.Packet(from_port=10, to_port=11, data=packet_data)
+
+    strategy.process_packet(packet)
+    strategy.update_status.assert_not_called()

@@ -1,6 +1,5 @@
 """This module is responsible for defining the Strategy interface."""
 
-import struct
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
@@ -321,14 +320,12 @@ class Strategy(ABC):
                     packet.from_port, packet.to_port, packet.data, final_data, action
                 )
 
-        message_type = struct.unpack("!H", packet.data[4:6])[0]
-        if message_type == 34:
-            try:
-                message, _ = PacketEncoderDecoder.decode_packet(packet)
-                if isinstance(message, ripple_pb2.TMStatusChange):
-                    self.update_status(message)
-            except DecodingNotSupportedError:
-                pass
+        try:
+            message, _ = PacketEncoderDecoder.decode_packet(packet)
+            if isinstance(message, ripple_pb2.TMStatusChange):
+                self.update_status(message)
+        except DecodingNotSupportedError:
+            pass
 
         return final_data, action
 
