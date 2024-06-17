@@ -138,10 +138,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
     def get_config(self, request, context):
         """
-        This function sends the config specified in `network-config.toml`, to the interceptor.
+        This function sends the network config specified in the self.strategy, to the interceptor.
 
         Args:
-            request: The request containing the Config.
+            request: The request containing the network config.
             context: gRPC context.
 
         Returns:
