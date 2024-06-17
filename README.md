@@ -8,10 +8,11 @@ See the related repository [xrpl-packet-interceptor](https://gitlab.ewi.tudelft.
 
 ## How to run
 1. Clone this repository and the packet interceptor repository
-2. Make a strategy in the controller and pass it as parameter to the serve method in main
-3. Configure the ports and amount of validator nodes to use in the interceptor in the `network-config.toml` file
-4. Run the controller
-5. Run the interceptor
+2. Make a strategy in the controller and pass it as parameter to the serve method in main. Create a new strategy configuration file, or use/modify the default file: `./xrpl_controller/strategies/configs/default-strategy-config.yaml`
+3. Configure the ports and amount of validator nodes to use in the interceptor in a new network config file, or in the `./xrpl_controller/network_configs/default-network-config.yaml` file.
+4. Make sure the used Strategy is initialized to use your configuration files of choice, see section 'Configuration Files' for more information.
+5. Run the controller
+6. Run the interceptor
 
 Below is a guide on how to run the controller module. Refer to the interceptor repository for instructions on how to run the interceptor module.
 
@@ -109,7 +110,7 @@ The log contains the timestamp when the action was taken on a packet, the action
 ### Constructing New Strategies
 To add a new strategy, you need to create a new file in the `strategies` folder with a class that inherits from the `Strategy` class. This class should implement the `handle_packet` method.
 
-#### Configuration files
+#### Configuration Files
 Users are able to create new configuration files for strategies, these are categorized under network configurations and strategy parameter configurations.
 The configurations have to be specified as yaml files, and will default to `default-strategy-config.yaml` and `default-network-config.yaml`.
 The network configurations have to contain all fields which are also specified in the default file. Strategy parameter configurations can contain anything, as long as all fields are specified subsequently.
@@ -121,16 +122,16 @@ All configuration files must be in the `yaml` format.
 
 #### Network Partitions
 Newly created `Strategy`'s should call `super().__init__()` to initialize needed fields to support network partitions.
-Use `self.partition_network(partition: list[list[int]])` to partition the network using the validators' peer ports as id's in the partitions.
-Example usage with a network of 3 nodes with peer ports `0`, `1`, and `2` respectively where `0` will be isolated and `1` and `2` will be in the same partition: `self.partition_network([[0], [1, 2]])`.
+Use `self.partition_network(partition: list[list[int]])` to partition the network using the validators' peer ID's in the partitions.
+Example usage with a network of 3 nodes with peer ID's `0`, `1`, and `2` respectively where `0` will be isolated and `1` and `2` will be in the same partition: `self.partition_network([[0], [1, 2]])`.
 The user can check the communication between 2 nodes manually by using 
-`self.check_communication(peer_from_port: int, peer_to_port: int)` which will return a boolean which indicates whether communication is possible between the 2 ports.
-To create custom partitions, the functions `self.connect(peer_port_1, peer_port_2)` and `self.disconnect(peer_port_1, peer_port_2)` can be used.
+`self.check_communication(peer_from_id: int, peer_to_id: int)` which will return a boolean which indicates whether communication is possible between the 2 ports.
+To create custom partitions, the functions `self.connect(peer_id_1, peer_id_2)` and `self.disconnect(peer_id_1, peer_id_2)` can be used.
 The application will automatically drop messages sent between 2 nodes if communication is closed between those nodes.
 
 #### Identical Subsequent Messages
 Every `Strategy` instance keeps track of previously sent messages sent between every node pair. The stored information includes the last sent message in bytes, the processed version of the last message, and the action that was taken on that message.
-The method `self.check_previous_message(peer_from_port: int, peer_to_port: int, message:bytes)` can be used which returns a tuple which also indicates whether the previous message was identical to the current message.
+The method `self.check_previous_message(peer_from_id: int, peer_to_id: int, message:bytes)` can be used which returns a tuple which also indicates whether the previous message was identical to the current message.
 In case that the previous message was indeed identical, then the second entry of the tuple contains the processed version of the previous message and the action that was taken.
 This functionality can be used to quickly perform the same actions on identical messages, which can be done automatically by setting the `auto_parse_identical` field in `Strategy`.
 When `auto_parse_identical` is set to `False`, then the strategy will not keep track of any previously sent messages.
