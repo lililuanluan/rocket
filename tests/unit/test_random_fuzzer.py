@@ -3,7 +3,7 @@
 from protos import packet_pb2
 from xrpl_controller.strategies import RandomFuzzer
 
-test_dir = "./tests/integration/test_configs/random_fuzzer/"
+test_dir = "./tests/test_configs/random_fuzzer/"
 
 
 def test_init():

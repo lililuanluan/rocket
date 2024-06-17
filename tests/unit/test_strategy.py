@@ -76,7 +76,7 @@ def test_process_message():
     """Test for process_message function."""
     strategy = RandomFuzzer(
         strategy_config_file="TEST_PROCESS_MESSAGE",
-        strategy_config_directory="./tests/integration/test_configs/random_fuzzer/",
+        strategy_config_directory="./tests/test_configs/random_fuzzer/",
     )
     strategy.update_network([node_0, node_1, node_2])
     packet_ack = packet_pb2.Packet(data=b"test", from_port=10, to_port=11)
