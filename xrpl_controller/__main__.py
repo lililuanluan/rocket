@@ -6,4 +6,6 @@ from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
 
 if __name__ == "__main__":
     strategy: Strategy = RandomFuzzer()
-    serve(strategy)
+    server = serve(strategy)
+
+    server.wait_for_termination()

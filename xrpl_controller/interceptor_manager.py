@@ -1,9 +1,11 @@
 """Contains functionality to easily interact with the network packet interceptor subprocess."""
 
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, TimeoutExpired
 from sys import platform
 from threading import Thread
 
+import docker
+from docker import DockerClient
 from loguru import logger
 
 
@@ -12,7 +14,8 @@ class InterceptorManager:
 
     def __init__(self):
         """Initialize the InterceptorManager, with None for the process variable."""
-        self.process = None
+        self.process: Popen | None = None
+        self.docker_client: DockerClient = docker.from_env()
 
     @staticmethod
     def __check_output(proc: Popen):
@@ -26,8 +29,8 @@ class InterceptorManager:
         """Starts the xrpl-packet-interceptor subprocess, and spawns a thread checking for output."""
         file = (
             "xrpl-packet-interceptor"
-            if platform != "Windows"
-            else "xrpl-packet-interceptor.exe"
+            if platform != "win32"
+            else "interceptor/xrpl-packet-interceptor.exe"
         )
         logger.info("Starting interceptor")
         self.process = Popen(
@@ -43,12 +46,21 @@ class InterceptorManager:
 
     def restart(self):
         """Stops and starts the xrpl-packet-interceptor subprocess."""
-        if self.process:
-            self.process.terminate()
+        self.stop()
         self.start_new()
 
     def stop(self):
         """Stops the xrpl-packet-interceptor subprocess."""
-        logger.info("Stopping interceptor")
         if self.process:
+            logger.info("Stopping interceptor")
             self.process.terminate()
+            try:
+                self.process.wait(timeout=5.0)
+            except TimeoutExpired:
+                self.process.terminate()
+
+    def cleanup_docker_containers(self):
+        """Stop the validator containers."""
+        for c in self.docker_client.containers.list():
+            if "validator_" in c.name:
+                c.stop()

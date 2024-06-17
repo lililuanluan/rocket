@@ -3,6 +3,7 @@
 import threading
 from datetime import datetime, timedelta
 
+from grpc import Server
 from loguru import logger
 
 from protos import ripple_pb2
@@ -18,13 +19,14 @@ class IterationType:
         """Init Iteration Type with an InterceptorManager attached."""
         self._max_iterations = max_iterations
         self._cur_iteration = 0
+        self._server: Server | None = None
 
         self._interceptor_manager = (
             InterceptorManager() if interceptor_manager is None else interceptor_manager
         )
 
     def add_iteration(self):
-        """Add an iteration to the iteration mechanism, stops when max_iterations is reached."""
+        """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
         if self._cur_iteration < self._max_iterations:
             logger.info(f"Starting iteration {self._cur_iteration}")
             self._interceptor_manager.restart()
@@ -34,6 +36,13 @@ class IterationType:
                 f"Finished iteration {self._cur_iteration}, stopping test process..."
             )
             self._interceptor_manager.stop()
+            self._interceptor_manager.cleanup_docker_containers()
+            if self._server:
+                self._server.stop(grace=1)
+
+    def set_server(self, server: Server):
+        """Set the server variable to the running instance of the gRPC server."""
+        self._server = server
 
 
 class TimeBasedIteration(IterationType):

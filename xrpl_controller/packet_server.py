@@ -172,8 +172,10 @@ def serve(strategy: Strategy):
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
+    strategy.iteration_type.set_server(server)
     strategy.iteration_type.add_iteration()
-    server.wait_for_termination()
+
+    return server
 
 
 def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:

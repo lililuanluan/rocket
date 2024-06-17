@@ -48,7 +48,7 @@ def test_ledger_based_iteration_add():
 
 
 def test_ledger_based_iteration_add_done():
-    """Tests whether cleanup is performed properly when iterations reach maxi."""
+    """Tests whether cleanup is performed properly when iterations reach maximum."""
     interceptor_manager = InterceptorManager()
     interceptor_manager.restart = MagicMock()
     interceptor_manager.stop = MagicMock()
