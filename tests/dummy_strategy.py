@@ -4,7 +4,7 @@ from xrpl_controller.strategies.strategy import Strategy
 
 
 class DummyStrategy(Strategy):
-    """Dummy strategy that does nothing."""
+    """Dummy strategy to be used for tests that allows to disable the available automatic processes in strategy."""
 
     def __init__(self, auto_partition, auto_parse_identical, keep_action_log):
         """Initialize the dummy strategy."""

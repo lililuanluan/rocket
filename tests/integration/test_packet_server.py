@@ -10,6 +10,8 @@ from tests.dummy_strategy import DummyStrategy
 from xrpl_controller.packet_server import serve
 
 
+# TODO: Make sure this test will get coverage.
+#  It currently does cover the method but since the serve() method does not terminate, it will not get coverage.
 def run_server():
     """Run the packet server with a dummy strategy."""
     strategy = DummyStrategy(False, False, False)

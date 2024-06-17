@@ -34,7 +34,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         self.strategy = strategy
         self.logger: ActionLogger | None = None
 
-    def send_packet(self, request, context):
+    def send_packet(
+        self, request, context: grpc.ServicerContext
+    ) -> packet_pb2.PacketAck:
         """
         This function receives the packet from the interceptor and passes it to the controller.
 
@@ -82,7 +84,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         return packet_pb2.PacketAck(data=new_data, action=action)
 
     def send_validator_node_info(
-        self, request_iterator, context
+        self,
+        request_iterator: List[packet_pb2.ValidatorNodeInfo],
+        context: grpc.ServicerContext,
     ) -> packet_pb2.ValidatorNodeInfoAck:
         """
         This function receives the validator node info from the interceptor and passes it to the controller.
