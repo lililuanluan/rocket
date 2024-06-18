@@ -19,7 +19,7 @@ def test_ledger_based_iteration_init():
     iteration = LedgerBasedIteration(5, 10)
     assert iteration._max_iterations == 5
     assert iteration._max_ledger_seq == 10
-    assert iteration._cur_iteration == 0
+    assert iteration.cur_iteration == 0
 
     assert iteration.prev_network_event == 0
     assert iteration.network_event_changes == 0
@@ -34,7 +34,7 @@ def test_time_based_iteration_init():
     iteration = TimeBasedIteration(5, 10)
     assert iteration._max_iterations == 5
     assert iteration._timer_seconds == 10
-    assert iteration._cur_iteration == 0
+    assert iteration.cur_iteration == 0
     assert isinstance(iteration._interceptor_manager, InterceptorManager)
 
 
@@ -46,7 +46,7 @@ def test_ledger_based_iteration_add():
     iteration = LedgerBasedIteration(5, 10, interceptor_manager)
     iteration.add_iteration()
 
-    assert iteration._cur_iteration == 1
+    assert iteration.cur_iteration == 1
     interceptor_manager.restart.assert_called_once()
 
 
@@ -180,7 +180,7 @@ def test_ledger_based_iteration_reset_parameters():
 
     assert iteration._max_iterations == 5
     assert iteration._max_ledger_seq == 10
-    assert iteration._cur_iteration == 0
+    assert iteration.cur_iteration == 0
 
     assert iteration.prev_network_event == 0
     assert iteration.network_event_changes == 0

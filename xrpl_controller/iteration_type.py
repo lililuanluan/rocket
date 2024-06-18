@@ -17,8 +17,9 @@ class IterationType:
         self, max_iterations: int, interceptor_manager: InterceptorManager | None = None
     ):
         """Init Iteration Type with an InterceptorManager attached."""
+        self.cur_iteration = 0
+
         self._max_iterations = max_iterations
-        self._cur_iteration = 0
         self._server: Server | None = None
 
         self._interceptor_manager = (
@@ -27,13 +28,13 @@ class IterationType:
 
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
-        if self._cur_iteration < self._max_iterations:
-            logger.info(f"Starting iteration {self._cur_iteration}")
+        if self.cur_iteration < self._max_iterations:
             self._interceptor_manager.restart()
-            self._cur_iteration += 1
+            logger.info(f"Starting iteration {self.cur_iteration}")
+            self.cur_iteration += 1
         else:
             logger.info(
-                f"Finished iteration {self._cur_iteration}, stopping test process..."
+                f"Finished iteration {self.cur_iteration}, stopping test process..."
             )
             self._interceptor_manager.stop()
             self._interceptor_manager.cleanup_docker_containers()
@@ -115,6 +116,10 @@ class LedgerBasedIteration(IterationType):
 
     def reset_values(self):
         """Reset state variables, called when interceptor is restarted."""
+        if self._timer:
+            self._timer.cancel()
+        self._timer = None
+
         self.prev_network_event = 0
         self.network_event_changes = 0
         self.ledger_seq = 0
