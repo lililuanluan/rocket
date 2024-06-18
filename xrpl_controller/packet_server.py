@@ -8,7 +8,7 @@ import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
 from protos.packet_pb2 import Packet
-from xrpl_controller.core import format_datetime, validate_ports
+from xrpl_controller.core import format_datetime, validate_ports_or_ids
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.strategies.strategy import Strategy
@@ -53,7 +53,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ValueError: if request.from_port == request.to_port or if any is negative
         """
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
-        validate_ports(request.from_port, request.to_port)
+        validate_ports_or_ids(request.from_port, request.to_port)
 
         (new_data, action) = self.strategy.process_packet(request)
 
@@ -142,10 +142,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
     def get_config(self, request, context):
         """
-        This function sends the config specified in `network-config.toml`, to the interceptor.
+        This function sends the network config specified in the self.strategy, to the interceptor.
 
         Args:
-            request: The request containing the Config.
+            request: The request containing the network config.
             context: gRPC context.
 
         Returns:
