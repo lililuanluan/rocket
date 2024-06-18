@@ -266,6 +266,8 @@ class Strategy(ABC):
 
         if isinstance(self.iteration_type, TimeBasedIteration):
             self.iteration_type.start_timer()
+        elif isinstance(self.iteration_type, LedgerBasedIteration):
+            self.iteration_type.start_timeout()
 
     def update_status(self, status: ripple_pb2.TMStatusChange):
         """Update the strategy's state variables, when a new TMStatusChange is received."""

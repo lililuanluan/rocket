@@ -97,6 +97,21 @@ class LedgerBasedIteration(IterationType):
         self.validation_time = timedelta()
 
         self._max_ledger_seq = max_ledger_seq
+        self._timer: threading.Timer | None = None
+        self._timeout = 60
+
+    def start_timeout(self):
+        """Start a timer which calls check_timeout after 60 seconds."""
+        self._timer = threading.Timer(self._timeout, self.check_timeout)
+        self._timer.start()
+
+    def check_timeout(self):
+        """Called when timeout is reached, and no ledgers have been validated."""
+        logger.warning(
+            f"Timeout reached, no ledgers validated in last {self._timeout} seconds"
+        )
+        self.add_iteration()
+        self.reset_values()
 
     def reset_values(self):
         """Reset state variables, called when interceptor is restarted."""
@@ -110,6 +125,8 @@ class LedgerBasedIteration(IterationType):
         """
         Update the iteration values, called when a TMStatusChange is received.
 
+        Resets the timeout when a new ledger gets validated.
+
         Args:
             status: The TMStatusChange message received on the network.
         """
@@ -117,6 +134,11 @@ class LedgerBasedIteration(IterationType):
             self.prev_network_event = status.newEvent
             self.network_event_changes += 1
             if status.ledgerSeq > self.ledger_seq:
+                # New ledger validated, we can reset timeout
+                if self._timer:
+                    self._timer.cancel()
+                self.start_timeout()
+
                 self.validation_time = datetime.now() - self.prev_validation_time
                 self.ledger_seq = status.ledgerSeq
                 self.prev_validation_time = datetime.now()
