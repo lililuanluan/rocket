@@ -42,19 +42,25 @@ class Strategy(ABC):
         if auto_parse_identical:
             self.prev_message_action_matrix: list[list[MessageAction]] = []
         self.keep_action_log = keep_action_log
-        self.params = {}
+        self.network_config, self.params = self.init_configs(
+            network_config_path, strategy_config_path
+        )
 
-        self.params = yaml_to_dict(strategy_config_path)
+    @staticmethod
+    def init_configs(network_config_path: str, strategy_config_path: str):
+        """Initialize the strategy and network configuration from the given paths."""
+        params = yaml_to_dict(strategy_config_path)
         print(
             "Initialized strategy parameters from configuration file:\n\t",
-            self.params,
+            params,
         )
 
-        self.network_config = yaml_to_dict(network_config_path)
+        network_config = yaml_to_dict(network_config_path)
         print(
             "Initialized strategy network configuration from configuration file:\n\t",
-            self.network_config,
+            network_config,
         )
+        return network_config, params
 
     def partition_network(self, partitions: list[list[int]]):
         """

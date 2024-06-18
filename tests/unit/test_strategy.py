@@ -1,6 +1,7 @@
 """Tests for Strategy class."""
 
 from encodings.utf_8 import encode
+from unittest.mock import patch
 
 from protos import packet_pb2
 from xrpl_controller.core import MAX_U32
@@ -35,10 +36,33 @@ node_2 = ValidatorNode(
     ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
 )
 
+configs = (
+    {
+        "base_port_peer": 60000,
+        "base_port_ws": 61000,
+        "base_port_ws_admin": 62000,
+        "base_port_rpc": 63000,
+        "number_of_nodes": 3,
+        "network_partition": [[0, 1, 2]],
+    },
+    {
+        "delay_probability": 0.6,
+        "drop_probability": 0,
+        "min_delay_ms": 10,
+        "max_delay_ms": 150,
+        "seed": 10,
+    },
+)
 
-def test_init():
+
+@patch(
+    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    return_value=configs,
+)
+def test_init(mock_init_configs):
     """Test whether Strategy attributes get initialized correctly."""
     strategy = RandomFuzzer()
+    mock_init_configs.assert_called_once()
     assert strategy.validator_node_list == []
     assert strategy.public_to_private_key_map == {}
     assert strategy.node_amount == 0
@@ -50,9 +74,14 @@ def test_init():
     assert strategy.keep_action_log
 
 
-def test_update_network():
+@patch(
+    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    return_value=configs,
+)
+def test_update_network(mock_init_configs):
     """Test whether Strategy attributes get updated correctly with update_network function."""
     strategy = RandomFuzzer()
+    mock_init_configs.assert_called_once()
     strategy.update_network([node_0, node_1, node_2])
     assert strategy.validator_node_list == [node_0, node_1, node_2]
     assert strategy.node_amount == 3
@@ -72,12 +101,15 @@ def test_update_network():
             assert item.action == -1
 
 
-def test_process_message():
+@patch(
+    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    return_value=configs,
+)
+def test_process_message(mock_init_configs):
     """Test for process_message function."""
-    strategy = RandomFuzzer(
-        strategy_config_file="TEST_PROCESS_MESSAGE",
-        strategy_config_directory="./tests/test_configs/random_fuzzer/",
-    )
+    strategy = RandomFuzzer()
+    mock_init_configs.assert_called_once()
+
     strategy.update_network([node_0, node_1, node_2])
     packet_ack = packet_pb2.Packet(data=b"test", from_port=10, to_port=11)
     assert strategy.process_packet(packet_ack) == (b"test", 119)

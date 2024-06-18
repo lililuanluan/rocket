@@ -1,7 +1,7 @@
 """This module contains the class that implements a random fuzzer."""
 
 import random
-from typing import Any, Tuple
+from typing import Tuple
 
 from protos import packet_pb2
 from xrpl_controller.core import MAX_U32

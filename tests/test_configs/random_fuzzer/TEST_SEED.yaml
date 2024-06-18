@@ -1,5 +1,0 @@
-delay_probability: 0.33
-drop_probability: 0.33
-max_delay_ms: 150
-min_delay_ms: 10
-seed: 10
