@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from unittest.mock import Mock
 
 import yaml
 
@@ -13,7 +14,7 @@ def test_init():
     """Tests whether the RandomFuzzer object is initialized correctly."""
     fn = "TEST_INIT"
     create_test_config(fn, 0.1, 0.1, 10, 150)
-    fuzzer = RandomFuzzer(strategy_config_file=fn)
+    fuzzer = RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
     assert fuzzer.params["drop_probability"] == 0.1
     assert fuzzer.params["delay_probability"] == 0.1
     assert fuzzer.params["min_delay_ms"] == 10
@@ -28,7 +29,7 @@ def test_init_bound_0():
     """Test whether values on the bounds still pass."""
     fn = "TEST_BOUND_0"
     create_test_config(fn, 0.4, 0.6, 10, 150)
-    fuzzer = RandomFuzzer(strategy_config_file=fn)
+    fuzzer = RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
     assert fuzzer.params["drop_probability"] == 0.4
     assert fuzzer.params["delay_probability"] == 0.6
     assert fuzzer.params["min_delay_ms"] == 10
@@ -40,7 +41,7 @@ def test_init_bound_1():
     """Test whether values on the bounds still pass."""
     fn = "TEST_BOUND_1"
     create_test_config(fn, 0, 0, 0, 0)
-    fuzzer = RandomFuzzer(strategy_config_file=fn)
+    fuzzer = RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
     assert fuzzer.params["drop_probability"] == 0
     assert fuzzer.params["delay_probability"] == 0
     assert fuzzer.params["min_delay_ms"] == 0
@@ -53,7 +54,7 @@ def test_init_invalid_sum_0():
     fn = "TEST_INV_SUM_0"
     create_test_config(fn, 0.4, 0.61, 0, 0)
     try:
-        RandomFuzzer(strategy_config_file=fn)
+        RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
         raise AssertionError()
     except ValueError:
         pass
@@ -65,7 +66,7 @@ def test_init_invalid_sum_1():
     fn = "TEST_INV_SUM_1"
     create_test_config(fn, 1.001, 0, 0, 0)
     try:
-        RandomFuzzer(strategy_config_file=fn)
+        RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
         raise AssertionError()
     except ValueError:
         pass
@@ -77,7 +78,7 @@ def test_init_invalid_sum_2():
     fn = "TEST_INV_SUM_2"
     create_test_config(fn, 0, 2.0, 0, 0)
     try:
-        RandomFuzzer(strategy_config_file=fn)
+        RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
         raise AssertionError()
     except ValueError:
         pass
@@ -90,7 +91,7 @@ def test_init_negative_drop():
     fn = "TEST_N_DROP"
     create_test_config("TEST_N_DROP", -0.001, 0.5, 0, 0)
     try:
-        RandomFuzzer(strategy_config_file=fn)
+        RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
         raise AssertionError()
     except ValueError:
         pass
@@ -103,7 +104,7 @@ def test_init_negative_delay():
     fn = "TEST_N_DELAY"
     create_test_config(fn, 0.5, -1, 0, 0)
     try:
-        RandomFuzzer(strategy_config_file=fn)
+        RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
         raise AssertionError()
     except ValueError:
         pass
@@ -116,7 +117,7 @@ def test_init_negative_min_delay():
     fn = "TEST_N_MIN_DELAY"
     create_test_config(fn, 0.5, 0.3, -1, 150)
     try:
-        RandomFuzzer(strategy_config_file=fn)
+        RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
         raise AssertionError()
     except ValueError:
         pass
@@ -129,7 +130,7 @@ def test_init_negative_max_delay():
     fn = "TEST_N_MAX_DELAY"
     create_test_config(fn, 0.5, 0.3, 1, -1)
     try:
-        RandomFuzzer(strategy_config_file=fn)
+        RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
         raise AssertionError()
     except ValueError:
         pass
@@ -142,7 +143,7 @@ def test_init_invalid_range():
     fn = "TEST_INV_RANGE"
     create_test_config(fn, 0.5, 0.3, 2, 1)
     try:
-        RandomFuzzer(strategy_config_file=fn)
+        RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
         raise AssertionError()
     except ValueError:
         pass
@@ -154,7 +155,7 @@ def test_handle_packet():
     """Test the handle_packet method with a random seed."""
     fn = "TEST_SEED"
     create_test_config(fn, 0.33, 0.33, 10, 150, 10)
-    fuzzer = RandomFuzzer(strategy_config_file=fn)
+    fuzzer = RandomFuzzer(strategy_config_file=fn, iteration_type=Mock())
 
     packet_ack = packet_pb2.Packet(data=b"test", from_port=60000, to_port=3)
     assert fuzzer.handle_packet(packet_ack) == (b"test", 4294967295)

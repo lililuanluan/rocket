@@ -108,6 +108,8 @@ def test_ledger_based_iteration_update():
     interceptor_manager.start_new = MagicMock()
 
     iteration = LedgerBasedIteration(5, 10, interceptor_manager)
+    iteration.start_timeout = MagicMock()
+
     iteration.update_iteration(status_msg)
 
     assert iteration.prev_network_event == 1
@@ -143,6 +145,7 @@ def test_ledger_based_iteration_update_complete():
     iteration = LedgerBasedIteration(5, 4, interceptor_manager)
     iteration.add_iteration = MagicMock()
     iteration.reset_values = MagicMock()
+    iteration.start_timeout = MagicMock()
 
     iteration.update_iteration(status_msg_1)
     iteration.update_iteration(status_msg_2)
@@ -170,6 +173,7 @@ def test_ledger_based_iteration_reset_parameters():
 
     iteration = LedgerBasedIteration(5, 10, interceptor_manager)
     iteration.add_iteration = MagicMock()
+    iteration.start_timeout = MagicMock()
 
     iteration.update_iteration(status_msg_1)
     iteration.reset_values()
