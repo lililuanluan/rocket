@@ -70,21 +70,17 @@ def format_filename(filename: str, filetype: str) -> str:
     return filename + filetype if not filename.endswith(filetype) else filename
 
 
-def yaml_to_dict(filename: str, directory: str) -> dict[str, Any]:
+def yaml_to_dict(filepath: str) -> dict[str, Any]:
     """
     Read a yaml file into a dictionary.
 
     Args:
-        filename: Name of the yaml file.
-        directory: Directory where the yaml file is located.
+        filepath: Path of the yaml file.
 
     Returns:
         A dictionary containing all fields in the yaml file.
     """
-    filename = format_filename(filename, "yaml")
-
-    directory = directory + "/" if not directory.endswith("/") else directory
-    path = directory + filename
+    path = format_filename(filepath, "yaml")
 
     with open(path, "rb") as f:
         result: dict[str, Any] = yaml.safe_load(f)

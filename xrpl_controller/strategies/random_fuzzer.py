@@ -1,7 +1,7 @@
 """This module contains the class that implements a random fuzzer."""
 
 import random
-from typing import Tuple
+from typing import Any, Tuple
 
 from protos import packet_pb2
 from xrpl_controller.core import MAX_U32
@@ -13,30 +13,24 @@ class RandomFuzzer(Strategy):
 
     def __init__(
         self,
-        network_config_file: str = "default-network-config.yaml",
-        network_config_directory: str = "./xrpl_controller/network_configs/",
-        strategy_config_file: str = "RandomFuzzer.yaml",
-        strategy_config_directory: str = "./xrpl_controller/strategies/configs/",
+        network_config_path: str = "./xrpl_controller/network_configs/default-network-config.yaml",
+        strategy_config_path: str = "./xrpl_controller/strategies/configs/RandomFuzzer.yaml",
         auto_parse_identical: bool = True,
     ):
         """
         Initializes the random fuzzer.
 
         Args:
-            network_config_file: the network config file to be used
-            network_config_directory: the directory that contains the network config file
-            strategy_config_file: the strategy config file to be used
-            strategy_config_directory: the directory that contains the strategy config file
+            network_config_path: the path to a network config file to be used
+            strategy_config_path: the path to a strategy config file to be used
             auto_parse_identical: whether to auto-parse identical packages per peer combination.
 
         Raises:
             ValueError: if retrieved probabilities or delays are invalid
         """
         super().__init__(
-            network_config_file=network_config_file,
-            network_config_directory=network_config_directory,
-            strategy_config_file=strategy_config_file,
-            strategy_config_directory=strategy_config_directory,
+            network_config_path=network_config_path,
+            strategy_config_path=strategy_config_path,
             auto_parse_identical=auto_parse_identical,
         )
 
