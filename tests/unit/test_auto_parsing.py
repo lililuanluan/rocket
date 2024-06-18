@@ -79,3 +79,20 @@ def test_auto_parsing_subsets_4_nodes():
     strategy.set_message_action(2, 0, b"test", b"mutated", 42)
     strategy.set_message_action(2, 1, b"test", b"mutated2", 42)
     assert strategy.check_subsets(2, 3, b"test") == (True, (b"mutated2", 42))
+
+
+def test_raises():
+    """Test whether exceptions get raised."""
+    strategy = RandomFuzzer(auto_parse_identical=False, auto_parse_subsets=False)
+
+    with pytest.raises(ValueError):
+        strategy.set_message_action(0, 1, b"test", b"mutated", 42)
+
+    with pytest.raises(ValueError):
+        strategy.set_subsets_dict({})
+
+    with pytest.raises(ValueError):
+        strategy.set_subsets_dict_entry(2, [0, 1])
+
+    with pytest.raises(ValueError):
+        strategy.check_subsets(2, 1, b"test")
