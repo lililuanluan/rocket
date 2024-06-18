@@ -17,6 +17,7 @@ class RandomFuzzer(Strategy):
         network_config_file: str = "default-network-config.yaml",
         strategy_config_file: str = "RandomFuzzer.yaml",
         auto_parse_identical: bool = True,
+        auto_parse_subsets: bool = True,
         iteration_type: IterationType | None = None,
     ):
         """
@@ -26,6 +27,7 @@ class RandomFuzzer(Strategy):
             network_config_file: the network config file to be used
             strategy_config_file: the strategy config file to be used
             auto_parse_identical: whether to auto-parse identical packages per peer combination.
+            auto_parse_subsets: whether to auto-parse identical packages w.r.t. defined subsets
             iteration_type: The type of iteration to keep track of
 
         Raises:
@@ -35,6 +37,7 @@ class RandomFuzzer(Strategy):
             network_config_file=network_config_file,
             strategy_config_file=strategy_config_file,
             auto_parse_identical=auto_parse_identical,
+            auto_parse_subsets=auto_parse_subsets,
             iteration_type=iteration_type,
         )
 
