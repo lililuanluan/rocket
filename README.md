@@ -155,5 +155,5 @@ pytest tests/ --cov=xrpl_controller --cov-branch --cov-report json:coverage_repo
 python coverage_script.py
 ```
 You can specify which tests to run by changing the path in the first command, for example to only run the unit tests you can use `tests/unit/`.
-To produce the actual interactive report, you can run the command with the additional argument `--cov-report html:coverage_reports/html/` which will generate a html report in the `coverage_reports` directory.
+To produce the actual interactive report, you need to run the pytest command with the additional argument `--cov-report html:coverage_reports/html/` which will generate a html report in the `coverage_reports/html/` directory.
 If you want to generate a coverage report for the system tests, you can use the IDE "Run with Coverage" option with the custom run configuration for systems tests that is specified in the section above.

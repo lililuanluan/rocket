@@ -44,8 +44,8 @@ class Strategy(ABC):
         self.validator_node_list: List[ValidatorNode] = []
         self.public_to_private_key_map: Dict[str, str] = {}
         self.node_amount: int = 0
-        self.port_dict: dict[int, int] = {}
-        self.id_dict: dict[int, int] = {}
+        self.port_to_id_dict: dict[int, int] = {}
+        self.id_to_port_dict: dict[int, int] = {}
         self.auto_partition: bool = auto_partition
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical
@@ -399,7 +399,7 @@ class Strategy(ABC):
                 decoded_priv_key.hex()
             )
 
-    def idx(self, port: int) -> int:
+    def port_to_id(self, port: int) -> int:
         """
         Transform a port to its corresponding index.
 
@@ -411,7 +411,7 @@ class Strategy(ABC):
         """
         return self.port_dict[port]
 
-    def port(self, peer_id: int) -> int:
+    def id_to_port(self, peer_id: int) -> int:
         """
         Transform a peer ID to its corresponding port.
 
@@ -436,8 +436,8 @@ class Strategy(ABC):
         Returns:
             Tuple[bytes, int]: The processed packet as bytes and an action in a tuple.
         """
-        peer_from_id = self.idx(packet.from_port)
-        peer_to_id = self.idx(packet.to_port)
+        peer_from_id = self.port_to_id(packet.from_port)
+        peer_to_id = self.port_to_id(packet.to_port)
 
         # Check for identical previous messages or for identical messages within broadcasts.
         # This uses booleans to check whether the functionality has to be applied automatically.

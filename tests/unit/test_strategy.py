@@ -51,7 +51,7 @@ def test_init():
     assert strategy.validator_node_list == []
     assert strategy.public_to_private_key_map == {}
     assert strategy.node_amount == 0
-    assert strategy.port_dict == {}
+    assert strategy.port_to_id_dict == {}
     assert strategy.communication_matrix == []
     assert strategy.auto_partition
     assert strategy.auto_parse_identical
@@ -67,8 +67,8 @@ def test_update_network():
     assert strategy.node_amount == 3
     assert strategy.port_dict == {10: 0, 11: 1, 12: 2}
     assert strategy.id_dict == {0: 10, 1: 11, 2: 12}
-    assert strategy.port(2) == 12
-    assert strategy.idx(12) == 2
+    assert strategy.id_to_port(2) == 12
+    assert strategy.port_to_id(12) == 2
     assert strategy.communication_matrix == [
         [False, True, True],
         [True, False, True],
