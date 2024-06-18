@@ -69,9 +69,11 @@ def test_send_validator_node_info_with_log():
     mock_strategy.keep_action_log = True
     packet_server = PacketService(mock_strategy)
     request_iterator = [packet_pb2.ValidatorNodeInfo()]
-    response = packet_server.send_validator_node_info(request_iterator, None)
-    assert response.status == "Received validator node info"
-    assert packet_server.logger is not None
+    mock_logger = Mock()
+    with patch("xrpl_controller.packet_server.ActionLogger", return_value=mock_logger):
+        response = packet_server.send_validator_node_info(request_iterator, None)
+        assert response.status == "Received validator node info"
+        assert packet_server.logger is not None
 
 
 def test_send_validator_node_info_with_existing_logger():
@@ -80,7 +82,7 @@ def test_send_validator_node_info_with_existing_logger():
     mock_strategy.keep_action_log = True
     packet_server = PacketService(mock_strategy)
     mock_logger = Mock()
-    with patch("xrpl_controller.csv_logger.ActionLogger", return_value=mock_logger):
+    with patch("xrpl_controller.packet_server.ActionLogger", return_value=mock_logger):
         packet_server.logger = mock_logger
         request_iterator = [packet_pb2.ValidatorNodeInfo()]
         response = packet_server.send_validator_node_info(request_iterator, None)
@@ -99,7 +101,7 @@ def test_get_config():
         "base_port_ws_admin": 0,
         "base_port_rpc": 0,
         "number_of_nodes": 0,
-        "network_partition": [],
+        "network_partition": [[]],
     }
     packet_server = PacketService(mock_strategy)
     request = packet_pb2.Config()
