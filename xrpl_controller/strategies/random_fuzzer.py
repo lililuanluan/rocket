@@ -16,6 +16,7 @@ class RandomFuzzer(Strategy):
         network_config_path: str = "./xrpl_controller/network_configs/default-network-config.yaml",
         strategy_config_path: str = "./xrpl_controller/strategies/configs/RandomFuzzer.yaml",
         auto_parse_identical: bool = True,
+        auto_parse_subsets: bool = True,
     ):
         """
         Initializes the random fuzzer.
@@ -24,6 +25,7 @@ class RandomFuzzer(Strategy):
             network_config_path: the path to a network config file to be used
             strategy_config_path: the path to a strategy config file to be used
             auto_parse_identical: whether to auto-parse identical packages per peer combination.
+            auto_parse_subsets: whether to auto-parse identical packages w.r.t. defined subsets
 
         Raises:
             ValueError: if retrieved probabilities or delays are invalid
@@ -32,6 +34,7 @@ class RandomFuzzer(Strategy):
             network_config_path=network_config_path,
             strategy_config_path=strategy_config_path,
             auto_parse_identical=auto_parse_identical,
+            auto_parse_subsets=auto_parse_subsets,
         )
 
         if self.params["seed"] is not None:

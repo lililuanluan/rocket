@@ -33,6 +33,21 @@ class PacketEncoderDecoder:
         35: ripple_pb2.TMHaveTransactionSet,
         41: ripple_pb2.TMValidation,
         42: ripple_pb2.TMGetObjectByHash,
+        # 50: Is not defined in proto file and has no corresponding class, but appears in enum.
+        # 51: Is not defined in proto file and has no corresponding class, but appears in enum.
+        52: ripple_pb2.TMGetPeerShardInfo,
+        53: ripple_pb2.TMPeerShardInfo,
+        54: ripple_pb2.TMValidatorList,
+        55: ripple_pb2.TMSquelch,
+        56: ripple_pb2.TMValidatorListCollection,
+        57: ripple_pb2.TMProofPathRequest,
+        58: ripple_pb2.TMProofPathResponse,
+        59: ripple_pb2.TMReplayDeltaRequest,
+        60: ripple_pb2.TMReplayDeltaResponse,
+        61: ripple_pb2.TMGetPeerShardInfoV2,
+        62: ripple_pb2.TMPeerShardInfoV2,
+        63: ripple_pb2.TMHaveTransactions,
+        64: ripple_pb2.TMTransactions,
     }
 
     @singledispatchmethod
@@ -44,12 +59,25 @@ class PacketEncoderDecoder:
         Args:
             message: Message to be signed.
             private_key: Private key of the message in hex format.
+
+        Returns:
+            Message that is signed
         """
         raise NotImplementedError(f"No signing method implemented for {type(message)}.")
 
     @sign_message.register
     @staticmethod
     def _(message: TMProposeSet, private_key: str) -> TMProposeSet:
+        """
+        Method that takes in a proposeSet and does the hashing of it.
+
+        Args:
+            message: ProposeSet.
+            private_key: Private key of the message in hex format
+
+        Returns:
+            message that needs to be signed
+        """
         # Collect the fields used to originally sign the message
         bytes_to_sign = (
             b"\x50\x52\x50\x00"

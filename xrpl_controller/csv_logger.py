@@ -6,10 +6,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from xrpl_controller.core import MAX_U32
 from xrpl_controller.validator_node_info import ValidatorNode
 
-action_log_columns = ["timestamp", "action", "from_port", "to_port", "data"]
+action_log_columns = [
+    "timestamp",
+    "action",
+    "from_port",
+    "to_port",
+    "message_type",
+    "original_data",
+    "possibly_mutated_data",
+]
 
 
 class CSVLogger:
@@ -98,36 +105,37 @@ class ActionLogger(CSVLogger):
         action: int,
         from_port: int,
         to_port: int,
-        data: bytes,
+        message_type: str,
+        original_data: str,
+        possibly_mutated_data: str,
         custom_timestamp: int | None = None,
     ):
         """
         Log an action according to a specific column format.
 
         Args:
-            action (int): Action.
-            from_port (int): Port of sending peer.
-            to_port (int): Port of receiving peer.
-            data (bytes): Data bytes.
-            custom_timestamp (int | None): Custom timestamp.
-        """
-        formatted_action = (
-            "send"
-            if action == 0
-            else "drop"
-            if action == MAX_U32
-            else f"delay:{action}ms"
-        )
+            action: action to be logged.
+            from_port: from_port of the message.
+            to_port: to_port of the message.
+            message_type: the message type as defined in the ripple.proto
+            original_data: the message's original data.
+            possibly_mutated_data: the message's possibly mutated data.
+            custom_timestamp: a custom timestamp to log if desired.
 
+        Returns:
+            None
+        """
         # Note: timestamp is milliseconds since epoch (January 1, 1970)
         self.writer.writerow(
             [
                 int(datetime.now().timestamp() * 1000)
                 if custom_timestamp is None
                 else custom_timestamp,
-                formatted_action,
+                action,
                 from_port,
                 to_port,
-                data.hex(),
+                message_type,
+                original_data,
+                possibly_mutated_data,
             ]
         )

@@ -7,8 +7,10 @@ from typing import List
 import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
-from xrpl_controller.core import format_datetime, validate_ports
+from protos.packet_pb2 import Packet
+from xrpl_controller.core import format_datetime, validate_ports_or_ids
 from xrpl_controller.csv_logger import ActionLogger
+from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.strategies.strategy import Strategy
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -32,7 +34,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         self.strategy = strategy
         self.logger: ActionLogger | None = None
 
-    def send_packet(self, request, context):
+    def send_packet(
+        self, request, context: grpc.ServicerContext
+    ) -> packet_pb2.PacketAck:
         """
         This function receives the packet from the interceptor and passes it to the controller.
 
@@ -49,25 +53,40 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ValueError: if request.from_port == request.to_port or if any is negative
         """
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
-        validate_ports(request.from_port, request.to_port)
+        validate_ports_or_ids(request.from_port, request.to_port)
 
-        (data, action) = self.strategy.process_packet(request)
+        (new_data, action) = self.strategy.process_packet(request)
 
-        if self.strategy.keep_action_log:
-            if not self.logger:
-                raise RuntimeError("Logger was not initialized")
-            self.logger.log_action(
-                action=action,
-                from_port=request.from_port,
-                to_port=request.to_port,
-                data=data,
-                custom_timestamp=timestamp,
-            )
+        if not self.strategy.keep_action_log:
+            return packet_pb2.PacketAck(data=new_data, action=action)
 
-        return packet_pb2.PacketAck(data=data, action=action)
+        if not self.logger:
+            raise RuntimeError("Logger was not initialized")
+
+        original_packet_deco = PacketEncoderDecoder.decode_packet(request)
+        new_packet = Packet(
+            data=new_data, from_port=request.from_port, to_port=request.to_port
+        )
+        new_packet_deco = PacketEncoderDecoder.decode_packet(new_packet)
+
+        self.logger.log_action(
+            action=action,
+            from_port=request.from_port,
+            to_port=request.to_port,
+            message_type=PacketEncoderDecoder.message_type_map[
+                original_packet_deco[1]
+            ].__name__,
+            original_data=original_packet_deco[0].__str__().replace("\n", "; "),
+            possibly_mutated_data=new_packet_deco[0].__str__().replace("\n", "; "),
+            custom_timestamp=timestamp,
+        )
+
+        return packet_pb2.PacketAck(data=new_data, action=action)
 
     def send_validator_node_info(
-        self, request_iterator, context
+        self,
+        request_iterator: List[packet_pb2.ValidatorNodeInfo],
+        context: grpc.ServicerContext,
     ) -> packet_pb2.ValidatorNodeInfoAck:
         """
         This function receives the validator node info from the interceptor and passes it to the controller.
@@ -123,10 +142,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
     def get_config(self, request, context):
         """
-        This function sends the config specified in `default-network-config.yaml`, to the interceptor.
+        This function sends the network config specified in the self.strategy, to the interceptor.
 
         Args:
-            request: The request containing the Config.
+            request: The request containing the network config.
             context: gRPC context.
 
         Returns:
@@ -160,7 +179,7 @@ def serve(strategy: Strategy):
     server.wait_for_termination()
 
 
-def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:
+def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:  # pragma: no cover
     """
     This function starts the server and listens for incoming packets.
 

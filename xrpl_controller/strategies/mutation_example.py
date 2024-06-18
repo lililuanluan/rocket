@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Tuple
 
-from xrpl.utils.time_conversions import datetime_to_ripple_time
+from xrpl.utils import datetime_to_ripple_time
 
 from protos import packet_pb2, ripple_pb2
 from xrpl_controller.strategies.encoder_decoder import (

@@ -36,6 +36,14 @@ node_2 = ValidatorNode(
     ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
 )
 
+node_3 = ValidatorNode(
+    SocketAddress("test_peer", 13),
+    SocketAddress("test-ws-pub", 23),
+    SocketAddress("test-ws-adm", 33),
+    SocketAddress("test-rpc", 43),
+    ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
+)
+
 configs = (
     {
         "base_port_peer": 60000,
@@ -66,7 +74,7 @@ def test_init(mock_init_configs):
     assert strategy.validator_node_list == []
     assert strategy.public_to_private_key_map == {}
     assert strategy.node_amount == 0
-    assert strategy.port_dict == {}
+    assert strategy.port_to_id_dict == {}
     assert strategy.communication_matrix == []
     assert strategy.auto_partition
     assert strategy.auto_parse_identical
@@ -86,11 +94,16 @@ def test_update_network(mock_init_configs):
     assert strategy.validator_node_list == [node_0, node_1, node_2]
     assert strategy.node_amount == 3
     assert strategy.port_dict == {10: 0, 11: 1, 12: 2}
+    assert strategy.id_dict == {0: 10, 1: 11, 2: 12}
+    assert strategy.id_to_port(2) == 12
+    assert strategy.port_to_id(12) == 2
     assert strategy.communication_matrix == [
         [False, True, True],
         [True, False, True],
         [True, True, False],
     ]
+
+    assert strategy.subsets_dict == {0: [], 1: [], 2: []}
 
     assert len(strategy.prev_message_action_matrix) == 3
     for row in strategy.prev_message_action_matrix:
@@ -124,7 +137,7 @@ def test_process_message(mock_init_configs):
     assert strategy.prev_message_action_matrix[0][1].final_message == b"test2"
 
     # Check whether messages get dropped automatically through auto partition
-    strategy.partition_network([[10, 11], [12]])
+    strategy.partition_network([[0, 1], [2]])
     for i in range(100):
         msg = encode("test" + str(i))[0]  # Just arbitrary encoding
         packet_ack = packet_pb2.Packet(data=msg, from_port=10, to_port=12)
