@@ -3,6 +3,8 @@
 from encodings.utf_8 import encode
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
 from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import MAX_U32
 from xrpl_controller.iteration_type import LedgerBasedIteration
@@ -107,8 +109,8 @@ def test_update_network(mock_init_configs):
     strategy.update_network([node_0, node_1, node_2])
     assert strategy.validator_node_list == [node_0, node_1, node_2]
     assert strategy.node_amount == 3
-    assert strategy.port_dict == {10: 0, 11: 1, 12: 2}
-    assert strategy.id_dict == {0: 10, 1: 11, 2: 12}
+    assert strategy.port_to_id_dict == {10: 0, 11: 1, 12: 2}
+    assert strategy.id_to_port_dict == {0: 10, 1: 11, 2: 12}
     assert strategy.id_to_port(2) == 12
     assert strategy.port_to_id(12) == 2
     assert strategy.communication_matrix == [
@@ -232,3 +234,29 @@ def test_update_status_other_message(mock_init_configs):
 
     strategy.update_status(packet)
     iteration_type.update_iteration.assert_not_called()
+
+
+@patch(
+    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    return_value=configs,
+)
+def test_port_to_id_invalid(mock_init_configs):
+    """Test whether port_to_id raises an error when an invalid port is given."""
+    strategy = RandomFuzzer(iteration_type=Mock())
+    mock_init_configs.assert_called_once()
+    strategy.port_to_id_dict = {10: 0, 11: 1, 12: 2}
+    with pytest.raises(ValueError):
+        strategy.port_to_id(0)
+
+
+@patch(
+    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    return_value=configs,
+)
+def test_id_to_port_invalid(mock_init_configs):
+    """Test whether id_to_port raises an error when an invalid id is given."""
+    strategy = RandomFuzzer(iteration_type=Mock())
+    mock_init_configs.assert_called_once()
+    strategy.id_to_port_dict = {0: 10, 1: 11, 2: 12}
+    with pytest.raises(ValueError):
+        strategy.id_to_port(3)

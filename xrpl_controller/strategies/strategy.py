@@ -370,13 +370,13 @@ class Strategy(ABC):
         self.validator_node_list = validator_node_list
         self.public_to_private_key_map.clear()
         self.node_amount = len(validator_node_list)
-        self.port_dict = {
+        self.port_to_id_dict = {
             port: index
             for index, port in enumerate(
                 [node.peer.port for node in validator_node_list]
             )
         }
-        self.id_dict = {
+        self.id_to_port_dict = {
             index: port
             for index, port in enumerate(
                 [node.peer.port for node in validator_node_list]
@@ -429,8 +429,14 @@ class Strategy(ABC):
 
         Returns:
             int: The corresponding peer ID
+
+        Raises:
+            ValueError: if port is not found in port_dict
         """
-        return self.port_dict[port]
+        try:
+            return self.port_to_id_dict[port]
+        except KeyError as err:
+            raise ValueError(f"Port {port} not found in port_dict") from err
 
     def id_to_port(self, peer_id: int) -> int:
         """
@@ -441,8 +447,14 @@ class Strategy(ABC):
 
         Returns:
             The corresponding port
+
+        Raises:
+            ValueError: if peer_id is not found in port_dict
         """
-        return self.id_dict[peer_id]
+        try:
+            return self.id_to_port_dict[peer_id]
+        except KeyError as err:
+            raise ValueError(f"pper ID {peer_id} not found in port_dict") from err
 
     def process_packet(
         self,

@@ -2,7 +2,7 @@
 
 from concurrent import futures
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import grpc
 
@@ -202,3 +202,17 @@ def test_time_based_iteration_timer():
     iteration.start_timeout_timer()
 
     iteration.add_iteration.assert_called_once()
+
+
+def test_start_timeout_timer_with_existing_timer():
+    """Test whether the start_timeout_timer function cancels the existing timer."""
+    iteration = TimeBasedIteration(max_iterations=5, timeout_seconds=0)
+
+    with patch(
+        "xrpl_controller.iteration_type.threading.Timer", return_value=Mock()
+    ) as mock_timer:
+        iteration._timer = mock_timer.return_value
+        iteration.start_timeout_timer()
+
+        mock_timer.assert_called_once()
+        mock_timer.return_value.cancel.assert_called_once()

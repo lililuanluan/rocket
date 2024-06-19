@@ -12,6 +12,8 @@ from xrpl_controller.strategies.strategy import Strategy
 class RandomFuzzer(Strategy):
     """Class that implements random fuzzer."""
 
+    # TODO: Add explanation for config file
+
     def __init__(
         self,
         network_config_path: str = "./xrpl_controller/network_configs/default-network-config.yaml",
