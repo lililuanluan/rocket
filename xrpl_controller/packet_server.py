@@ -162,13 +162,13 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         for name, name_type in config_values_types.items():
             value = config.get(name)
             if value is None:
-                raise ValueError(f"{name} was not specified in network-config.yaml")
+                raise ValueError(f"{name} was not specified in the network config")
             try:
                 check_type(value, name_type)
             except TypeCheckError as err:
                 raise (
                     TypeError(
-                        f"The type for {name} in network-config.yaml should be {name_type} but was {type(value)}"
+                        f"The type for {name} in network config should be {name_type} but was {type(value)}"
                     )
                 ) from err
 
