@@ -86,7 +86,7 @@ class LivenessTest(SystemLevelTest):
             rmtree(".temp-interceptor", onexc=on_exc)
 
         # Random fuzzer which is not random, it will send every packet without delaying or dropping
-        strategy: RandomFuzzer = RandomFuzzer(0, 0, 1, 150)
+        strategy: RandomFuzzer = RandomFuzzer()
 
         # controller_thread = Thread(target=serve, args=(strategy,))
         interceptor_process = multiprocessing.Process(target=start_interceptor)

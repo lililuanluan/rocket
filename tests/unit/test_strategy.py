@@ -1,11 +1,13 @@
 """Tests for Strategy class."""
 
 from encodings.utf_8 import encode
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
-from protos import packet_pb2
+from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import MAX_U32
+from xrpl_controller.iteration_type import LedgerBasedIteration
 from xrpl_controller.strategies import RandomFuzzer
+from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,
@@ -60,6 +62,17 @@ configs = (
         "max_delay_ms": 150,
         "seed": 10,
     },
+)
+
+status_msg = ripple_pb2.TMStatusChange(
+    newStatus=2,
+    newEvent=1,
+    ledgerSeq=3,
+    ledgerHash=b"abcdef",
+    ledgerHashPrevious=b"123456",
+    networkTime=1000,
+    firstSeq=0,
+    lastSeq=2,
 )
 
 
@@ -150,3 +163,72 @@ def test_process_message(mock_init_configs):
     for _ in range(100):
         packet_ack = packet_pb2.Packet(data=b"testtest", from_port=10, to_port=12)
         assert strategy.process_packet(packet_ack) == result
+
+
+@patch(
+    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    return_value=configs,
+)
+def test_update_status(mock_init_configs):
+    """Test whether a statuschange message correctly updates the iteration."""
+    message = PacketEncoderDecoder.encode_message(status_msg, message_type=34)
+    packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
+
+    iteration_type = LedgerBasedIteration(
+        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
+    )
+    iteration_type.start_timeout_timer = MagicMock()
+    iteration_type.update_iteration = MagicMock()
+    iteration_type.set_server = MagicMock()
+
+    strategy = RandomFuzzer(iteration_type=iteration_type)
+    mock_init_configs.assert_called_once()
+
+    strategy.update_status(packet)
+    iteration_type.update_iteration.assert_called_once()
+
+
+@patch(
+    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    return_value=configs,
+)
+def test_update_status_exception(mock_init_configs):
+    """Test whether an invalid message type gets ignored."""
+    message = PacketEncoderDecoder.encode_message(status_msg, message_type=99)
+    packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
+
+    iteration_type = LedgerBasedIteration(
+        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
+    )
+    iteration_type.start_timeout_timer = MagicMock()
+    iteration_type.update_iteration = MagicMock()
+    iteration_type.set_server = MagicMock()
+
+    strategy = RandomFuzzer(iteration_type=iteration_type)
+    mock_init_configs.assert_called_once()
+
+    strategy.update_status(packet)
+    iteration_type.update_iteration.assert_not_called()
+
+
+@patch(
+    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    return_value=configs,
+)
+def test_update_status_other_message(mock_init_configs):
+    """Test whether a message type different from TMStatusChange 34 is ignored."""
+    message = PacketEncoderDecoder.encode_message(status_msg, message_type=15)
+    packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
+
+    iteration_type = LedgerBasedIteration(
+        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
+    )
+    iteration_type.start_timeout_timer = MagicMock()
+    iteration_type.update_iteration = MagicMock()
+    iteration_type.set_server = MagicMock()
+
+    strategy = RandomFuzzer(iteration_type=iteration_type)
+    mock_init_configs.assert_called_once()
+
+    strategy.update_status(packet)
+    iteration_type.update_iteration.assert_not_called()
