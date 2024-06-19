@@ -1,6 +1,6 @@
 """Tests for network partitions functionality."""
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from tests.unit.test_strategy import node_0, node_1, node_2
 from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
@@ -31,8 +31,9 @@ configs = (
 )
 def test_custom_connections(mock_init_configs):
     """Test whether Strategy attributes get updated correctly when connect_nodes is called."""
-    strategy = RandomFuzzer()
+    strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
+
     strategy.update_network([node_0, node_1, node_2])
     strategy.disconnect_nodes(0, 1)
     assert strategy.communication_matrix == [
@@ -79,7 +80,7 @@ def test_custom_connections(mock_init_configs):
 )
 def test_reset_communications(mock_init_configs):
     """Test whether Strategy attributes resets communication matrix correctly when reset_communications is called."""
-    strategy = RandomFuzzer()
+    strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[0], [1, 2]])
@@ -97,7 +98,7 @@ def test_reset_communications(mock_init_configs):
 )
 def test_partition_network_0(mock_init_configs):
     """Test whether Strategy attributes get updated correctly when partition_network is called. Formation 0."""
-    strategy = RandomFuzzer()
+    strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[0], [1, 2]])
@@ -114,8 +115,9 @@ def test_partition_network_0(mock_init_configs):
 )
 def test_partition_network_1(mock_init_configs):
     """Test whether Strategy attributes get updated correctly when partition_network is called. Formation 1."""
-    strategy = RandomFuzzer()
+    strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
+
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[0, 1, 2]])
     assert strategy.communication_matrix == [
@@ -131,8 +133,9 @@ def test_partition_network_1(mock_init_configs):
 )
 def test_partition_network_2(mock_init_configs):
     """Test whether Strategy attributes get updated correctly when partition_network is called."""
-    strategy = RandomFuzzer()
+    strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
+
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[0], [1], [2]])
     assert strategy.communication_matrix == [
@@ -148,7 +151,7 @@ def test_partition_network_2(mock_init_configs):
 )
 def test_partition_network_invalid_partitions(mock_init_configs):
     """Test whether invalid partitions get rejected. Missing port."""
-    strategy = RandomFuzzer()
+    strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
     strategy.update_network([node_0, node_1, node_2])
     try:
@@ -164,7 +167,7 @@ def test_partition_network_invalid_partitions(mock_init_configs):
 )
 def test_partition_network_invalid_amount(mock_init_configs):
     """Test whether invalid partitions get rejected. Duplicated port."""
-    strategy = RandomFuzzer()
+    strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
     strategy.update_network([node_0, node_1, node_2])
     try:
@@ -180,7 +183,7 @@ def test_partition_network_invalid_amount(mock_init_configs):
 )
 def test_apply_partition(mock_init_configs):
     """Test whether partitions get applied correctly."""
-    strategy = RandomFuzzer()
+    strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
     strategy.update_network([node_0, node_1, node_2])
     strategy.partition_network([[0, 1], [2]])

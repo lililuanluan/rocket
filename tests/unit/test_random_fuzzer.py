@@ -1,6 +1,6 @@
 """Tests for the RandomFuzzer class."""
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -20,7 +20,7 @@ def test_init(mock_params, mock_super_init):
         "seed": None,
     }.__getitem__
 
-    fuzzer = RandomFuzzer()
+    fuzzer = RandomFuzzer(iteration_type=Mock())
     assert fuzzer.params["drop_probability"] == 0.1
     assert fuzzer.params["delay_probability"] == 0.1
     assert fuzzer.params["min_delay_ms"] == 10
@@ -39,7 +39,7 @@ def test_init_bound_0(mock_params, mock_super_init):
         "max_delay_ms": 150,
         "seed": None,
     }.__getitem__
-    fuzzer = RandomFuzzer()
+    fuzzer = RandomFuzzer(iteration_type=Mock())
     assert fuzzer.params["drop_probability"] == 0.4
     assert fuzzer.params["delay_probability"] == 0.6
     assert fuzzer.params["min_delay_ms"] == 10
@@ -58,7 +58,7 @@ def test_init_bound_1(mock_params, mock_super_init):
         "max_delay_ms": 0,
         "seed": None,
     }.__getitem__
-    fuzzer = RandomFuzzer()
+    fuzzer = RandomFuzzer(iteration_type=Mock())
     assert fuzzer.params["drop_probability"] == 0
     assert fuzzer.params["delay_probability"] == 0
     assert fuzzer.params["min_delay_ms"] == 0
@@ -79,7 +79,7 @@ def test_init_invalid_sum_0(mock_params, mock_super_init):
     }.__getitem__
 
     with pytest.raises(ValueError, match="must sum to less than or equal to 1.0"):
-        RandomFuzzer()
+        RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
 
 
@@ -96,7 +96,7 @@ def test_init_invalid_sum_1(mock_params, mock_super_init):
     }.__getitem__
 
     with pytest.raises(ValueError, match="must sum to less than or equal to 1.0"):
-        RandomFuzzer()
+        RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
 
 
@@ -113,7 +113,7 @@ def test_init_invalid_sum_2(mock_params, mock_super_init):
     }.__getitem__
 
     with pytest.raises(ValueError, match="must sum to less than or equal to 1.0"):
-        RandomFuzzer()
+        RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
 
 
@@ -132,7 +132,7 @@ def test_init_negative_drop(mock_params, mock_super_init):
     with pytest.raises(
         ValueError, match="drop and delay probabilities must be non-negative"
     ):
-        RandomFuzzer()
+        RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
 
 
@@ -151,7 +151,7 @@ def test_init_negative_delay(mock_params, mock_super_init):
     with pytest.raises(
         ValueError, match="drop and delay probabilities must be non-negative"
     ):
-        RandomFuzzer()
+        RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
 
 
@@ -168,7 +168,7 @@ def test_init_negative_min_delay(mock_params, mock_super_init):
     }.__getitem__
 
     with pytest.raises(ValueError, match="delay values must both be non-negative"):
-        RandomFuzzer()
+        RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
 
 
@@ -185,7 +185,7 @@ def test_init_negative_max_delay(mock_params, mock_super_init):
     }.__getitem__
 
     with pytest.raises(ValueError, match="delay values must both be non-negative"):
-        RandomFuzzer()
+        RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
 
 
@@ -204,7 +204,7 @@ def test_init_invalid_range(mock_params, mock_super_init):
     with pytest.raises(
         ValueError, match="min_delay_ms must be smaller or equal to max_delay_ms"
     ):
-        RandomFuzzer()
+        RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
 
 
@@ -221,7 +221,7 @@ def test_handle_packet(mock_params, mock_super_init):
         "seed": 10,
     }.__getitem__
 
-    fuzzer = RandomFuzzer()
+    fuzzer = RandomFuzzer(iteration_type=Mock())
     mock_super_init.assert_called_once()
     packet_ack = packet_pb2.Packet(data=b"test", from_port=60000, to_port=3)
     assert fuzzer.handle_packet(packet_ack) == (b"test", 4294967295)

@@ -1,5 +1,7 @@
 """Tests for mutating a packet using handle method."""
 
+from unittest.mock import Mock
+
 import base58
 from xrpl.core.keypairs.secp256k1 import SECP256K1
 
@@ -15,7 +17,7 @@ from xrpl_controller.strategies.mutation_example import (
 
 def test_mutation_propose():
     """Tests for a basic mutation of a propose message."""
-    strategy: Strategy = MutationExample()
+    strategy: Strategy = MutationExample(iteration_type=Mock())
     # Create a sample packet
     message = TMProposeSet()
     message.proposeSeq = 0
@@ -65,7 +67,7 @@ def test_mutation_propose():
 
 def test_no_mutation_not_propose():
     """Tests for no mutating occuring when it is not a propose message."""
-    strategy: Strategy = MutationExample()
+    strategy: Strategy = MutationExample(iteration_type=Mock())
     # Create a sample packet
     message = ripple_pb2.TMTransaction()
     message.rawTransaction = b"\x01" * 32
@@ -100,7 +102,7 @@ def test_no_mutation_not_propose():
 
 def test_mutation_decoding_not_support():
     """Tests a decoding of a packet that is an unknown type."""
-    strategy: Strategy = MutationExample()
+    strategy: Strategy = MutationExample(iteration_type=Mock())
     message_type = 99
     encoded_packet = packet_pb2.Packet(
         data=b"\x00\x00\x00\x0b"
@@ -116,7 +118,7 @@ def test_mutation_decoding_not_support():
 
 def test_mutation_propose_correct_signature_change():
     """Test for checking the signature is different from original after mutating a packet."""
-    strategy: Strategy = MutationExample()
+    strategy: Strategy = MutationExample(iteration_type=Mock())
     message = TMProposeSet()
     message.proposeSeq = 0
     message.currentTxHash = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"

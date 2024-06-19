@@ -33,6 +33,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
         self.logger: ActionLogger | None = None
+        self._start_datetime: datetime.datetime = datetime.datetime.now()
 
     def send_packet(
         self, request, context: grpc.ServicerContext
@@ -135,7 +136,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ):  # Close the previous logger if there was a previous one
                 self.logger.close()
             self.logger = ActionLogger(
-                format_datetime(datetime.datetime.now()), validator_node_list
+                format_datetime(self._start_datetime),
+                validator_node_list,
+                f"action-{self.strategy.iteration_type.cur_iteration}",
+                f"node_info-{self.strategy.iteration_type.cur_iteration}",
             )
 
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
@@ -176,18 +180,7 @@ def serve(strategy: Strategy):
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
-    server.wait_for_termination()
+    strategy.iteration_type.set_server(server)
+    strategy.iteration_type.add_iteration()
 
-
-def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:  # pragma: no cover
-    """
-    This function starts the server and listens for incoming packets.
-
-    Returns: None
-
-    """
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
-    server.add_insecure_port("[::]:50051")
-    server.start()
     return server

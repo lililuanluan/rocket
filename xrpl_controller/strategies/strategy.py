@@ -4,8 +4,9 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
 import base58
+from loguru import logger
 
-from protos import packet_pb2
+from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import (
     MAX_U32,
     flatten,
@@ -14,7 +15,15 @@ from xrpl_controller.core import (
     validate_ports_or_ids,
     yaml_to_dict,
 )
+from xrpl_controller.iteration_type import (
+    IterationType,
+    LedgerBasedIteration,
+)
 from xrpl_controller.message_action import MessageAction
+from xrpl_controller.strategies.encoder_decoder import (
+    DecodingNotSupportedError,
+    PacketEncoderDecoder,
+)
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
@@ -29,6 +38,7 @@ class Strategy(ABC):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
+        iteration_type: IterationType | None = None,
     ):
         """
         Initialize the Strategy interface with needed fields.
@@ -39,7 +49,8 @@ class Strategy(ABC):
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions.
             auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
             auto_parse_subsets (bool, optional): Whether the strategy will perform same actions on defined subsets.
-            keep_action_log (bool, optional): Whether the strategy will keep an action log.
+            keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
+            iteration_type (IterationType, optional): Type of iteration logic to use.
         """
         self.validator_node_list: List[ValidatorNode] = []
         self.public_to_private_key_map: Dict[str, str] = {}
@@ -56,20 +67,21 @@ class Strategy(ABC):
         self.network_config, self.params = self.init_configs(
             network_config_path, strategy_config_path
         )
+        self.iteration_type = (
+            LedgerBasedIteration(10, 5) if iteration_type is None else iteration_type
+        )
 
     @staticmethod
     def init_configs(network_config_path: str, strategy_config_path: str):
         """Initialize the strategy and network configuration from the given paths."""
         params = yaml_to_dict(strategy_config_path)
-        print(
-            "Initialized strategy parameters from configuration file:\n\t",
-            params,
+        logger.debug(
+            f"Initialized strategy parameters from configuration file:\n\t{params}"
         )
 
         network_config = yaml_to_dict(network_config_path)
-        print(
-            "Initialized strategy network configuration from configuration file:\n\t",
-            network_config,
+        logger.debug(
+            f"Initialized strategy network configuration from configuration file:\n\t{network_config}"
         )
         return network_config, params
 
@@ -354,17 +366,17 @@ class Strategy(ABC):
         Args:
             validator_node_list (list[ValidatorNode]): The list with (new) validator node information
         """
-        print("Updating the strategy's network information")
+        logger.info("Updating the strategy's network information")
         self.validator_node_list = validator_node_list
         self.public_to_private_key_map.clear()
         self.node_amount = len(validator_node_list)
-        self.port_dict = {
+        self.port_to_id_dict = {
             port: index
             for index, port in enumerate(
                 [node.peer.port for node in validator_node_list]
             )
         }
-        self.id_dict = {
+        self.id_to_port_dict = {
             index: port
             for index, port in enumerate(
                 [node.peer.port for node in validator_node_list]
@@ -396,6 +408,17 @@ class Strategy(ABC):
             self.public_to_private_key_map[decoded_pub_key.hex()] = (
                 decoded_priv_key.hex()
             )
+        self.iteration_type.start_timeout_timer()
+
+    def update_status(self, packet: packet_pb2.Packet):
+        """Update the iteration's state variables, when a new TMStatusChange is received."""
+        if isinstance(self.iteration_type, LedgerBasedIteration):
+            try:
+                message, _ = PacketEncoderDecoder.decode_packet(packet)
+                if isinstance(message, ripple_pb2.TMStatusChange):
+                    self.iteration_type.update_iteration(message)
+            except DecodingNotSupportedError:
+                pass
 
     def port_to_id(self, port: int) -> int:
         """
@@ -406,8 +429,14 @@ class Strategy(ABC):
 
         Returns:
             int: The corresponding peer ID
+
+        Raises:
+            ValueError: if port is not found in port_dict
         """
-        return self.port_dict[port]
+        try:
+            return self.port_to_id_dict[port]
+        except KeyError as err:
+            raise ValueError(f"Port {port} not found in port_dict") from err
 
     def id_to_port(self, peer_id: int) -> int:
         """
@@ -418,8 +447,14 @@ class Strategy(ABC):
 
         Returns:
             The corresponding port
+
+        Raises:
+            ValueError: if peer_id is not found in port_dict
         """
-        return self.id_dict[peer_id]
+        try:
+            return self.id_to_port_dict[peer_id]
+        except KeyError as err:
+            raise ValueError(f"pper ID {peer_id} not found in port_dict") from err
 
     def process_packet(
         self,
@@ -470,6 +505,8 @@ class Strategy(ABC):
                 self.set_message_action(
                     peer_from_id, peer_to_id, packet.data, final_data, action
                 )
+
+        self.update_status(packet)
 
         return final_data, action
 

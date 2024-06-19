@@ -95,9 +95,12 @@ class PacketEncoderDecoder:
         return message
 
     @staticmethod
-    def decode_packet(packet: packet_pb2.Packet) -> tuple[Message | bytes, int]:
+    def decode_packet(packet: packet_pb2.Packet) -> tuple[Message, int]:
         """
-        Decodes the given packet into a tuple.
+        Decodes the given packet into a tuple containing the message object, and type number.
+
+        Throws an exception when trying to decode a message which is not supported
+        according to the 'ripple.proto' file.
 
         Args:
             packet:  packet to decode
