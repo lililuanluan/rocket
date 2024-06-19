@@ -76,7 +76,6 @@ class TimeBasedIteration(IterationType):
             interceptor_manager: InterceptorManager attached to this iteration type.
         """
         super().__init__(max_iterations, timeout_seconds, interceptor_manager)
-        self._timer_seconds = timeout_seconds
 
 
 class LedgerBasedIteration(IterationType):
@@ -145,3 +144,15 @@ class LedgerBasedIteration(IterationType):
             if self.ledger_seq == self._max_ledger_seq:
                 self.add_iteration()
                 self.reset_values()
+
+
+class NoneIteration(IterationType):
+    """Iteration Type used for local testing purposes."""
+
+    def __init__(self, timeout_seconds: int = 60):
+        """Init the NoneIteration class with a specified timeout in seconds."""
+        super().__init__(max_iterations=1, timeout_seconds=timeout_seconds)
+
+    def add_iteration(self):
+        """Override the add_iteration function to prevent the interceptor subprocess from starting."""
+        pass

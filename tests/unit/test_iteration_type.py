@@ -33,7 +33,7 @@ def test_time_based_iteration_init():
     """Tests the initialization of TimeBasedIteration."""
     iteration = TimeBasedIteration(5, 10)
     assert iteration._max_iterations == 5
-    assert iteration._timer_seconds == 10
+    assert iteration._timeout_seconds == 10
     assert iteration.cur_iteration == 0
     assert isinstance(iteration._interceptor_manager, InterceptorManager)
 
