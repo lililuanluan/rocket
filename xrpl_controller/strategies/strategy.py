@@ -23,8 +23,8 @@ class Strategy(ABC):
 
     def __init__(
         self,
-        network_config_file: str = "default-network-config.yaml",
-        strategy_config_file: str = "default-strategy-config.yaml",
+        network_config_path: str = "./xrpl_controller/network_configs/default-network-config.yaml",
+        strategy_config_path: str = "./xrpl_controller/strategies/configs/default-strategy-config.yaml",
         auto_partition: bool = True,
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
@@ -34,8 +34,8 @@ class Strategy(ABC):
         Initialize the Strategy interface with needed fields.
 
         Args:
-            network_config_file (str): The filename of a network configuration file
-            strategy_config_file (str): The filename of a strategy configuration file.
+            network_config_path (str): The path of a network configuration file
+            strategy_config_path (str): The path of the strategy configuration file
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions.
             auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
             auto_parse_subsets (bool, optional): Whether the strategy will perform same actions on defined subsets.
@@ -53,27 +53,25 @@ class Strategy(ABC):
         self.prev_message_action_matrix: list[list[MessageAction]] = []
         self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.keep_action_log = keep_action_log
-        self.params = {}
-
-        str_conf_directory = "./xrpl_controller/strategies/configs/"
-        self.params = yaml_to_dict(
-            strategy_config_file,
-            str_conf_directory,
+        self.network_config, self.params = self.init_configs(
+            network_config_path, strategy_config_path
         )
+
+    @staticmethod
+    def init_configs(network_config_path: str, strategy_config_path: str):
+        """Initialize the strategy and network configuration from the given paths."""
+        params = yaml_to_dict(strategy_config_path)
         print(
             "Initialized strategy parameters from configuration file:\n\t",
-            self.params,
+            params,
         )
 
-        ntw_conf_directory = "./xrpl_controller/network_configs/"
-        self.network_config = yaml_to_dict(
-            network_config_file,
-            ntw_conf_directory,
-        )
+        network_config = yaml_to_dict(network_config_path)
         print(
             "Initialized strategy network configuration from configuration file:\n\t",
-            self.network_config,
+            network_config,
         )
+        return network_config, params
 
     def partition_network(self, partitions: list[list[int]]):
         """

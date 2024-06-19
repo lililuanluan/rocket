@@ -13,8 +13,8 @@ class RandomFuzzer(Strategy):
 
     def __init__(
         self,
-        network_config_file: str = "default-network-config.yaml",
-        strategy_config_file: str = "RandomFuzzer.yaml",
+        network_config_path: str = "./xrpl_controller/network_configs/default-network-config.yaml",
+        strategy_config_path: str = "./xrpl_controller/strategies/configs/RandomFuzzer.yaml",
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
     ):
@@ -22,8 +22,8 @@ class RandomFuzzer(Strategy):
         Initializes the random fuzzer.
 
         Args:
-            network_config_file: the network config file to be used
-            strategy_config_file: the strategy config file to be used
+            network_config_path: the path to a network config file to be used
+            strategy_config_path: the path to a strategy config file to be used
             auto_parse_identical: whether to auto-parse identical packages per peer combination.
             auto_parse_subsets: whether to auto-parse identical packages w.r.t. defined subsets
 
@@ -31,8 +31,8 @@ class RandomFuzzer(Strategy):
             ValueError: if retrieved probabilities or delays are invalid
         """
         super().__init__(
-            network_config_file=network_config_file,
-            strategy_config_file=strategy_config_file,
+            network_config_path=network_config_path,
+            strategy_config_path=strategy_config_path,
             auto_parse_identical=auto_parse_identical,
             auto_parse_subsets=auto_parse_subsets,
         )
