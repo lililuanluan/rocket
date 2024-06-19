@@ -18,7 +18,6 @@ from xrpl_controller.core import (
 from xrpl_controller.iteration_type import (
     IterationType,
     LedgerBasedIteration,
-    TimeBasedIteration,
 )
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.strategies.encoder_decoder import (
@@ -76,15 +75,13 @@ class Strategy(ABC):
     def init_configs(network_config_path: str, strategy_config_path: str):
         """Initialize the strategy and network configuration from the given paths."""
         params = yaml_to_dict(strategy_config_path)
-        print(
-            "Initialized strategy parameters from configuration file:\n\t",
-            params,
+        logger.debug(
+            f"Initialized strategy parameters from configuration file:\n\t{params}"
         )
 
         network_config = yaml_to_dict(network_config_path)
-        print(
-            "Initialized strategy network configuration from configuration file:\n\t",
-            network_config,
+        logger.debug(
+            f"Initialized strategy network configuration from configuration file:\n\t{network_config}"
         )
         return network_config, params
 
@@ -411,15 +408,17 @@ class Strategy(ABC):
             self.public_to_private_key_map[decoded_pub_key.hex()] = (
                 decoded_priv_key.hex()
             )
-        if isinstance(self.iteration_type, TimeBasedIteration):
-            self.iteration_type.start_timer()
-        elif isinstance(self.iteration_type, LedgerBasedIteration):
-            self.iteration_type.start_timeout()
+        self.iteration_type.start_timeout_timer()
 
-    def update_status(self, status: ripple_pb2.TMStatusChange):
-        """Update the strategy's state variables, when a new TMStatusChange is received."""
+    def update_status(self, packet: packet_pb2.Packet):
+        """Update the iteration's state variables, when a new TMStatusChange is received."""
         if isinstance(self.iteration_type, LedgerBasedIteration):
-            self.iteration_type.update_iteration(status)
+            try:
+                message, _ = PacketEncoderDecoder.decode_packet(packet)
+                if isinstance(message, ripple_pb2.TMStatusChange):
+                    self.iteration_type.update_iteration(message)
+            except DecodingNotSupportedError:
+                pass
 
     def port_to_id(self, port: int) -> int:
         """
@@ -495,12 +494,7 @@ class Strategy(ABC):
                     peer_from_id, peer_to_id, packet.data, final_data, action
                 )
 
-        try:
-            message, _ = PacketEncoderDecoder.decode_packet(packet)
-            if isinstance(message, ripple_pb2.TMStatusChange):
-                self.update_status(message)
-        except DecodingNotSupportedError:
-            pass
+        self.update_status(packet)
 
         return final_data, action
 

@@ -6,6 +6,7 @@ from typing import Tuple
 from xrpl.utils import datetime_to_ripple_time
 
 from protos import packet_pb2, ripple_pb2
+from xrpl_controller.iteration_type import IterationType
 from xrpl_controller.strategies.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
@@ -16,9 +17,9 @@ from xrpl_controller.strategies.strategy import Strategy
 class MutationExample(Strategy):
     """Class that Mutates all TMProposeSet messages."""
 
-    def __init__(self):
+    def __init__(self, iteration_type: IterationType | None = None):
         """Initialize the MutationExample class."""
-        super().__init__()
+        super().__init__(iteration_type=iteration_type)
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """

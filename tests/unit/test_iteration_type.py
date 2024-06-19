@@ -44,6 +44,7 @@ def test_ledger_based_iteration_add():
     interceptor_manager.restart = MagicMock()
 
     iteration = LedgerBasedIteration(5, 10, interceptor_manager)
+    iteration.start_timeout_timer = MagicMock()
     iteration.add_iteration()
 
     assert iteration.cur_iteration == 1
@@ -58,6 +59,7 @@ def test_ledger_based_iteration_add_done():
     interceptor_manager.cleanup_docker_containers = MagicMock()
 
     iteration = LedgerBasedIteration(1, 10, interceptor_manager)
+    iteration.start_timeout_timer = MagicMock()
     grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     grpc_server.stop = MagicMock()
 
@@ -79,6 +81,7 @@ def test_ledger_based_iteration_add_done_no_server():
     interceptor_manager.cleanup_docker_containers = MagicMock()
 
     iteration = LedgerBasedIteration(1, 10, interceptor_manager)
+    iteration.start_timeout_timer = MagicMock()
     grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     grpc_server.stop = MagicMock()
 
@@ -108,6 +111,7 @@ def test_ledger_based_iteration_update():
     interceptor_manager.start_new = MagicMock()
 
     iteration = LedgerBasedIteration(5, 10, interceptor_manager)
+    iteration.start_timeout_timer = MagicMock()
     iteration.start_timeout = MagicMock()
 
     iteration.update_iteration(status_msg)
@@ -143,9 +147,9 @@ def test_ledger_based_iteration_update_complete():
     interceptor_manager.start_new = MagicMock()
 
     iteration = LedgerBasedIteration(5, 4, interceptor_manager)
+    iteration.start_timeout_timer = MagicMock()
     iteration.add_iteration = MagicMock()
     iteration.reset_values = MagicMock()
-    iteration.start_timeout = MagicMock()
 
     iteration.update_iteration(status_msg_1)
     iteration.update_iteration(status_msg_2)
@@ -173,7 +177,7 @@ def test_ledger_based_iteration_reset_parameters():
 
     iteration = LedgerBasedIteration(5, 10, interceptor_manager)
     iteration.add_iteration = MagicMock()
-    iteration.start_timeout = MagicMock()
+    iteration.start_timeout_timer = MagicMock()
 
     iteration.update_iteration(status_msg_1)
     iteration.reset_values()
@@ -195,6 +199,6 @@ def test_time_based_iteration_timer():
     iteration = TimeBasedIteration(5, 0)
     iteration.add_iteration = MagicMock()
 
-    iteration.start_timer()
+    iteration.start_timeout_timer()
 
     iteration.add_iteration.assert_called_once()

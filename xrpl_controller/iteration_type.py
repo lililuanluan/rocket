@@ -14,17 +14,29 @@ class IterationType:
     """Base class for defining iteration mechanisms."""
 
     def __init__(
-        self, max_iterations: int, interceptor_manager: InterceptorManager | None = None
+        self,
+        max_iterations: int,
+        timeout_seconds: int = 60,
+        interceptor_manager: InterceptorManager | None = None,
     ):
         """Init Iteration Type with an InterceptorManager attached."""
         self.cur_iteration = 0
 
         self._max_iterations = max_iterations
         self._server: Server | None = None
+        self._timer: threading.Timer | None = None
+        self._timeout_seconds = timeout_seconds
 
         self._interceptor_manager = (
             InterceptorManager() if interceptor_manager is None else interceptor_manager
         )
+
+    def start_timeout_timer(self):
+        """Starts a timeout timer, which starts a new iteration when the timeout is reached."""
+        if self._timer:
+            self._timer.cancel()
+        self._timer = threading.Timer(self._timeout_seconds, self.add_iteration)
+        self._timer.start()
 
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
@@ -52,7 +64,7 @@ class TimeBasedIteration(IterationType):
     def __init__(
         self,
         max_iterations: int,
-        timer_seconds: int,
+        timeout_seconds: int,
         interceptor_manager: InterceptorManager | None = None,
     ):
         """
@@ -60,16 +72,11 @@ class TimeBasedIteration(IterationType):
 
         Args:
             max_iterations: Maximum number of iterations.
-            timer_seconds: the amount of seconds an iteration should take.
+            timeout_seconds: the amount of seconds an iteration should take.
             interceptor_manager: InterceptorManager attached to this iteration type.
         """
-        super().__init__(max_iterations, interceptor_manager)
-        self._timer_seconds = timer_seconds
-
-    def start_timer(self):
-        """Starts a thread which restarts the interceptor process after a set amount of seconds."""
-        timer = threading.Timer(self._timer_seconds, self.add_iteration)
-        timer.start()
+        super().__init__(max_iterations, timeout_seconds, interceptor_manager)
+        self._timer_seconds = timeout_seconds
 
 
 class LedgerBasedIteration(IterationType):
@@ -89,7 +96,7 @@ class LedgerBasedIteration(IterationType):
             max_ledger_seq: The amount of ledgers to be validated in a single iteration.
             interceptor_manager: InterceptorManager attached to this iteration type.
         """
-        super().__init__(max_iterations, interceptor_manager)
+        super().__init__(max_iterations, interceptor_manager=interceptor_manager)
 
         self.prev_network_event = 0
         self.network_event_changes = 0
@@ -98,21 +105,6 @@ class LedgerBasedIteration(IterationType):
         self.validation_time = timedelta()
 
         self._max_ledger_seq = max_ledger_seq
-        self._timer: threading.Timer | None = None
-        self._timeout = 60
-
-    def start_timeout(self):
-        """Start a timer which calls check_timeout after 60 seconds."""
-        self._timer = threading.Timer(self._timeout, self.check_timeout)
-        self._timer.start()
-
-    def check_timeout(self):
-        """Called when timeout is reached, and no ledgers have been validated."""
-        logger.warning(
-            f"Timeout reached, no ledgers validated in last {self._timeout} seconds"
-        )
-        self.add_iteration()
-        self.reset_values()
 
     def reset_values(self):
         """Reset state variables, called when interceptor is restarted."""
@@ -142,7 +134,7 @@ class LedgerBasedIteration(IterationType):
                 # New ledger validated, we can reset timeout
                 if self._timer:
                     self._timer.cancel()
-                self.start_timeout()
+                self.start_timeout_timer()
 
                 self.validation_time = datetime.now() - self.prev_validation_time
                 self.ledger_seq = status.ledgerSeq
