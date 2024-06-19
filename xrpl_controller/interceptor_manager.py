@@ -18,6 +18,7 @@ class InterceptorManager:
 
     @staticmethod
     def __check_output(proc: Popen):
+        """Log the stdout and stderr of the subprocess."""
         stdout, stderr = proc.communicate()
         if stdout:
             logger.debug(f"\n{stdout}")
