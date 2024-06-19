@@ -19,8 +19,9 @@ from tests.system_level.helper import (
     on_exc,
     start_interceptor,
 )
-from xrpl_controller.packet_server import serve_for_automated_tests
-from xrpl_controller.strategies import RandomFuzzer
+from xrpl_controller.iteration_type import NoneIteration
+from xrpl_controller.packet_server import serve
+from xrpl_controller.strategies.mutation_example import MutationExample
 
 
 class LivenessTest(SystemLevelTest):
@@ -86,12 +87,13 @@ class LivenessTest(SystemLevelTest):
             rmtree(".temp-interceptor", onexc=on_exc)
 
         # Random fuzzer which is not random, it will send every packet without delaying or dropping
-        strategy: RandomFuzzer = RandomFuzzer()
+        strategy: MutationExample = MutationExample(
+            iteration_type=NoneIteration(timeout_seconds=300)
+        )
 
-        # controller_thread = Thread(target=serve, args=(strategy,))
         interceptor_process = multiprocessing.Process(target=start_interceptor)
 
-        server = serve_for_automated_tests(strategy)
+        server = serve(strategy)
         interceptor_process.start()
 
         while len(strategy.validator_node_list) != 3:
