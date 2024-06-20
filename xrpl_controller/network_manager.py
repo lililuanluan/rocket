@@ -7,8 +7,8 @@ import base58
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
-class NetworkStore:
-    """Class which holds information about a network of validator nodes."""
+class NetworkManager:
+    """Class which holds and handles information related to a network of validator nodes."""
 
     def __init__(self):
         """Initialize fields for this object."""

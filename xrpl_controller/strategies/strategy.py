@@ -16,7 +16,7 @@ from xrpl_controller.core import (
 )
 from xrpl_controller.iteration_type import IterationType, LedgerBasedIteration
 from xrpl_controller.message_action import MessageAction
-from xrpl_controller.network_store import NetworkStore
+from xrpl_controller.network_manager import NetworkManager
 from xrpl_controller.strategies.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
@@ -49,7 +49,7 @@ class Strategy(ABC):
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
             iteration_type (IterationType, optional): Type of iteration logic to use.
         """
-        self.network = NetworkStore()
+        self.network = NetworkManager()
         self.auto_partition: bool = auto_partition
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical

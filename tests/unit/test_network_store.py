@@ -1,12 +1,12 @@
 """Tests for NetworkStore class."""
 
 from tests.variable_store import node_0, node_1
-from xrpl_controller.network_store import NetworkStore
+from xrpl_controller.network_manager import NetworkManager
 
 
 def test_init():
     """Test the __init__ method."""
-    store = NetworkStore()
+    store = NetworkManager()
     assert store.network_config == {}
     assert store.validator_node_list == []
     assert store.node_amount == 0
@@ -17,7 +17,7 @@ def test_init():
 
 def test_update_network():
     """Test the update_network method."""
-    store = NetworkStore()
+    store = NetworkManager()
     store.update_network([node_0, node_1])
     assert store.network_config == {}
     assert store.validator_node_list == [node_0, node_1]
