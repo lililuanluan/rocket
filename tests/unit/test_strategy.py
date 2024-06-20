@@ -5,77 +5,12 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from protos import packet_pb2, ripple_pb2
+from protos import packet_pb2
+from tests.variable_store import configs, node_0, node_1, node_2, status_msg
 from xrpl_controller.core import MAX_U32
 from xrpl_controller.iteration_type import LedgerBasedIteration
 from xrpl_controller.strategies import RandomFuzzer
 from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
-from xrpl_controller.validator_node_info import (
-    SocketAddress,
-    ValidatorKeyData,
-    ValidatorNode,
-)
-
-node_0 = ValidatorNode(
-    SocketAddress("test_peer", 10),
-    SocketAddress("test-ws-pub", 20),
-    SocketAddress("test-ws-adm", 30),
-    SocketAddress("test-rpc", 40),
-    ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
-)
-
-node_1 = ValidatorNode(
-    SocketAddress("test_peer", 11),
-    SocketAddress("test-ws-pub", 21),
-    SocketAddress("test-ws-adm", 31),
-    SocketAddress("test-rpc", 41),
-    ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
-)
-
-node_2 = ValidatorNode(
-    SocketAddress("test_peer", 12),
-    SocketAddress("test-ws-pub", 22),
-    SocketAddress("test-ws-adm", 32),
-    SocketAddress("test-rpc", 42),
-    ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
-)
-
-node_3 = ValidatorNode(
-    SocketAddress("test_peer", 13),
-    SocketAddress("test-ws-pub", 23),
-    SocketAddress("test-ws-adm", 33),
-    SocketAddress("test-rpc", 43),
-    ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
-)
-
-configs = (
-    {
-        "base_port_peer": 60000,
-        "base_port_ws": 61000,
-        "base_port_ws_admin": 62000,
-        "base_port_rpc": 63000,
-        "number_of_nodes": 3,
-        "network_partition": [[0, 1, 2]],
-    },
-    {
-        "delay_probability": 0.6,
-        "drop_probability": 0,
-        "min_delay_ms": 10,
-        "max_delay_ms": 150,
-        "seed": 10,
-    },
-)
-
-status_msg = ripple_pb2.TMStatusChange(
-    newStatus=2,
-    newEvent=1,
-    ledgerSeq=3,
-    ledgerHash=b"abcdef",
-    ledgerHashPrevious=b"123456",
-    networkTime=1000,
-    firstSeq=0,
-    lastSeq=2,
-)
 
 
 @patch(

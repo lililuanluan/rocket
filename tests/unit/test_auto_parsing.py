@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from protos import packet_pb2
-from tests.unit.test_strategy import node_0, node_1, node_2, node_3
+from tests.variable_store import node_0, node_1, node_2, node_3
 from xrpl_controller.strategies import RandomFuzzer
 
 configs = (

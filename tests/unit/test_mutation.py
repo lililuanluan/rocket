@@ -10,9 +10,7 @@ from protos.packet_pb2 import Packet
 from protos.ripple_pb2 import TMProposeSet
 from xrpl_controller.strategies import Strategy
 from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
-from xrpl_controller.strategies.mutation_example import (
-    MutationExample,
-)
+from xrpl_controller.strategies.mutation_example import MutationExample
 
 
 def test_mutation_propose():

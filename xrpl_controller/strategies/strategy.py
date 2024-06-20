@@ -14,10 +14,7 @@ from xrpl_controller.core import (
     validate_ports_or_ids,
     yaml_to_dict,
 )
-from xrpl_controller.iteration_type import (
-    IterationType,
-    LedgerBasedIteration,
-)
+from xrpl_controller.iteration_type import IterationType, LedgerBasedIteration
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.network_store import NetworkStore
 from xrpl_controller.strategies.encoder_decoder import (
