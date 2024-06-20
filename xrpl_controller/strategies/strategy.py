@@ -409,6 +409,7 @@ class Strategy(ABC):
                 decoded_priv_key.hex()
             )
         self.iteration_type.start_timeout_timer()
+        self.setup()
 
     def update_status(self, packet: packet_pb2.Packet):
         """Update the iteration's state variables, when a new TMStatusChange is received."""
@@ -509,6 +510,15 @@ class Strategy(ABC):
         self.update_status(packet)
 
         return final_data, action
+
+    @abstractmethod
+    def setup(self):
+        """
+        Setup method to be implemented by implementations of Strategy, not required.
+
+        This method gets called at the end of update_network to initialize starting values.
+        """
+        pass
 
     @abstractmethod
     def handle_packet(

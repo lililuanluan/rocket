@@ -21,6 +21,10 @@ class MutationExample(Strategy):
         """Initialize the MutationExample class."""
         super().__init__(iteration_type=iteration_type)
 
+    def setup(self):
+        """Setup method for MutationExample."""
+        pass
+
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """
         Handler method for receiving a packet.
