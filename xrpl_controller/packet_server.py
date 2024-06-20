@@ -33,7 +33,6 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
         self.logger: ActionLogger | None = None
-        self._start_datetime: datetime.datetime = datetime.datetime.now()
 
     def send_packet(
         self, request, context: grpc.ServicerContext
@@ -136,7 +135,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ):  # Close the previous logger if there was a previous one
                 self.logger.close()
             self.logger = ActionLogger(
-                format_datetime(self._start_datetime),
+                format_datetime(self.strategy.start_datetime),
                 validator_node_list,
                 f"action-{self.strategy.iteration_type.cur_iteration}",
                 f"node_info-{self.strategy.iteration_type.cur_iteration}",

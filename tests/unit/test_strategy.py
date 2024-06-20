@@ -7,7 +7,7 @@ import pytest
 
 from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import MAX_U32
-from xrpl_controller.iteration_type import LedgerBasedIteration
+from xrpl_controller.iteration_type import LedgerIteration
 from xrpl_controller.strategies import RandomFuzzer
 from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.validator_node_info import (
@@ -176,18 +176,18 @@ def test_update_status(mock_init_configs):
     message = PacketEncoderDecoder.encode_message(status_msg, message_type=34)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
+    iteration_type = LedgerIteration(
         max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
     )
-    iteration_type.start_timeout_timer = MagicMock()
-    iteration_type.update_iteration = MagicMock()
+    iteration_type._start_timeout_timer = MagicMock()
+    iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()
 
     strategy.update_status(packet)
-    iteration_type.update_iteration.assert_called_once()
+    iteration_type.on_status_change.assert_called_once()
 
 
 @patch(
@@ -199,18 +199,18 @@ def test_update_status_exception(mock_init_configs):
     message = PacketEncoderDecoder.encode_message(status_msg, message_type=99)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
+    iteration_type = LedgerIteration(
         max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
     )
-    iteration_type.start_timeout_timer = MagicMock()
-    iteration_type.update_iteration = MagicMock()
+    iteration_type._start_timeout_timer = MagicMock()
+    iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()
 
     strategy.update_status(packet)
-    iteration_type.update_iteration.assert_not_called()
+    iteration_type.on_status_change.assert_not_called()
 
 
 @patch(
@@ -222,18 +222,18 @@ def test_update_status_other_message(mock_init_configs):
     message = PacketEncoderDecoder.encode_message(status_msg, message_type=15)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
+    iteration_type = LedgerIteration(
         max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
     )
-    iteration_type.start_timeout_timer = MagicMock()
-    iteration_type.update_iteration = MagicMock()
+    iteration_type._start_timeout_timer = MagicMock()
+    iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()
 
     strategy.update_status(packet)
-    iteration_type.update_iteration.assert_not_called()
+    iteration_type.on_status_change.assert_not_called()
 
 
 @patch(

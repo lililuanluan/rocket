@@ -18,6 +18,8 @@ action_log_columns = [
     "possibly_mutated_data",
 ]
 
+result_log_columns = ["node_id", "ledger_hash", "ledger_index", "close_time"]
+
 
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
@@ -142,5 +144,34 @@ class ActionLogger(CSVLogger):
                 message_type,
                 original_data,
                 possibly_mutated_data,
+            ]
+        )
+
+
+class ResultLogger(CSVLogger):
+    def __init__(
+        self,
+        sub_directory: str,
+        result_log_filename: str | None = None,
+    ):
+        final_filename = (
+            result_log_filename if result_log_filename is not None else "result_log.csv"
+        )
+        directory = f"action_logs/{sub_directory}"
+        super().__init__(
+            filename=final_filename,
+            columns=result_log_columns,
+            directory=directory,
+        )
+
+    def log_result(
+        self, node_id: int, ledger_hash: str, ledger_index: int, close_time: int
+    ):
+        self.writer.writerow(
+            [
+                node_id,
+                ledger_hash,
+                ledger_index,
+                close_time,
             ]
         )

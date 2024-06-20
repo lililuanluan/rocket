@@ -1,6 +1,7 @@
 """This module is responsible for defining the Strategy interface."""
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Dict, List, Tuple
 
 import base58
@@ -17,7 +18,7 @@ from xrpl_controller.core import (
 )
 from xrpl_controller.iteration_type import (
     IterationType,
-    LedgerBasedIteration,
+    LedgerIteration,
 )
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.strategies.encoder_decoder import (
@@ -67,8 +68,10 @@ class Strategy(ABC):
         self.network_config, self.params = self.init_configs(
             network_config_path, strategy_config_path
         )
+
+        self.start_datetime: datetime = datetime.now()
         self.iteration_type = (
-            LedgerBasedIteration(10, 5) if iteration_type is None else iteration_type
+            LedgerIteration(10, 5) if iteration_type is None else iteration_type
         )
 
     @staticmethod
@@ -408,17 +411,16 @@ class Strategy(ABC):
             self.public_to_private_key_map[decoded_pub_key.hex()] = (
                 decoded_priv_key.hex()
             )
-        self.iteration_type.start_timeout_timer()
+        self.iteration_type.set_validator_nodes(validator_node_list)
 
     def update_status(self, packet: packet_pb2.Packet):
         """Update the iteration's state variables, when a new TMStatusChange is received."""
-        if isinstance(self.iteration_type, LedgerBasedIteration):
-            try:
-                message, _ = PacketEncoderDecoder.decode_packet(packet)
-                if isinstance(message, ripple_pb2.TMStatusChange):
-                    self.iteration_type.update_iteration(message)
-            except DecodingNotSupportedError:
-                pass
+        try:
+            message, _ = PacketEncoderDecoder.decode_packet(packet)
+            if isinstance(message, ripple_pb2.TMStatusChange):
+                self.iteration_type.on_status_change(message)
+        except DecodingNotSupportedError:
+            pass
 
     def port_to_id(self, port: int) -> int:
         """
