@@ -86,10 +86,6 @@ def test_init(mock_init_configs):
     """Test whether Strategy attributes get initialized correctly."""
     strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
-    assert strategy.validator_node_list == []
-    assert strategy.public_to_private_key_map == {}
-    assert strategy.node_amount == 0
-    assert strategy.port_to_id_dict == {}
     assert strategy.communication_matrix == []
     assert strategy.auto_partition
     assert strategy.auto_parse_identical
@@ -107,10 +103,10 @@ def test_update_network(mock_init_configs):
     mock_init_configs.assert_called_once()
 
     strategy.update_network([node_0, node_1, node_2])
-    assert strategy.validator_node_list == [node_0, node_1, node_2]
-    assert strategy.node_amount == 3
-    assert strategy.port_to_id_dict == {10: 0, 11: 1, 12: 2}
-    assert strategy.id_to_port_dict == {0: 10, 1: 11, 2: 12}
+    assert strategy.network.validator_node_list == [node_0, node_1, node_2]
+    assert strategy.network.node_amount == 3
+    assert strategy.network.port_to_id_dict == {10: 0, 11: 1, 12: 2}
+    assert strategy.network.id_to_port_dict == {0: 10, 1: 11, 2: 12}
     assert strategy.id_to_port(2) == 12
     assert strategy.port_to_id(12) == 2
     assert strategy.communication_matrix == [

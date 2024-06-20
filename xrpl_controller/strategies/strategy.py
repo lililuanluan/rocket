@@ -1,9 +1,8 @@
 """This module is responsible for defining the Strategy interface."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
-import base58
 from loguru import logger
 
 from protos import packet_pb2, ripple_pb2
@@ -20,6 +19,7 @@ from xrpl_controller.iteration_type import (
     LedgerBasedIteration,
 )
 from xrpl_controller.message_action import MessageAction
+from xrpl_controller.network_store import NetworkStore
 from xrpl_controller.strategies.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
@@ -52,11 +52,7 @@ class Strategy(ABC):
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
             iteration_type (IterationType, optional): Type of iteration logic to use.
         """
-        self.validator_node_list: List[ValidatorNode] = []
-        self.public_to_private_key_map: Dict[str, str] = {}
-        self.node_amount: int = 0
-        self.port_to_id_dict: dict[int, int] = {}
-        self.id_to_port_dict: dict[int, int] = {}
+        self.network = NetworkStore()
         self.auto_partition: bool = auto_partition
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical
@@ -64,7 +60,7 @@ class Strategy(ABC):
         self.prev_message_action_matrix: list[list[MessageAction]] = []
         self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.keep_action_log = keep_action_log
-        self.network_config, self.params = self.init_configs(
+        self.network.network_config, self.params = self.init_configs(
             network_config_path, strategy_config_path
         )
         self.iteration_type = (
@@ -72,7 +68,9 @@ class Strategy(ABC):
         )
 
     @staticmethod
-    def init_configs(network_config_path: str, strategy_config_path: str):
+    def init_configs(
+        network_config_path: str, strategy_config_path: str
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Initialize the strategy and network configuration from the given paths."""
         params = yaml_to_dict(strategy_config_path)
         logger.debug(
@@ -98,15 +96,18 @@ class Strategy(ABC):
         flattened_partitions = flatten(partitions)
         if (
             set(flattened_partitions)
-            != set([peer_id for peer_id in range(len(self.validator_node_list))])
-            or len(flattened_partitions) != self.node_amount
+            != set(
+                [peer_id for peer_id in range(len(self.network.validator_node_list))]
+            )
+            or len(flattened_partitions) != self.network.node_amount
         ):
             raise ValueError(
                 "The given network partition is not valid for the current network."
             )
 
         self.communication_matrix = [
-            [False for _ in range(self.node_amount)] for _ in range(self.node_amount)
+            [False for _ in range(self.network.node_amount)]
+            for _ in range(self.network.node_amount)
         ]
 
         for partition in partitions:
@@ -172,7 +173,7 @@ class Strategy(ABC):
         This method uses partition_network to rebuild the communication matrix in a correct way.
         """
         self.partition_network(
-            [[peer_id for peer_id in range(len(self.validator_node_list))]]
+            [[peer_id for peer_id in range(len(self.network.validator_node_list))]]
         )
 
     def set_subsets_dict_entry(
@@ -209,7 +210,7 @@ class Strategy(ABC):
                 "auto_parse_subsets must be set to True when calling set_subsets_dict."
             )
 
-        self.subsets_dict = {peer_id: [] for peer_id in range(self.node_amount)}
+        self.subsets_dict = {peer_id: [] for peer_id in range(self.network.node_amount)}
 
         for peer_id, subsets in subsets_dict.items():
             self.set_subsets_dict_entry(peer_id, subsets)
@@ -367,47 +368,21 @@ class Strategy(ABC):
             validator_node_list (list[ValidatorNode]): The list with (new) validator node information
         """
         logger.info("Updating the strategy's network information")
-        self.validator_node_list = validator_node_list
-        self.public_to_private_key_map.clear()
-        self.node_amount = len(validator_node_list)
-        self.port_to_id_dict = {
-            port: index
-            for index, port in enumerate(
-                [node.peer.port for node in validator_node_list]
-            )
-        }
-        self.id_to_port_dict = {
-            index: port
-            for index, port in enumerate(
-                [node.peer.port for node in validator_node_list]
-            )
-        }
+        self.network.update_network(validator_node_list)
 
         self.partition_network(
             [[peer_id for peer_id in range(len(validator_node_list))]]
         )
-
         if self.auto_parse_identical:
             self.prev_message_action_matrix = [
-                [MessageAction() for _ in range(self.node_amount)]
-                for _ in range(self.node_amount)
+                [MessageAction() for _ in range(self.network.node_amount)]
+                for _ in range(self.network.node_amount)
             ]
-
         if self.auto_parse_subsets:
-            self.subsets_dict = {peer_id: [] for peer_id in range(self.node_amount)}
+            self.subsets_dict = {
+                peer_id: [] for peer_id in range(self.network.node_amount)
+            }
 
-        for node in self.validator_node_list:
-            decoded_pub_key = base58.b58decode(
-                node.validator_key_data.validation_public_key,
-                alphabet=base58.XRP_ALPHABET,
-            )[1:34]
-            decoded_priv_key = base58.b58decode(
-                node.validator_key_data.validation_private_key,
-                alphabet=base58.XRP_ALPHABET,
-            )[1:33]
-            self.public_to_private_key_map[decoded_pub_key.hex()] = (
-                decoded_priv_key.hex()
-            )
         self.iteration_type.start_timeout_timer()
         self.setup()
 
@@ -435,7 +410,7 @@ class Strategy(ABC):
             ValueError: if port is not found in port_dict
         """
         try:
-            return self.port_to_id_dict[port]
+            return self.network.port_to_id_dict[port]
         except KeyError as err:
             raise ValueError(f"Port {port} not found in port_dict") from err
 
@@ -453,7 +428,7 @@ class Strategy(ABC):
             ValueError: if peer_id is not found in port_dict
         """
         try:
-            return self.id_to_port_dict[peer_id]
+            return self.network.id_to_port_dict[peer_id]
         except KeyError as err:
             raise ValueError(f"pper ID {peer_id} not found in port_dict") from err
 

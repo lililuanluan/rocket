@@ -32,7 +32,9 @@ def test_mutation_propose():
     priv_key = base58.b58decode(private_key, alphabet=base58.RIPPLE_ALPHABET)
     bs58_key = priv_key[1:33]
 
-    strategy.public_to_private_key_map = {message.nodePubKey.hex(): bs58_key.hex()}
+    strategy.network.public_to_private_key_map = {
+        message.nodePubKey.hex(): bs58_key.hex()
+    }
 
     # Encode the message into a packet
     encoded_data = PacketEncoderDecoder.encode_message(message, 33)
@@ -156,7 +158,9 @@ def test_mutation_propose_correct_signature_change():
 
     assert org_sig == final_sig
 
-    strategy.public_to_private_key_map = {message.nodePubKey.hex(): bs58_key.hex()}
+    strategy.network.public_to_private_key_map = {
+        message.nodePubKey.hex(): bs58_key.hex()
+    }
 
     # Here we are now checking the signature difference after we mutate the packet
     # Encode the message into a packet
