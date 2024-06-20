@@ -1,4 +1,5 @@
 """Tests for NetworkStore class."""
+
 from tests.variable_store import node_0, node_1
 from xrpl_controller.network_store import NetworkStore
 
@@ -23,4 +24,7 @@ def test_update_network():
     assert store.node_amount == 2
     assert store.port_to_id_dict == {10: 0, 11: 1}
     assert store.id_to_port_dict == {0: 10, 1: 11}
-    assert store.public_to_private_key_map == {'643978c4': 'c548734c', 'f82580': '3a9c94'}
+    assert store.public_to_private_key_map == {
+        "643978c4": "c548734c",
+        "f82580": "3a9c94",
+    }

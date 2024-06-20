@@ -1,4 +1,5 @@
 """Class that holds information about a network of validator nodes."""
+
 from typing import Any
 
 import base58

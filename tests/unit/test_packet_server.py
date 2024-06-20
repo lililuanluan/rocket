@@ -106,12 +106,18 @@ def test_get_config():
     packet_server = PacketService(mock_strategy)
     request = packet_pb2.Config()
     response = packet_server.get_config(request, None)
-    assert response.base_port_peer == mock_strategy.network.network_config.get("base_port_peer")
-    assert response.base_port_ws == mock_strategy.network.network_config.get("base_port_ws")
+    assert response.base_port_peer == mock_strategy.network.network_config.get(
+        "base_port_peer"
+    )
+    assert response.base_port_ws == mock_strategy.network.network_config.get(
+        "base_port_ws"
+    )
     assert response.base_port_ws_admin == mock_strategy.network.network_config.get(
         "base_port_ws_admin"
     )
-    assert response.base_port_rpc == mock_strategy.network.network_config.get("base_port_rpc")
+    assert response.base_port_rpc == mock_strategy.network.network_config.get(
+        "base_port_rpc"
+    )
     assert response.number_of_nodes == mock_strategy.network.network_config.get(
         "number_of_nodes"
     )
