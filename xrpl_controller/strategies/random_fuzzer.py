@@ -72,7 +72,6 @@ class RandomFuzzer(Strategy):
 
     def setup(self):
         """Setup method for RandomFuzzer."""
-        pass
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """

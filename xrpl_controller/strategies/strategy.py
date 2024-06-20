@@ -512,7 +512,7 @@ class Strategy(ABC):
         return final_data, action
 
     @abstractmethod
-    def setup(self):
+    def setup(self):  # pragma: no cover
         """
         Setup method to be implemented by implementations of Strategy, not required.
 
