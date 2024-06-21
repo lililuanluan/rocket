@@ -71,8 +71,23 @@ class IterationType(ABC):
         """Setter for the log_dir variable, since it needs to be updated every iteration."""
         self._log_dir = log_dir
 
-    def add_iteration(self):
+    def log_consensus_property_results(self, max_ledger_seq: int):
+        """Checks the consistency and liveness properties."""
+        if self.cur_iteration > 0 and self._validator_nodes:
+            if not self._log_dir:
+                raise RuntimeError("Log directory not defined in IterationType")
+            # Called when an iteration is finished, and it is not the first one (meaning there are results)
+            ConsistencyLivenessProperty.check(
+                self._validator_nodes,
+                self._log_dir,
+                self.cur_iteration,
+                max_ledger_seq,
+            )
+
+    def add_iteration(self, max_ledger_seq: int = -1):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
+        self.log_consensus_property_results(max_ledger_seq)
+
         if self.cur_iteration < self._max_iterations:
             self._start_timeout_timer()
 
@@ -123,17 +138,6 @@ class LedgerIteration(IterationType):
         self.prev_validation_time = datetime.now()
         self.validation_time = timedelta()
 
-    def log_consensus_property_results(self):
-        """Add iteration when finished, checks the consistency and liveness properties."""
-        if self.cur_iteration > 0 and self._validator_nodes:
-            # Called when an iteration is finished, and it is not the first one (meaning there are results)
-            ConsistencyLivenessProperty.check(
-                self._validator_nodes,
-                self._log_dir,
-                self.cur_iteration,
-                self._max_ledger_seq,
-            )
-
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
         """
         Update the iteration values, called when a TMStatusChange is received.
@@ -162,8 +166,7 @@ class LedgerIteration(IterationType):
                     f"Ledger {self.ledger_seq} validated, time elapsed: {self.validation_time}"
                 )
         if self.ledger_seq == self._max_ledger_seq:
-            self.log_consensus_property_results()
-            self.add_iteration()
+            self.add_iteration(self._max_ledger_seq)
             self._reset_values()
 
 
@@ -196,7 +199,7 @@ class NoneIteration(IterationType):
         logger.info("Final time reached.")
         self._stop_all()
 
-    def add_iteration(self):
+    def add_iteration(self, max_ledger_seq: int = -1):
         """Override the add_iteration function to prevent the interceptor subprocess from starting."""
         self._start_timeout_timer()
         self.cur_iteration += 1

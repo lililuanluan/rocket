@@ -96,3 +96,4 @@ class ConsistencyLivenessProperty(ConsensusProperty):
                 max_ledger,
                 result.get("close_time"),
             )
+        result_logger.flush()

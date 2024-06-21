@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, Mock, call, patch
 
 import grpc
+import pytest
 
 from protos import ripple_pb2
 from protos.ripple_pb2 import TMStatusChange
@@ -365,10 +366,21 @@ def test_log_results():
     iteration = LedgerIteration(5, 10, interceptor_manager=Mock())
     iteration.cur_iteration += 1
     iteration.set_validator_nodes(validator_nodes)
+    iteration.set_log_dir("test_dir")
 
     with patch(
         "xrpl_controller.iteration_type.ConsistencyLivenessProperty",
         return_value=Mock(),
     ) as mock_prop:
-        iteration.log_consensus_property_results()
+        iteration.log_consensus_property_results(10)
         mock_prop.check.assert_called_once()
+
+
+def test_log_results_error():
+    """Test whether a method to log the results is called."""
+    iteration = LedgerIteration(5, 10, interceptor_manager=Mock())
+    iteration.cur_iteration += 1
+    iteration.set_validator_nodes(validator_nodes)
+
+    with pytest.raises(RuntimeError):
+        iteration.log_consensus_property_results(10)
