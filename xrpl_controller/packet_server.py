@@ -5,6 +5,7 @@ from concurrent import futures
 from typing import List
 
 import grpc
+from typeguard import TypeCheckError, check_type  # type: ignore
 
 from protos import packet_pb2, packet_pb2_grpc
 from protos.packet_pb2 import Packet
@@ -154,10 +155,39 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         Returns:
             Config: The Config object.
+
+        Raises:
+            ValueError: if an expected field is not set in the config file.
+            TypeError: if the type of a field does not match the expected type.
         """
         config = self.strategy.network.network_config
-        partition_list: List[List[int]] = config.get("network_partition")
-        partitions = map(lambda x: packet_pb2.Partition(nodes=x), partition_list)
+
+        config_values_types = {
+            "network_partition": List[List[int]],
+            "base_port_peer": int,
+            "base_port_ws": int,
+            "base_port_ws_admin": int,
+            "base_port_rpc": int,
+            "number_of_nodes": int,
+        }
+
+        for name, name_type in config_values_types.items():
+            value = config.get(name)
+            if value is None:
+                raise ValueError(f"{name} was not specified in the network config")
+            try:
+                check_type(value, name_type)
+            except TypeCheckError as err:
+                raise (
+                    TypeError(
+                        f"The type for {name} in network config should be {name_type.__name__} but was {type(value).__name__}"
+                    )
+                ) from err
+
+        partitions = map(
+            lambda x: packet_pb2.Partition(nodes=x),
+            config.get("network_partition"),
+        )
 
         return packet_pb2.Config(
             base_port_peer=config.get("base_port_peer"),
