@@ -92,9 +92,9 @@ class LivenessTest(SystemLevelTest):
         server = serve(strategy)
         interceptor_process.start()
 
-        while len(strategy.validator_node_list) != 3:
+        while len(strategy.network.validator_node_list) != 3:
             logger.info(
-                f"waiting for nodes to come online... {len(strategy.validator_node_list)}"
+                f"waiting for nodes to come online... {len(strategy.network.validator_node_list)}"
             )
             await sleep(2)
 
@@ -109,7 +109,8 @@ class LivenessTest(SystemLevelTest):
             await sleep(15)
 
             futures = [
-                fetch_node_info(p.ws_public.port) for p in strategy.validator_node_list
+                fetch_node_info(p.ws_public.port)
+                for p in strategy.network.validator_node_list
             ]
             node_infos = await asyncio.gather(*futures)
 
