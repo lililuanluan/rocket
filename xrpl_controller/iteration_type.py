@@ -103,7 +103,7 @@ class IterationType(ABC):
         raise NotImplementedError()
 
 
-class LedgerIteration(IterationType):
+class LedgerBasedIteration(IterationType):
     """Ledger Based iteration type, able to keep track of validated ledgers."""
 
     def __init__(
@@ -170,7 +170,7 @@ class LedgerIteration(IterationType):
             self._reset_values()
 
 
-class TimeIteration(IterationType):
+class TimeBasedIteration(IterationType):
     """Time Based iteration type, keeps track of time elapsed since network start."""
 
     def __init__(self, max_iterations: int, timeout_seconds: int = 30):

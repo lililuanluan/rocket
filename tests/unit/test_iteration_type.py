@@ -11,9 +11,9 @@ from protos import ripple_pb2
 from protos.ripple_pb2 import TMStatusChange
 from xrpl_controller.interceptor_manager import InterceptorManager
 from xrpl_controller.iteration_type import (
-    LedgerIteration,
+    LedgerBasedIteration,
     NoneIteration,
-    TimeIteration,
+    TimeBasedIteration,
 )
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -33,7 +33,7 @@ validator_nodes = [node, node]
 
 def test_ledger_based_iteration_init():
     """Tests the initialization of IterationTemplate."""
-    iteration = LedgerIteration(5, 10)
+    iteration = LedgerBasedIteration(5, 10)
     assert iteration._max_iterations == 5
     assert iteration._max_ledger_seq == 10
     assert iteration.cur_iteration == 0
@@ -58,7 +58,7 @@ def test_ledger_based_iteration_add():
     interceptor_manager = InterceptorManager()
     interceptor_manager.restart = MagicMock()
 
-    iteration = LedgerIteration(5, 10, interceptor_manager=interceptor_manager)
+    iteration = LedgerBasedIteration(5, 10, interceptor_manager=interceptor_manager)
     iteration._start_timeout_timer = MagicMock()
     iteration.add_iteration()
 
@@ -73,7 +73,7 @@ def test_ledger_based_iteration_add_done():
     interceptor_manager.stop = MagicMock()
     interceptor_manager.cleanup_docker_containers = MagicMock()
 
-    iteration = LedgerIteration(1, 10, interceptor_manager=interceptor_manager)
+    iteration = LedgerBasedIteration(1, 10, interceptor_manager=interceptor_manager)
     iteration._start_timeout_timer = MagicMock()
     grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     grpc_server.stop = MagicMock()
@@ -95,7 +95,7 @@ def test_ledger_based_iteration_add_done_no_server():
     interceptor_manager.stop = MagicMock()
     interceptor_manager.cleanup_docker_containers = MagicMock()
 
-    iteration = LedgerIteration(1, 10, interceptor_manager=interceptor_manager)
+    iteration = LedgerBasedIteration(1, 10, interceptor_manager=interceptor_manager)
     iteration._start_timeout_timer = MagicMock()
     grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     grpc_server.stop = MagicMock()
@@ -125,7 +125,7 @@ def test_ledger_based_iteration_update():
     interceptor_manager = InterceptorManager()
     interceptor_manager.start_new = MagicMock()
 
-    iteration = LedgerIteration(5, 10, interceptor_manager=interceptor_manager)
+    iteration = LedgerBasedIteration(5, 10, interceptor_manager=interceptor_manager)
     iteration.set_validator_nodes(validator_nodes)
     iteration._start_timeout_timer = MagicMock()
     iteration.start_timeout = MagicMock()
@@ -161,7 +161,7 @@ def test_ledger_based_iteration_update_complete():
     interceptor_manager = InterceptorManager()
     interceptor_manager.start_new = MagicMock()
 
-    iteration = LedgerIteration(5, 2, interceptor_manager=interceptor_manager)
+    iteration = LedgerBasedIteration(5, 2, interceptor_manager=interceptor_manager)
     iteration.set_validator_nodes(validator_nodes)
     iteration._start_timeout_timer = MagicMock()
     iteration.add_iteration = MagicMock()
@@ -189,7 +189,7 @@ def test_ledger_based_iteration_reset_parameters():
     interceptor_manager = InterceptorManager()
     interceptor_manager.start_new = MagicMock()
 
-    iteration = LedgerIteration(5, 10, interceptor_manager=interceptor_manager)
+    iteration = LedgerBasedIteration(5, 10, interceptor_manager=interceptor_manager)
     iteration.add_iteration = MagicMock()
     iteration._start_timeout_timer = MagicMock()
     with patch(
@@ -226,7 +226,7 @@ def test_ledger_based_iteration_reset_parameters_no_timer():
     interceptor_manager = InterceptorManager()
     interceptor_manager.start_new = MagicMock()
 
-    iteration = LedgerIteration(5, 10, interceptor_manager=interceptor_manager)
+    iteration = LedgerBasedIteration(5, 10, interceptor_manager=interceptor_manager)
     iteration.add_iteration = MagicMock()
     iteration._start_timeout_timer = MagicMock()
     with patch(
@@ -297,7 +297,9 @@ def test_none_iteration_add():
 
 def test_timeout_timer():
     """Test whether the timer is initialized correctly."""
-    iteration = LedgerIteration(5, 10, timeout_seconds=15, interceptor_manager=Mock())
+    iteration = LedgerBasedIteration(
+        5, 10, timeout_seconds=15, interceptor_manager=Mock()
+    )
     iteration.add_iteration = MagicMock()
 
     with patch(
@@ -313,7 +315,9 @@ def test_timeout_timer():
 
 def test_timeout_timer_cancel():
     """Test whether a timer is cancelled before starting a new one."""
-    iteration = LedgerIteration(5, 10, timeout_seconds=15, interceptor_manager=Mock())
+    iteration = LedgerBasedIteration(
+        5, 10, timeout_seconds=15, interceptor_manager=Mock()
+    )
     iteration.add_iteration = MagicMock()
     prev_timer = MagicMock()
     iteration._timer = prev_timer
@@ -329,7 +333,9 @@ def test_timeout_timer_cancel():
 
 def test_timeout_reached():
     """Test the behavior when a timeout is reached."""
-    iteration = LedgerIteration(5, 10, timeout_seconds=15, interceptor_manager=Mock())
+    iteration = LedgerBasedIteration(
+        5, 10, timeout_seconds=15, interceptor_manager=Mock()
+    )
     iteration.add_iteration = MagicMock()
 
     iteration._timeout_reached()
@@ -339,7 +345,7 @@ def test_timeout_reached():
 
 def test_init_time_iter():
     """Test initialization of TimeIteration class."""
-    iteration = TimeIteration(max_iterations=1, timeout_seconds=15)
+    iteration = TimeBasedIteration(max_iterations=1, timeout_seconds=15)
     assert iteration._max_iterations == 1
     assert iteration.cur_iteration == 0
     assert iteration._timeout_seconds == 15
@@ -363,7 +369,7 @@ def test_none_iter():
 
 def test_log_results():
     """Test whether a method to log the results is called."""
-    iteration = LedgerIteration(5, 10, interceptor_manager=Mock())
+    iteration = LedgerBasedIteration(5, 10, interceptor_manager=Mock())
     iteration.cur_iteration += 1
     iteration.set_validator_nodes(validator_nodes)
     iteration.set_log_dir("test_dir")
@@ -378,7 +384,7 @@ def test_log_results():
 
 def test_log_results_error():
     """Test whether a method to log the results is called."""
-    iteration = LedgerIteration(5, 10, interceptor_manager=Mock())
+    iteration = LedgerBasedIteration(5, 10, interceptor_manager=Mock())
     iteration.cur_iteration += 1
     iteration.set_validator_nodes(validator_nodes)
 

@@ -19,7 +19,7 @@ from xrpl_controller.core import (
 )
 from xrpl_controller.iteration_type import (
     IterationType,
-    LedgerIteration,
+    LedgerBasedIteration,
 )
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.strategies.encoder_decoder import (
@@ -72,7 +72,7 @@ class Strategy(ABC):
 
         self.start_datetime: datetime = datetime.now()
         self.iteration_type = (
-            LedgerIteration(10, 5) if iteration_type is None else iteration_type
+            LedgerBasedIteration(10, 5) if iteration_type is None else iteration_type
         )
         self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
 
