@@ -34,7 +34,6 @@ def test_serve_integration():
     # Create a client to send requests to the server
     channel = grpc.insecure_channel("localhost:50051")
     stub = packet_pb2_grpc.PacketServiceStub(channel)
-    print(" still good")
     packet = packet_pb2.Packet(data=b"test", from_port=10, to_port=20)
     response = stub.send_packet(packet)
     assert response.data == b"test"
