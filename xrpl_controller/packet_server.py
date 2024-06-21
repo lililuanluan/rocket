@@ -9,7 +9,7 @@ from typeguard import TypeCheckError, check_type  # type: ignore
 
 from protos import packet_pb2, packet_pb2_grpc
 from protos.packet_pb2 import Packet
-from xrpl_controller.core import format_datetime, validate_ports
+from xrpl_controller.core import format_datetime, validate_ports_or_ids
 from xrpl_controller.csv_logger import ActionLogger
 from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.strategies.strategy import Strategy
@@ -34,8 +34,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         """
         self.strategy = strategy
         self.logger: ActionLogger | None = None
+        self._start_datetime: datetime.datetime = datetime.datetime.now()
 
-    def send_packet(self, request, context):
+    def send_packet(
+        self, request, context: grpc.ServicerContext
+    ) -> packet_pb2.PacketAck:
         """
         This function receives the packet from the interceptor and passes it to the controller.
 
@@ -52,7 +55,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ValueError: if request.from_port == request.to_port or if any is negative
         """
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
-        validate_ports(request.from_port, request.to_port)
+        validate_ports_or_ids(request.from_port, request.to_port)
 
         (new_data, action) = self.strategy.process_packet(request)
 
@@ -83,7 +86,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         return packet_pb2.PacketAck(data=new_data, action=action)
 
     def send_validator_node_info(
-        self, request_iterator, context
+        self,
+        request_iterator: List[packet_pb2.ValidatorNodeInfo],
+        context: grpc.ServicerContext,
     ) -> packet_pb2.ValidatorNodeInfoAck:
         """
         This function receives the validator node info from the interceptor and passes it to the controller.
@@ -132,17 +137,20 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ):  # Close the previous logger if there was a previous one
                 self.logger.close()
             self.logger = ActionLogger(
-                format_datetime(datetime.datetime.now()), validator_node_list
+                format_datetime(self._start_datetime),
+                validator_node_list,
+                f"action-{self.strategy.iteration_type.cur_iteration}",
+                f"node_info-{self.strategy.iteration_type.cur_iteration}",
             )
 
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
 
     def get_config(self, request, context):
         """
-        This function sends the config specified in `network-config.toml`, to the interceptor.
+        This function sends the network config specified in the self.strategy, to the interceptor.
 
         Args:
-            request: The request containing the Config.
+            request: The request containing the network config.
             context: gRPC context.
 
         Returns:
@@ -202,18 +210,7 @@ def serve(strategy: Strategy):
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
-    server.wait_for_termination()
+    strategy.iteration_type.set_server(server)
+    strategy.iteration_type.add_iteration()
 
-
-def serve_for_automated_tests(strategy: Strategy) -> grpc.Server:
-    """
-    This function starts the server and listens for incoming packets.
-
-    Returns: None
-
-    """
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
-    server.add_insecure_port("[::]:50051")
-    server.start()
     return server

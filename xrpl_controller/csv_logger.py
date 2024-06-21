@@ -80,14 +80,19 @@ class ActionLogger(CSVLogger):
         self,
         sub_directory: str,
         validator_node_list: list[ValidatorNode],
-        filename: str | None = None,
+        action_log_filename: str | None = None,
+        node_log_filename: str | None = None,
     ):
         """Initialize ActionLogger class."""
-        final_filename = filename if filename is not None else "action_log.csv"
+        final_filename = (
+            action_log_filename if action_log_filename is not None else "action_log.csv"
+        )
         directory = f"action_logs/{sub_directory}"
 
         node_logger = CSVLogger(
-            filename="node_info",
+            filename=node_log_filename
+            if node_log_filename is not None
+            else "node_info",
             columns=["validator_node_info"],
             directory=directory,
         )
