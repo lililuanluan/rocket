@@ -50,7 +50,7 @@ class MutationExample(Strategy):
         # Sign the message
         signed_message = PacketEncoderDecoder.sign_message(
             message,
-            self.public_to_private_key_map[message.nodePubKey.hex()],
+            self.network.public_to_private_key_map[message.nodePubKey.hex()],
         )
 
         return PacketEncoderDecoder.encode_message(signed_message, message_type_no), 0

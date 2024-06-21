@@ -95,7 +95,7 @@ def test_get_config():
     # TODO: Maybe add assertion on ports so this test fails. This test initializes a config with default values so
     #  all ports set to zero which is guaranteed to fail in the interceptor.
     mock_strategy = Mock()
-    mock_strategy.network_config = {
+    mock_strategy.network.network_config = {
         "base_port_peer": 0,
         "base_port_ws": 0,
         "base_port_ws_admin": 0,
@@ -106,19 +106,25 @@ def test_get_config():
     packet_server = PacketService(mock_strategy)
     request = packet_pb2.Config()
     response = packet_server.get_config(request, None)
-    assert response.base_port_peer == mock_strategy.network_config.get("base_port_peer")
-    assert response.base_port_ws == mock_strategy.network_config.get("base_port_ws")
-    assert response.base_port_ws_admin == mock_strategy.network_config.get(
+    assert response.base_port_peer == mock_strategy.network.network_config.get(
+        "base_port_peer"
+    )
+    assert response.base_port_ws == mock_strategy.network.network_config.get(
+        "base_port_ws"
+    )
+    assert response.base_port_ws_admin == mock_strategy.network.network_config.get(
         "base_port_ws_admin"
     )
-    assert response.base_port_rpc == mock_strategy.network_config.get("base_port_rpc")
-    assert response.number_of_nodes == mock_strategy.network_config.get(
+    assert response.base_port_rpc == mock_strategy.network.network_config.get(
+        "base_port_rpc"
+    )
+    assert response.number_of_nodes == mock_strategy.network.network_config.get(
         "number_of_nodes"
     )
     assert list(response.partitions) == list(
         map(
             lambda x: packet_pb2.Partition(nodes=x),
-            mock_strategy.network_config.get("network_partition"),
+            mock_strategy.network.network_config.get("network_partition"),
         )
     )
 
@@ -126,7 +132,7 @@ def test_get_config():
 def test_get_config_raises_type_error():
     """Test the get_config method of PacketService."""
     mock_strategy = Mock()
-    mock_strategy.network_config = {
+    mock_strategy.network.network_config = {
         "base_port_peer": 0,
         "base_port_ws": 0,
         "base_port_ws_admin": 0,
@@ -142,7 +148,7 @@ def test_get_config_raises_type_error():
     ):
         packet_server.get_config(request, None)
 
-    mock_strategy.network_config = {
+    mock_strategy.network.network_config = {
         "base_port_peer": 0,
         "base_port_ws": 0,
         "base_port_ws_admin": 0,
@@ -162,7 +168,7 @@ def test_get_config_raises_type_error():
 def test_get_config_raises_value_error():
     """Test the get_config method of PacketService."""
     mock_strategy = Mock()
-    mock_strategy.network_config = {
+    mock_strategy.network.network_config = {
         "base_port_peer": 0,
         "base_port_ws_admin": 0,
         "base_port_rpc": 0,
@@ -176,7 +182,7 @@ def test_get_config_raises_value_error():
     ):
         packet_server.get_config(request, None)
 
-    mock_strategy.network_config = {
+    mock_strategy.network.network_config = {
         "base_port_peer": 0,
         "base_port_ws": 0,
         "base_port_ws_admin": 0,

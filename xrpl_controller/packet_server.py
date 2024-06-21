@@ -160,7 +160,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ValueError: if an expected field is not set in the config file.
             TypeError: if the type of a field does not match the expected type.
         """
-        config = self.strategy.network_config
+        config = self.strategy.network.network_config
 
         config_values_types = {
             "network_partition": List[List[int]],
