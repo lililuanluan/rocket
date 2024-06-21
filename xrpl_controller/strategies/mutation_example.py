@@ -21,6 +21,9 @@ class MutationExample(Strategy):
         """Initialize the MutationExample class."""
         super().__init__(iteration_type=iteration_type)
 
+    def setup(self):
+        """Setup method for MutationExample."""
+
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """
         Handler method for receiving a packet.
@@ -47,7 +50,7 @@ class MutationExample(Strategy):
         # Sign the message
         signed_message = PacketEncoderDecoder.sign_message(
             message,
-            self.public_to_private_key_map[message.nodePubKey.hex()],
+            self.network.public_to_private_key_map[message.nodePubKey.hex()],
         )
 
         return PacketEncoderDecoder.encode_message(signed_message, message_type_no), 0

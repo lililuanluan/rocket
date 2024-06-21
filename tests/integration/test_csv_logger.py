@@ -4,6 +4,8 @@ import csv
 import os
 import unittest
 
+import pytest
+
 from xrpl_controller.csv_logger import CSVLogger
 
 test_dir = "TEST_LOG_DIR"
@@ -80,11 +82,9 @@ class TestCSVLogger(unittest.TestCase):
         """Test failure on wrong column amount."""
         cols = ["col1"]
         logger = CSVLogger("TEST_INVALID", cols, test_dir)
-        try:
+
+        with pytest.raises(ValueError):
             logger.log_row(["1", "2"])
-            raise AssertionError()
-        except ValueError:
-            pass
 
         logger.close()
         path = "./logs/" + test_dir + "/TEST_INVALID.csv"
