@@ -86,3 +86,16 @@ def test_check_liveness_consistency(logger_mock):
     logger_mock().log_result.assert_has_calls(
         calls=[call(0, "hash123", 3, 4, 1234), call(1, "hash123", 3, 4, 1234)]
     )
+
+
+@patch("xrpl_controller.consensus_property.ResultLogger")
+def test_check_liveness_consistency_err(logger_mock):
+    """Test whether the logger is called correctly."""
+    ConsistencyLivenessProperty._fetch_ledger = MagicMock(return_value=None)
+
+    ConsistencyLivenessProperty.check([node_0, node_1], "test", 0, 4)
+
+    ConsistencyLivenessProperty._fetch_ledger.assert_has_calls(
+        calls=[call(30), call(31)]
+    )
+    logger_mock().log_result.assert_not_called()
