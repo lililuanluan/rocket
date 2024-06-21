@@ -20,6 +20,7 @@ from xrpl_controller.iteration_type import (
     LedgerBasedIteration,
 )
 from xrpl_controller.message_action import MessageAction
+from xrpl_controller.message_action_stack import MessageActionStack
 from xrpl_controller.strategies.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
@@ -61,7 +62,7 @@ class Strategy(ABC):
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical
         self.auto_parse_subsets = auto_parse_subsets
-        self.prev_message_action_matrix: list[list[MessageAction]] = []
+        self.prev_message_action_matrix: list[list[MessageActionStack]] = []
         self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.keep_action_log = keep_action_log
         self.network_config, self.params = self.init_configs(
@@ -241,9 +242,9 @@ class Strategy(ABC):
             )
 
         validate_ports_or_ids(peer_from_id, peer_to_id)
-        self.prev_message_action_matrix[peer_from_id][peer_to_id].set_initial_message(
-            initial_message
-        ).set_final_message(final_message).set_action(action)
+        self.prev_message_action_matrix[peer_from_id][peer_to_id].add(
+            MessageAction(initial_message, final_message, action)
+        )
 
     def check_previous_message(
         self, peer_from_id: int, peer_to_id: int, message: bytes
@@ -272,11 +273,9 @@ class Strategy(ABC):
                 "auto_parse_subsets or auto_parse_identical must be set to True when calling check_previous_message."
             )
 
-        message_action = self.prev_message_action_matrix[peer_from_id][peer_to_id]
-        return message == message_action.initial_message, (
-            message_action.final_message,
-            message_action.action,
-        )
+        return self.prev_message_action_matrix[peer_from_id][
+            peer_to_id
+        ].check_previous_messages(message)
 
     def check_subset_entry(
         self, peer_from_id: int, peer_to_id: int, message: bytes, subset: list[int]
@@ -389,7 +388,10 @@ class Strategy(ABC):
 
         if self.auto_parse_identical:
             self.prev_message_action_matrix = [
-                [MessageAction() for _ in range(self.node_amount)]
+                [
+                    MessageActionStack(self.node_amount + 1)
+                    for _ in range(self.node_amount)
+                ]
                 for _ in range(self.node_amount)
             ]
 

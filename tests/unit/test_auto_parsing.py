@@ -40,7 +40,7 @@ def test_auto_parsing(mock_init_configs):
     strategy.set_message_action(0, 1, b"test", b"mutated", 42)
     res = strategy.check_previous_message(0, 1, b"notest")
     assert not res[0]
-    assert res[1] == (b"mutated", 42)
+    assert res[1] == (b"", -1)
 
     res2 = strategy.check_previous_message(0, 1, b"test")
     assert res2[0]
@@ -87,14 +87,14 @@ def test_auto_parsing_subsets():
     assert strategy.subsets_dict == {0: [], 1: [], 2: [0, 1]}
     strategy.set_message_action(2, 0, b"testtest", b"mutated", 42)
     assert strategy.check_subsets(2, 1, b"testtest") == (True, (b"mutated", 42))
-    assert strategy.check_subsets(2, 1, b"testtest2") == (False, (b"mutated", 42))
+    assert strategy.check_subsets(2, 1, b"testtest2") == (False, (b"", -1))
 
     # Entry is now wrapped in another list
     strategy.set_subsets_dict({2: [[0, 1]]})
     assert strategy.subsets_dict == {0: [], 1: [], 2: [[0, 1]]}
     strategy.set_message_action(2, 0, b"testtest2", b"mutated", 42)
     assert strategy.check_subsets(2, 1, b"testtest2") == (True, (b"mutated", 42))
-    assert strategy.check_subsets(2, 1, b"testtestF") == (False, (b"mutated", 42))
+    assert strategy.check_subsets(2, 1, b"testtestF") == (False, (b"", -1))
 
     packet_ack = packet_pb2.Packet(data=b"testtest", from_port=10, to_port=11)
     strategy.process_packet(packet_ack)
