@@ -142,9 +142,9 @@ To create custom partitions, the functions `self.connect(peer_id_1, peer_id_2)` 
 The application will automatically drop messages sent between 2 nodes if communication is closed between those nodes.
 
 #### Identical Subsequent Messages
-Every `Strategy` instance keeps track of previously sent messages sent between every node pair. The stored information includes the last sent message in bytes, the processed version of the last message, and the action that was taken on that message.
-The method `self.check_previous_message(peer_from_id: int, peer_to_id: int, message:bytes)` can be used which returns a tuple which also indicates whether the previous message was identical to the current message.
-In case that the previous message was indeed identical, then the second entry of the tuple contains the processed version of the previous message and the action that was taken.
+Every `Strategy` instance keeps track of previously sent messages sent between every node pair. In a network of `n` nodes, the stored information includes the `n+1` last sent message in bytes, the processed version of those last messages, and the actions that were taken on the messages.
+The method `self.check_previous_message(peer_from_id: int, peer_to_id: int, message:bytes)` can be used which returns a tuple which also indicates whether one of the previous messages were identical to the current message.
+In case that one of the previous messages were indeed identical, then the second entry of the tuple contains the processed version of the previous message and the action that was taken.
 This functionality can be used to quickly perform the same actions on identical messages, which can be done automatically by setting the `auto_parse_identical` field in `Strategy`.
 When `auto_parse_identical` is set to `False`, then the strategy will not keep track of any previously sent messages.
 This functionality is useful when XRPL validator nodes resend messages to their peers, this functionality makes sure that those resends are automatically parsed so that the same actions will be taken on such messages.
