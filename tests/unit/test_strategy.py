@@ -4,7 +4,7 @@ from encodings.utf_8 import encode
 from unittest.mock import MagicMock, Mock, patch
 
 from protos import packet_pb2
-from tests.variable_store import configs, node_0, node_1, node_2, status_msg
+from tests.default_test_variables import configs, node_0, node_1, node_2, status_msg
 from xrpl_controller.core import MAX_U32
 from xrpl_controller.iteration_type import LedgerBasedIteration
 from xrpl_controller.strategies import RandomFuzzer
