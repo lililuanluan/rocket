@@ -11,6 +11,7 @@ from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import (
     MAX_U32,
     flatten,
+    format_datetime,
     parse_to_2d_list_of_ints,
     parse_to_list_of_ints,
     validate_ports_or_ids,
@@ -73,6 +74,7 @@ class Strategy(ABC):
         self.iteration_type = (
             LedgerIteration(10, 5) if iteration_type is None else iteration_type
         )
+        self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
 
     @staticmethod
     def init_configs(network_config_path: str, strategy_config_path: str):

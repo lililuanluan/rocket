@@ -9,12 +9,14 @@ from grpc import Server
 from loguru import logger
 
 from protos import ripple_pb2
-from xrpl_controller.consensus_property import ConsistencyProperty
+from xrpl_controller.consensus_property import ConsistencyLivenessProperty
 from xrpl_controller.interceptor_manager import InterceptorManager
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
 class IterationType(ABC):
+    """Base class for defining iteration types."""
+
     def __init__(
         self,
         max_iterations: int,
@@ -33,8 +35,10 @@ class IterationType(ABC):
             InterceptorManager() if interceptor_manager is None else interceptor_manager
         )
         self._validator_nodes: List[ValidatorNode] | None = None
+        self._log_dir: str | None = None
 
     def _stop_all(self):
+        """Stop the interceptor along with the docker containers."""
         logger.info(
             f"Finished iteration {self.cur_iteration}, stopping test process..."
         )
@@ -51,6 +55,7 @@ class IterationType(ABC):
         self._timer.start()
 
     def _timeout_reached(self):
+        """Function that is called when the timeout is reached."""
         logger.info("Timeout reached.")
         self.add_iteration()
 
@@ -59,17 +64,15 @@ class IterationType(ABC):
         self._server = server
 
     def set_validator_nodes(self, validator_nodes: List[ValidatorNode]):
+        """Setter for the validator_nodes list, since it needs to be updated every iteration."""
         self._validator_nodes = validator_nodes
 
     def set_log_dir(self, log_dir: str):
+        """Setter for the log_dir variable, since it needs to be updated every iteration."""
         self._log_dir = log_dir
 
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
-        if self.cur_iteration > 0 and self._validator_nodes:
-            # Called when an iteration is finished, and it is not the first one (meaning there are results)
-            ConsistencyProperty.check(self._validator_nodes)
-
         if self.cur_iteration < self._max_iterations:
             if self._timer:
                 self._timer.cancel()
@@ -83,10 +86,13 @@ class IterationType(ABC):
 
     @abstractmethod
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
+        """Abstract method that keeps track of TMStatusChange messages."""
         raise NotImplementedError()
 
 
 class LedgerIteration(IterationType):
+    """Ledger Based iteration type, able to keep track of validated ledgers."""
+
     def __init__(
         self,
         max_iterations: int,
@@ -118,6 +124,18 @@ class LedgerIteration(IterationType):
         self.ledger_seq = 1
         self.prev_validation_time = datetime.now()
         self.validation_time = timedelta()
+
+    def add_iteration(self):
+        """Add iteration when finished, checks the consistency and liveness properties."""
+        if self.cur_iteration > 0 and self._validator_nodes:
+            # Called when an iteration is finished, and it is not the first one (meaning there are results)
+            ConsistencyLivenessProperty.check(
+                self._validator_nodes,
+                self._log_dir,
+                self.cur_iteration,
+                self._max_ledger_seq,
+            )
+        super().add_iteration()
 
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
         """
@@ -154,11 +172,14 @@ class LedgerIteration(IterationType):
 
 
 class TimeIteration(IterationType):
+    """Time Based iteration type, keeps track of time elapsed since network start."""
+
     def __init__(self, max_iterations: int, timeout_seconds: int = 30):
         """Init the TimeIteration class with a specified timeout in seconds."""
         super().__init__(max_iterations=max_iterations, timeout_seconds=timeout_seconds)
 
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
+        """Override the method since time based iteration does not need to keep track of ledgers."""
         pass
 
 
@@ -170,6 +191,7 @@ class NoneIteration(IterationType):
         super().__init__(max_iterations=1, timeout_seconds=timeout_seconds)
 
     def _timeout_reached(self):
+        """Overrides _timeout_reached to stop the whole process after timeout completes."""
         logger.info("Final time reached.")
         self._stop_all()
 
@@ -178,4 +200,5 @@ class NoneIteration(IterationType):
         self._start_timeout_timer()
 
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
+        """Override the method since none iteration does not need to keep track of ledgers."""
         pass
