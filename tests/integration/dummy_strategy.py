@@ -24,7 +24,3 @@ class DummyStrategy(Strategy):
     def handle_packet(self, packet):
         """Return the packet as is."""
         return packet.data, 0
-
-    def setup(self):
-        """Ignore setup method."""
-        pass

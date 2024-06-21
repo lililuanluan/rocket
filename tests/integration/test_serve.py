@@ -20,7 +20,7 @@ def run_server(mock_configs):
     mock_configs.assert_called_once()
     mock_iteration_type = Mock()
     strategy.iteration_type = mock_iteration_type
-    strategy.network.port_to_id_dict = {10: 0, 20: 1}
+    strategy.port_to_id_dict = {10: 0, 20: 1}
     server = serve(strategy)
     mock_iteration_type.set_server.assert_called_once()
     mock_iteration_type.add_iteration.assert_called_once()
@@ -34,9 +34,9 @@ def test_serve_integration():
     # Create a client to send requests to the server
     channel = grpc.insecure_channel("localhost:50051")
     stub = packet_pb2_grpc.PacketServiceStub(channel)
-    packet = packet_pb2.Packet(data=b"testtest", from_port=10, to_port=20)
+    packet = packet_pb2.Packet(data=b"test", from_port=10, to_port=20)
     response = stub.send_packet(packet)
-    assert response.data == b"testtest"
+    assert response.data == b"test"
     assert response.action == 0
 
     server.stop(grace=1)
