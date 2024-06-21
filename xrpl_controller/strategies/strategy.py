@@ -20,7 +20,7 @@ from xrpl_controller.iteration_type import (
     LedgerBasedIteration,
 )
 from xrpl_controller.message_action import MessageAction
-from xrpl_controller.message_action_stack import MessageActionStack
+from xrpl_controller.message_action_buffer import MessageActionBuffer
 from xrpl_controller.strategies.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
@@ -62,7 +62,7 @@ class Strategy(ABC):
         self.communication_matrix: list[list[bool]] = []
         self.auto_parse_identical = auto_parse_identical
         self.auto_parse_subsets = auto_parse_subsets
-        self.prev_message_action_matrix: list[list[MessageActionStack]] = []
+        self.prev_message_action_matrix: list[list[MessageActionBuffer]] = []
         self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.keep_action_log = keep_action_log
         self.network_config, self.params = self.init_configs(
@@ -264,6 +264,7 @@ class Strategy(ABC):
 
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
+            Returns an empty byte as message and -1 as action when no match was found.
 
         Raises:
             ValueError: if auto_parse_identical and auto_parse_subsets are False.
@@ -275,7 +276,7 @@ class Strategy(ABC):
 
         return self.prev_message_action_matrix[peer_from_id][
             peer_to_id
-        ].check_previous_messages(message)
+        ].match_previous_messages(message)
 
     def check_subset_entry(
         self, peer_from_id: int, peer_to_id: int, message: bytes, subset: list[int]
@@ -389,7 +390,7 @@ class Strategy(ABC):
         if self.auto_parse_identical:
             self.prev_message_action_matrix = [
                 [
-                    MessageActionStack(self.node_amount + 1)
+                    MessageActionBuffer(self.node_amount + 1)
                     for _ in range(self.node_amount)
                 ]
                 for _ in range(self.node_amount)

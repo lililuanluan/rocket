@@ -3,7 +3,7 @@
 from xrpl_controller.message_action import MessageAction
 
 
-class MessageActionStack:
+class MessageActionBuffer:
     """MessageAction list which holds the last `capacity` amount of given entries."""
 
     def __init__(self, capacity):
@@ -21,7 +21,7 @@ class MessageActionStack:
 
         self.messages.append(message)
 
-    def check_previous_messages(self, message: bytes) -> tuple[bool, tuple[bytes, int]]:
+    def match_previous_messages(self, message: bytes) -> tuple[bool, tuple[bytes, int]]:
         """
         Parse a message automatically to a final state with an action if it was matching to the previous message.
 
@@ -30,6 +30,7 @@ class MessageActionStack:
 
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
+            Returns empty byte as message and -1 as action when no match was found.
         """
         for message_action in self.messages:
             if message == message_action.initial_message:
