@@ -23,7 +23,7 @@ class MessageActionBuffer:
 
     def match_previous_messages(self, message: bytes) -> tuple[bool, tuple[bytes, int]]:
         """
-        Parse a message automatically to a final state with an action if it was matching to the previous message.
+        Parse a message automatically to a final state with an action if it was matching to the one of the previous `capacity` amount of messages.
 
         Args:
             message: The message to be checked for parsing
