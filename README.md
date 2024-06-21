@@ -121,6 +121,7 @@ The log contains the timestamp when the action was taken on a packet, the action
 
 ### Constructing New Strategies
 To add a new strategy, you need to create a new file in the `strategies` folder with a class that inherits from the `Strategy` class. This class should implement the `handle_packet` method.
+Every strategy should additionally implement the `setup` method to initialize starting values or to perform certain operations at start-up. When this method is not to be used, simply call `pass` in the method body, or leave the body empty.
 
 #### Configuration Files
 Users are able to create new configuration files for strategies, these are categorized under network configurations and strategy parameter configurations.

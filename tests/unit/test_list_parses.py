@@ -1,5 +1,7 @@
 """Tests for list parser functions in core.py."""
 
+import pytest
+
 from xrpl_controller.core import parse_to_2d_list_of_ints, parse_to_list_of_ints
 
 
@@ -11,14 +13,8 @@ def test_parsers():
     parse_to_list_of_ints(lst_1d)  # Should not raise exception
     parse_to_2d_list_of_ints(lst_2d)  # Should not raise exception
 
-    try:
+    with pytest.raises(ValueError):
         parse_to_list_of_ints(lst_2d)  # Should raise exception
-        raise AssertionError
-    except ValueError:
-        pass
 
-    try:
+    with pytest.raises(ValueError):
         parse_to_2d_list_of_ints(lst_1d)  # Should raise exception
-        raise AssertionError
-    except ValueError:
-        pass
