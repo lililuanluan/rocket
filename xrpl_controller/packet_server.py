@@ -147,6 +147,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         Returns:
             Config: The Config object.
+
+        Raises:
+            ValueError: if an expected field is not set in the config file.
+            TypeError: if the type of a field does not match the expected type.
         """
         config = self.strategy.network_config
 
