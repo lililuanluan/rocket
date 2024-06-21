@@ -1,5 +1,7 @@
 """Tests for network partitions functionality."""
 
+import pytest
+
 from tests.unit.test_strategy import node_0, node_1, node_2
 from xrpl_controller.network_manager import NetworkManager
 
@@ -29,23 +31,14 @@ def test_custom_connections():
     assert network.check_communication(0, 1)
     assert network.check_communication(1, 0)
 
-    try:
+    with pytest.raises(ValueError):
         network.check_communication(0, 0)
-        raise AssertionError()
-    except ValueError:
-        pass
 
-    try:
+    with pytest.raises(ValueError):
         network.disconnect_nodes(0, 0)
-        raise AssertionError()
-    except ValueError:
-        pass
 
-    try:
+    with pytest.raises(ValueError):
         network.connect_nodes(1, 1)
-        raise AssertionError()
-    except ValueError:
-        pass
 
 
 def test_reset_communications():
@@ -103,22 +96,16 @@ def test_partition_network_invalid_partitions():
     """Test whether invalid partitions get rejected. Missing port."""
     network = NetworkManager()
     network.update_network([node_0, node_1, node_2])
-    try:
+    with pytest.raises(ValueError):
         network.partition_network([[0], [2]])
-        raise AssertionError()
-    except ValueError:
-        pass
 
 
 def test_partition_network_invalid_amount():
     """Test whether invalid partitions get rejected. Duplicated port."""
     network = NetworkManager()
     network.update_network([node_0, node_1, node_2])
-    try:
+    with pytest.raises(ValueError):
         network.partition_network([[0], [1, 1, 2]])
-        raise AssertionError()
-    except ValueError:
-        pass
 
 
 def test_apply_partition():
@@ -133,10 +120,7 @@ def test_apply_partition():
     assert not network.check_communication(1, 2)
 
     # Test whether exception gets raised when ports are equal
-    try:
-        assert not network.check_communication(2, 2)
-        raise AssertionError()
-    except ValueError:
-        pass
+    with pytest.raises(ValueError):
+        network.check_communication(2, 2)
 
     assert network.check_communication(1, 0)

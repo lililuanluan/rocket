@@ -23,7 +23,6 @@ class MutationExample(Strategy):
 
     def setup(self):
         """Setup method for MutationExample."""
-        pass
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
         """
