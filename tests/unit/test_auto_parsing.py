@@ -5,27 +5,9 @@ from unittest.mock import Mock, patch
 import pytest
 
 from protos import packet_pb2
-from tests.default_test_variables import node_0, node_1, node_2, node_3
+from tests.default_test_variables import configs, node_0, node_1, node_2, node_3
 from xrpl_controller.network_manager import NetworkManager
 from xrpl_controller.strategies import RandomFuzzer
-
-configs = (
-    {
-        "base_port_peer": 60000,
-        "base_port_ws": 61000,
-        "base_port_ws_admin": 62000,
-        "base_port_rpc": 63000,
-        "number_of_nodes": 3,
-        "network_partition": [[0, 1, 2]],
-    },
-    {
-        "delay_probability": 0.6,
-        "drop_probability": 0,
-        "min_delay_ms": 10,
-        "max_delay_ms": 150,
-        "seed": 10,
-    },
-)
 
 
 def test_auto_parsing():

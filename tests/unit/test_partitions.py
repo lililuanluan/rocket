@@ -3,25 +3,6 @@
 from tests.unit.test_strategy import node_0, node_1, node_2
 from xrpl_controller.network_manager import NetworkManager
 
-configs = (
-    {
-        "base_port_peer": 60000,
-        "base_port_ws": 61000,
-        "base_port_ws_admin": 62000,
-        "base_port_rpc": 63000,
-        "number_of_nodes": 3,
-        "network_partition": [[0, 1, 2]],
-    },
-    {
-        "delay_probability": 0.6,
-        "drop_probability": 0,
-        "min_delay_ms": 10,
-        "max_delay_ms": 150,
-        "seed": 10,
-    },
-)
-# Ports of the imported nodes are 10, 11, 12 respectively
-
 
 def test_custom_connections():
     """Test whether Strategy attributes get updated correctly when connect_nodes is called."""

@@ -5,21 +5,9 @@ import datetime
 import os
 import unittest
 
+from tests.default_test_variables import node_0
 from xrpl_controller.core import MAX_U32, format_datetime
 from xrpl_controller.csv_logger import ActionLogger, action_log_columns
-from xrpl_controller.validator_node_info import (
-    SocketAddress,
-    ValidatorKeyData,
-    ValidatorNode,
-)
-
-node = ValidatorNode(
-    SocketAddress("test_peer", 10),
-    SocketAddress("test-ws-pub", 20),
-    SocketAddress("test-ws-adm", 30),
-    SocketAddress("test-rpc", 40),
-    ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
-)
 
 
 class TestActionLogger(unittest.TestCase):
@@ -43,7 +31,7 @@ class TestActionLogger(unittest.TestCase):
         path_actions = f"{base_dir}/{timestamp_str}/action_log.csv"
         path_nodes = f"{base_dir}/{timestamp_str}/node_info.csv"
 
-        logger = ActionLogger("TEST_ACTION_LOG_DIR/" + timestamp_str, [node])
+        logger = ActionLogger("TEST_ACTION_LOG_DIR/" + timestamp_str, [node_0])
         logger.log_action(0, 0, 1, "propose", "orig data", "new data")
         logger.log_action(3, 0, 1, "validata", "orig data", "new data")
         logger.log_action(MAX_U32, 0, 1, "close", "orig data", "new data")
@@ -80,7 +68,7 @@ class TestActionLogger(unittest.TestCase):
         with open(path_nodes) as file:
             csv_reader = csv.reader(file)
             assert next(csv_reader) == ["validator_node_info"]
-            assert next(csv_reader) == [node.__str__()]
+            assert next(csv_reader) == [node_0.__str__()]
 
         os.remove(path_actions)
         os.remove(path_nodes)
