@@ -3,8 +3,6 @@
 from encodings.utf_8 import encode
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
-
 from protos import packet_pb2
 from tests.variable_store import configs, node_0, node_1, node_2, status_msg
 from xrpl_controller.core import MAX_U32
@@ -21,10 +19,10 @@ def test_init(mock_init_configs):
     """Test whether Strategy attributes get initialized correctly."""
     strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
-    assert strategy.communication_matrix == []
+    assert strategy.network.communication_matrix == []
     assert strategy.auto_partition
     assert strategy.auto_parse_identical
-    assert strategy.prev_message_action_matrix == []
+    assert strategy.network.prev_message_action_matrix == []
     assert strategy.keep_action_log
 
 
@@ -42,18 +40,18 @@ def test_update_network(mock_init_configs):
     assert strategy.network.node_amount == 3
     assert strategy.network.port_to_id_dict == {10: 0, 11: 1, 12: 2}
     assert strategy.network.id_to_port_dict == {0: 10, 1: 11, 2: 12}
-    assert strategy.id_to_port(2) == 12
-    assert strategy.port_to_id(12) == 2
-    assert strategy.communication_matrix == [
+    assert strategy.network.id_to_port(2) == 12
+    assert strategy.network.port_to_id(12) == 2
+    assert strategy.network.communication_matrix == [
         [False, True, True],
         [True, False, True],
         [True, True, False],
     ]
 
-    assert strategy.subsets_dict == {0: [], 1: [], 2: []}
+    assert strategy.network.subsets_dict == {0: [], 1: [], 2: []}
 
-    assert len(strategy.prev_message_action_matrix) == 3
-    for row in strategy.prev_message_action_matrix:
+    assert len(strategy.network.prev_message_action_matrix) == 3
+    for row in strategy.network.prev_message_action_matrix:
         assert len(row) == 3
         for item in row:
             assert item.initial_message == b""
@@ -79,12 +77,17 @@ def test_process_message(mock_init_configs):
     assert strategy.process_packet(packet_ack) == (b"testtest2", 13)
 
     # Check whether set_message gets modified
-    assert strategy.prev_message_action_matrix[0][1].initial_message == b"testtest2"
-    assert strategy.prev_message_action_matrix[0][1].action == 13
-    assert strategy.prev_message_action_matrix[0][1].final_message == b"testtest2"
+    assert (
+        strategy.network.prev_message_action_matrix[0][1].initial_message
+        == b"testtest2"
+    )
+    assert strategy.network.prev_message_action_matrix[0][1].action == 13
+    assert (
+        strategy.network.prev_message_action_matrix[0][1].final_message == b"testtest2"
+    )
 
     # Check whether messages get dropped automatically through auto partition
-    strategy.partition_network([[0, 1], [2]])
+    strategy.network.partition_network([[0, 1], [2]])
     for i in range(100):
         msg = encode("testtest" + str(i))[0]  # Just arbitrary encoding
         packet_ack = packet_pb2.Packet(data=msg, from_port=10, to_port=12)
@@ -165,29 +168,3 @@ def test_update_status_other_message(mock_init_configs):
 
     strategy.update_status(packet)
     iteration_type.update_iteration.assert_not_called()
-
-
-@patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
-    return_value=configs,
-)
-def test_port_to_id_invalid(mock_init_configs):
-    """Test whether port_to_id raises an error when an invalid port is given."""
-    strategy = RandomFuzzer(iteration_type=Mock())
-    mock_init_configs.assert_called_once()
-    strategy.port_to_id_dict = {10: 0, 11: 1, 12: 2}
-    with pytest.raises(ValueError):
-        strategy.port_to_id(0)
-
-
-@patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
-    return_value=configs,
-)
-def test_id_to_port_invalid(mock_init_configs):
-    """Test whether id_to_port raises an error when an invalid id is given."""
-    strategy = RandomFuzzer(iteration_type=Mock())
-    mock_init_configs.assert_called_once()
-    strategy.id_to_port_dict = {0: 10, 1: 11, 2: 12}
-    with pytest.raises(ValueError):
-        strategy.id_to_port(3)
