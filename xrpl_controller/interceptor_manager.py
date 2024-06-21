@@ -59,6 +59,7 @@ class InterceptorManager:
 
     def stop(self):
         """Stops the xrpl-packet-interceptor subprocess."""
+        # Check if this is the end of an active run
         if self.process:
             logger.info("Stopping interceptor")
             self.process.terminate()

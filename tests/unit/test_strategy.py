@@ -113,15 +113,15 @@ def test_update_status(mock_init_configs):
     iteration_type = LedgerBasedIteration(
         max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
     )
-    iteration_type.start_timeout_timer = MagicMock()
-    iteration_type.update_iteration = MagicMock()
+    iteration_type._start_timeout_timer = MagicMock()
+    iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()
 
     strategy.update_status(packet)
-    iteration_type.update_iteration.assert_called_once()
+    iteration_type.on_status_change.assert_called_once()
 
 
 @patch(
@@ -136,15 +136,15 @@ def test_update_status_exception(mock_init_configs):
     iteration_type = LedgerBasedIteration(
         max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
     )
-    iteration_type.start_timeout_timer = MagicMock()
-    iteration_type.update_iteration = MagicMock()
+    iteration_type._start_timeout_timer = MagicMock()
+    iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()
 
     strategy.update_status(packet)
-    iteration_type.update_iteration.assert_not_called()
+    iteration_type.on_status_change.assert_not_called()
 
 
 @patch(
@@ -159,12 +159,12 @@ def test_update_status_other_message(mock_init_configs):
     iteration_type = LedgerBasedIteration(
         max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
     )
-    iteration_type.start_timeout_timer = MagicMock()
-    iteration_type.update_iteration = MagicMock()
+    iteration_type._start_timeout_timer = MagicMock()
+    iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()
 
     strategy.update_status(packet)
-    iteration_type.update_iteration.assert_not_called()
+    iteration_type.on_status_change.assert_not_called()

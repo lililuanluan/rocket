@@ -18,6 +18,14 @@ action_log_columns = [
     "possibly_mutated_data",
 ]
 
+result_log_columns = [
+    "node_id",
+    "ledger_hash",
+    "ledger_index",
+    "goal_ledger_index",
+    "close_time",
+]
+
 
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
@@ -142,5 +150,59 @@ class ActionLogger(CSVLogger):
                 message_type,
                 original_data,
                 possibly_mutated_data,
+            ]
+        )
+
+
+class ResultLogger(CSVLogger):
+    """CSVLogger child class which is dedicated to handle the logging of results."""
+
+    def __init__(
+        self,
+        sub_directory: str,
+        result_log_filename: str | None = None,
+    ):
+        """
+        Initialize ResultLogger class.
+
+        Args:
+            sub_directory: The subdirectory in `action_logs` to store the results in
+            result_log_filename: The name of the log file to store the results in
+        """
+        final_filename = (
+            result_log_filename if result_log_filename is not None else "result_log.csv"
+        )
+        directory = f"action_logs/{sub_directory}"
+        super().__init__(
+            filename=final_filename,
+            columns=result_log_columns,
+            directory=directory,
+        )
+
+    def log_result(
+        self,
+        node_id: int,
+        ledger_hash: str,
+        ledger_index: int,
+        goal_ledger_index: int,
+        close_time: int,
+    ):
+        """
+        Log a result row to the CSV file.
+
+        Args:
+            node_id: ID of the node to be logged.
+            ledger_hash: Ledger hash of the node to be logged.
+            ledger_index: Ledger index of the node to be logged.
+            goal_ledger_index: Goal ledger index of the iteration.
+            close_time: Close time of the node to be logged.
+        """
+        self.writer.writerow(
+            [
+                node_id,
+                ledger_hash,
+                ledger_index,
+                goal_ledger_index,
+                close_time,
             ]
         )
