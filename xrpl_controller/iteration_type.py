@@ -74,18 +74,16 @@ class IterationType(ABC):
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
         if self.cur_iteration < self._max_iterations:
-            if self._timer:
-                self._timer.cancel()
             self._start_timeout_timer()
 
             self._interceptor_manager.restart()
-            logger.info(f"Starting iteration {self.cur_iteration}")
             self.cur_iteration += 1
+            logger.info(f"Starting iteration {self.cur_iteration}")
         else:
             self._stop_all()
 
     @abstractmethod
-    def on_status_change(self, status: ripple_pb2.TMStatusChange):
+    def on_status_change(self, status: ripple_pb2.TMStatusChange):  # pragma: no cover
         """Abstract method that keeps track of TMStatusChange messages."""
         raise NotImplementedError()
 
@@ -125,7 +123,7 @@ class LedgerIteration(IterationType):
         self.prev_validation_time = datetime.now()
         self.validation_time = timedelta()
 
-    def add_iteration(self):
+    def log_consensus_property_results(self):
         """Add iteration when finished, checks the consistency and liveness properties."""
         if self.cur_iteration > 0 and self._validator_nodes:
             # Called when an iteration is finished, and it is not the first one (meaning there are results)
@@ -135,7 +133,6 @@ class LedgerIteration(IterationType):
                 self.cur_iteration,
                 self._max_ledger_seq,
             )
-        super().add_iteration()
 
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
         """
@@ -155,8 +152,6 @@ class LedgerIteration(IterationType):
                 len(self._validator_nodes) * (len(self._validator_nodes) - 1)
             ):
                 # New ledger validated, we can reset timeout
-                if self._timer:
-                    self._timer.cancel()
                 self._start_timeout_timer()
 
                 self.validation_time = datetime.now() - self.prev_validation_time
@@ -167,6 +162,7 @@ class LedgerIteration(IterationType):
                     f"Ledger {self.ledger_seq} validated, time elapsed: {self.validation_time}"
                 )
         if self.ledger_seq == self._max_ledger_seq:
+            self.log_consensus_property_results()
             self.add_iteration()
             self._reset_values()
 
@@ -184,7 +180,12 @@ class TimeIteration(IterationType):
 
 
 class NoneIteration(IterationType):
-    """Iteration Type used for local testing purposes."""
+    """
+    Iteration Type used for local testing purposes.
+
+    It starts the controller as its separate entity without iterations,
+    so you could run the interceptor separately as well.
+    """
 
     def __init__(self, timeout_seconds: int = 300):
         """Init the NoneIteration class with a specified timeout in seconds."""
@@ -198,6 +199,7 @@ class NoneIteration(IterationType):
     def add_iteration(self):
         """Override the add_iteration function to prevent the interceptor subprocess from starting."""
         self._start_timeout_timer()
+        self.cur_iteration += 1
 
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
         """Override the method since none iteration does not need to keep track of ledgers."""

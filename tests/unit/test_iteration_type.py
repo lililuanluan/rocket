@@ -6,11 +6,13 @@ from unittest.mock import MagicMock, Mock, call, patch
 
 import grpc
 
+from protos import ripple_pb2
 from protos.ripple_pb2 import TMStatusChange
 from xrpl_controller.interceptor_manager import InterceptorManager
 from xrpl_controller.iteration_type import (
     LedgerIteration,
     NoneIteration,
+    TimeIteration,
 )
 from xrpl_controller.validator_node_info import (
     SocketAddress,
@@ -287,6 +289,86 @@ def test_none_iteration_add():
 
     iteration.add_iteration()
     assert iteration._max_iterations == 1
-    assert iteration.cur_iteration == 0
+    assert iteration.cur_iteration == 1
     iteration._start_timeout_timer.assert_called_once()
     assert isinstance(iteration._interceptor_manager, InterceptorManager)
+
+
+def test_timeout_timer():
+    """Test whether the timer is initialized correctly."""
+    iteration = LedgerIteration(5, 10, timeout_seconds=15, interceptor_manager=Mock())
+    iteration.add_iteration = MagicMock()
+
+    with patch(
+        "xrpl_controller.iteration_type.threading.Timer", return_value=Mock()
+    ) as mock_timer:
+        iteration._start_timeout_timer()
+
+        mock_timer.return_value.cancel.assert_not_called()
+        mock_timer.assert_called_with(15, iteration._timeout_reached)
+
+    # iteration.add_iteration.assert_called_once()
+
+
+def test_timeout_timer_cancel():
+    """Test whether a timer is cancelled before starting a new one."""
+    iteration = LedgerIteration(5, 10, timeout_seconds=15, interceptor_manager=Mock())
+    iteration.add_iteration = MagicMock()
+    prev_timer = MagicMock()
+    iteration._timer = prev_timer
+
+    with patch(
+        "xrpl_controller.iteration_type.threading.Timer", return_value=Mock()
+    ) as mock_timer:
+        iteration._start_timeout_timer()
+        mock_timer.assert_called_with(15, iteration._timeout_reached)
+
+    prev_timer.cancel.assert_called_once()
+
+
+def test_timeout_reached():
+    """Test the behavior when a timeout is reached."""
+    iteration = LedgerIteration(5, 10, timeout_seconds=15, interceptor_manager=Mock())
+    iteration.add_iteration = MagicMock()
+
+    iteration._timeout_reached()
+
+    iteration.add_iteration.assert_called_once()
+
+
+def test_init_time_iter():
+    """Test initialization of TimeIteration class."""
+    iteration = TimeIteration(max_iterations=1, timeout_seconds=15)
+    assert iteration._max_iterations == 1
+    assert iteration.cur_iteration == 0
+    assert iteration._timeout_seconds == 15
+
+    iteration.on_status_change(ripple_pb2.TMStatusChange())
+
+
+def test_none_iter():
+    """Test initialization of NoneIteration class."""
+    iteration = NoneIteration(60)
+    assert iteration._max_iterations == 1
+    assert iteration.cur_iteration == 0
+    assert iteration._timeout_seconds == 60
+
+    iteration._stop_all = MagicMock()
+    iteration._timeout_reached()
+
+    iteration._stop_all.assert_called_once()
+    iteration.on_status_change(ripple_pb2.TMStatusChange())
+
+
+def test_log_results():
+    """Test whether a method to log the results is called."""
+    iteration = LedgerIteration(5, 10, interceptor_manager=Mock())
+    iteration.cur_iteration += 1
+    iteration.set_validator_nodes(validator_nodes)
+
+    with patch(
+        "xrpl_controller.iteration_type.ConsistencyLivenessProperty",
+        return_value=Mock(),
+    ) as mock_prop:
+        iteration.log_consensus_property_results()
+        mock_prop.check.assert_called_once()
