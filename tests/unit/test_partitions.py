@@ -2,6 +2,8 @@
 
 from unittest.mock import Mock, patch
 
+import pytest
+
 from tests.unit.test_strategy import node_0, node_1, node_2
 from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
 
@@ -55,23 +57,14 @@ def test_custom_connections(mock_init_configs):
     assert strategy.check_communication(0, 1)
     assert strategy.check_communication(1, 0)
 
-    try:
+    with pytest.raises(ValueError):
         strategy.check_communication(0, 0)
-        raise AssertionError()
-    except ValueError:
-        pass
 
-    try:
+    with pytest.raises(ValueError):
         strategy.disconnect_nodes(0, 0)
-        raise AssertionError()
-    except ValueError:
-        pass
 
-    try:
+    with pytest.raises(ValueError):
         strategy.connect_nodes(1, 1)
-        raise AssertionError()
-    except ValueError:
-        pass
 
 
 @patch(
@@ -154,11 +147,8 @@ def test_partition_network_invalid_partitions(mock_init_configs):
     strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
     strategy.update_network([node_0, node_1, node_2])
-    try:
+    with pytest.raises(ValueError):
         strategy.partition_network([[0], [2]])
-        raise AssertionError()
-    except ValueError:
-        pass
 
 
 @patch(
@@ -170,11 +160,8 @@ def test_partition_network_invalid_amount(mock_init_configs):
     strategy = RandomFuzzer(iteration_type=Mock())
     mock_init_configs.assert_called_once()
     strategy.update_network([node_0, node_1, node_2])
-    try:
+    with pytest.raises(ValueError):
         strategy.partition_network([[0], [1, 1, 2]])
-        raise AssertionError()
-    except ValueError:
-        pass
 
 
 @patch(
@@ -194,10 +181,7 @@ def test_apply_partition(mock_init_configs):
     assert not strategy.check_communication(1, 2)
 
     # Test whether exception gets raised when ports are equal
-    try:
-        assert not strategy.check_communication(2, 2)
-        raise AssertionError()
-    except ValueError:
-        pass
+    with pytest.raises(ValueError):
+        strategy.check_communication(2, 2)
 
     assert strategy.check_communication(1, 0)
