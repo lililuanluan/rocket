@@ -121,3 +121,71 @@ def test_get_config():
             mock_strategy.network_config.get("network_partition"),
         )
     )
+
+
+def test_get_config_raises_type_error():
+    """Test the get_config method of PacketService."""
+    mock_strategy = Mock()
+    mock_strategy.network_config = {
+        "base_port_peer": 0,
+        "base_port_ws": 0,
+        "base_port_ws_admin": 0,
+        "base_port_rpc": 0,
+        "number_of_nodes": "4",
+        "network_partition": [[0, 1]],
+    }
+    packet_server = PacketService(mock_strategy)
+    request = packet_pb2.Config()
+    with pytest.raises(
+        TypeError,
+        match="The type for number_of_nodes in network config should be int but was str",
+    ):
+        packet_server.get_config(request, None)
+
+    mock_strategy.network_config = {
+        "base_port_peer": 0,
+        "base_port_ws": 0,
+        "base_port_ws_admin": 0,
+        "base_port_rpc": 0,
+        "number_of_nodes": 0,
+        "network_partition": [0],
+    }
+    packet_server = PacketService(mock_strategy)
+    request = packet_pb2.Config()
+    with pytest.raises(
+        TypeError,
+        match="The type for network_partition in network config should be List but was list",
+    ):
+        packet_server.get_config(request, None)
+
+
+def test_get_config_raises_value_error():
+    """Test the get_config method of PacketService."""
+    mock_strategy = Mock()
+    mock_strategy.network_config = {
+        "base_port_peer": 0,
+        "base_port_ws_admin": 0,
+        "base_port_rpc": 0,
+        "number_of_nodes": "4",
+        "network_partition": [[0, 1]],
+    }
+    packet_server = PacketService(mock_strategy)
+    request = packet_pb2.Config()
+    with pytest.raises(
+        ValueError, match="base_port_ws was not specified in the network config"
+    ):
+        packet_server.get_config(request, None)
+
+    mock_strategy.network_config = {
+        "base_port_peer": 0,
+        "base_port_ws": 0,
+        "base_port_ws_admin": 0,
+        "base_port_rpc": 0,
+        "number_of_nodes": 0,
+    }
+    packet_server = PacketService(mock_strategy)
+    request = packet_pb2.Config()
+    with pytest.raises(
+        ValueError, match="network_partition was not specified in the network config"
+    ):
+        packet_server.get_config(request, None)

@@ -180,7 +180,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             except TypeCheckError as err:
                 raise (
                     TypeError(
-                        f"The type for {name} in network config should be {name_type} but was {type(value)}"
+                        f"The type for {name} in network config should be {name_type.__name__} but was {type(value).__name__}"
                     )
                 ) from err
 
