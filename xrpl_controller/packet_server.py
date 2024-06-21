@@ -154,7 +154,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Returns:
             Config: The Config object.
         """
-        config = self.strategy.network_config
+        config = self.strategy.network.network_config
         partition_list: List[List[int]] = config.get("network_partition")
         partitions = map(lambda x: packet_pb2.Partition(nodes=x), partition_list)
 
