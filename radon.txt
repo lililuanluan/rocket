@@ -1,0 +1,358 @@
+Cyclomatic complexity:
+xrpl_controller\consensus_property.py
+    M 70:4 ConsistencyLivenessProperty.check - C
+    C 42:0 ConsistencyLivenessProperty - B
+    M 46:4 ConsistencyLivenessProperty._fetch_ledger - A
+    C 14:0 ConsensusProperty - A
+    M 19:4 ConsensusProperty.check - A
+xrpl_controller\core.py
+    F 82:0 parse_to_2d_list_of_ints - B
+    F 25:0 validate_ports_or_ids - A
+    F 60:0 parse_to_list_of_ints - A
+    F 12:0 flatten - A
+    F 104:0 format_filename - A
+    F 119:0 yaml_to_dict - A
+    F 45:0 format_datetime - A
+xrpl_controller\csv_logger.py
+    C 84:0 ActionLogger - A
+    M 87:4 ActionLogger.__init__ - A
+    C 30:0 CSVLogger - A
+    M 33:4 CSVLogger.__init__ - A
+    C 157:0 ResultLogger - A
+    M 54:4 CSVLogger.log_row - A
+    M 70:4 CSVLogger.log_rows - A
+    M 116:4 ActionLogger.log_action - A
+    M 160:4 ResultLogger.__init__ - A
+    M 46:4 CSVLogger.close - A
+    M 50:4 CSVLogger.flush - A
+    M 182:4 ResultLogger.log_result - A
+xrpl_controller\interceptor_manager.py
+    C 12:0 InterceptorManager - A
+    M 20:4 InterceptorManager.__check_output - A
+    M 29:4 InterceptorManager.cleanup_docker_containers - A
+    M 60:4 InterceptorManager.stop - A
+    M 36:4 InterceptorManager.start_new - A
+    M 15:4 InterceptorManager.__init__ - A
+    M 55:4 InterceptorManager.restart - A
+xrpl_controller\iteration_type.py
+    M 141:4 LedgerBasedIteration.on_status_change - B
+    M 74:4 IterationType.log_consensus_property_results - A
+    C 106:0 LedgerBasedIteration - A
+    C 17:0 IterationType - A
+    M 20:4 IterationType.__init__ - A
+    M 40:4 IterationType._stop_all - A
+    M 50:4 IterationType._start_timeout_timer - A
+    M 87:4 IterationType.add_iteration - A
+    M 129:4 LedgerBasedIteration._reset_values - A
+    C 173:0 TimeBasedIteration - A
+    C 185:0 NoneIteration - A
+    M 57:4 IterationType._timeout_reached - A
+    M 62:4 IterationType.set_server - A
+    M 66:4 IterationType.set_validator_nodes - A
+    M 70:4 IterationType.set_log_dir - A
+    M 101:4 IterationType.on_status_change - A
+    M 109:4 LedgerBasedIteration.__init__ - A
+    M 176:4 TimeBasedIteration.__init__ - A
+    M 180:4 TimeBasedIteration.on_status_change - A
+    M 193:4 NoneIteration.__init__ - A
+    M 197:4 NoneIteration._timeout_reached - A
+    M 202:4 NoneIteration.add_iteration - A
+    M 207:4 NoneIteration.on_status_change - A
+xrpl_controller\message_action.py
+    C 4:0 MessageAction - A
+    M 7:4 MessageAction.__init__ - A
+    M 22:4 MessageAction.set_initial_message - A
+    M 35:4 MessageAction.set_final_message - A
+    M 48:4 MessageAction.set_action - A
+xrpl_controller\network_manager.py
+    M 44:4 NetworkManager.update_network - C
+    M 85:4 NetworkManager.partition_network - B
+    M 311:4 NetworkManager.check_subsets - B
+    C 17:0 NetworkManager - A
+    M 194:4 NetworkManager.set_subsets_dict - A
+    M 278:4 NetworkManager.check_subset_entry - A
+    M 214:4 NetworkManager.set_message_action - A
+    M 245:4 NetworkManager.check_previous_message - A
+    M 165:4 NetworkManager.reset_communications - A
+    M 175:4 NetworkManager.set_subsets_dict_entry - A
+    M 359:4 NetworkManager.port_to_id - A
+    M 377:4 NetworkManager.id_to_port - A
+    M 26:4 NetworkManager.__init__ - A
+    M 118:4 NetworkManager.connect_nodes - A
+    M 133:4 NetworkManager.disconnect_nodes - A
+    M 148:4 NetworkManager.check_communication - A
+xrpl_controller\packet_server.py
+    C 25:0 PacketService - A
+    M 87:4 PacketService.send_validator_node_info - A
+    M 147:4 PacketService.get_config - A
+    M 38:4 PacketService.send_packet - A
+    F 201:0 serve - A
+    M 28:4 PacketService.__init__ - A
+xrpl_controller\validator_node_info.py
+    C 6:0 ValidatorKeyData - A
+    C 43:0 SocketAddress - A
+    C 71:0 ValidatorNode - A
+    M 9:4 ValidatorKeyData.__init__ - A
+    M 34:4 ValidatorKeyData.__str__ - A
+    M 46:4 SocketAddress.__init__ - A
+    M 57:4 SocketAddress.as_url - A
+    M 67:4 SocketAddress.__str__ - A
+    M 74:4 ValidatorNode.__init__ - A
+    M 99:4 ValidatorNode.__str__ - A
+xrpl_controller\strategies\encoder_decoder.py
+    C 20:0 PacketEncoderDecoder - A
+    M 98:4 PacketEncoderDecoder.decode_packet - A
+    C 13:0 DecodingNotSupportedError - A
+    M 55:4 PacketEncoderDecoder.sign_message - A
+    M 70:4 PacketEncoderDecoder._ - A
+    M 125:4 PacketEncoderDecoder.encode_message - A
+xrpl_controller\strategies\mutation_example.py
+    C 17:0 MutationExample - A
+    M 27:4 MutationExample.handle_packet - A
+    M 20:4 MutationExample.__init__ - A
+    M 24:4 MutationExample.setup - A
+xrpl_controller\strategies\random_fuzzer.py
+    M 15:4 RandomFuzzer.__init__ - B
+    C 12:0 RandomFuzzer - A
+    M 76:4 RandomFuzzer.handle_packet - A
+    M 73:4 RandomFuzzer.setup - A
+xrpl_controller\strategies\strategy.py
+    M 104:4 Strategy.process_packet - B
+    C 24:0 Strategy - A
+    M 95:4 Strategy.update_status - A
+    M 27:4 Strategy.__init__ - A
+    M 68:4 Strategy.init_configs - A
+    M 83:4 Strategy.update_network - A
+    M 163:4 Strategy.setup - A
+    M 172:4 Strategy.handle_packet - A
+
+113 blocks (classes, functions, methods) analyzed.
+Average complexity: A (2.504424778761062)
+
+Maintainability:
+xrpl_controller\consensus_property.py - A
+xrpl_controller\core.py - A
+xrpl_controller\csv_logger.py - A
+xrpl_controller\interceptor_manager.py - A
+xrpl_controller\iteration_type.py - A
+xrpl_controller\message_action.py - A
+xrpl_controller\network_manager.py - A
+xrpl_controller\packet_server.py - A
+xrpl_controller\validator_node_info.py - A
+xrpl_controller\__init__.py - A
+xrpl_controller\__main__.py - A
+xrpl_controller\strategies\encoder_decoder.py - A
+xrpl_controller\strategies\mutation_example.py - A
+xrpl_controller\strategies\random_fuzzer.py - A
+xrpl_controller\strategies\strategy.py - A
+xrpl_controller\strategies\__init__.py - A
+
+Halstead metric:
+xrpl_controller\consensus_property.py:
+    h1: 4
+    h2: 14
+    N1: 13
+    N2: 21
+    vocabulary: 18
+    length: 34
+    calculated_length: 61.30296890880645
+    volume: 141.7774500490386
+    difficulty: 3.0
+    effort: 425.3323501471158
+    time: 23.6295750081731
+    bugs: 0.0472591500163462
+xrpl_controller\core.py:
+    h1: 9
+    h2: 22
+    N1: 14
+    N2: 26
+    vocabulary: 31
+    length: 40
+    calculated_length: 126.63682062300134
+    volume: 198.16785241547504
+    difficulty: 5.318181818181818
+    effort: 1053.8926696641172
+    time: 58.54959275911762
+    bugs: 0.06605595080515834
+xrpl_controller\csv_logger.py:
+    h1: 5
+    h2: 17
+    N1: 11
+    N2: 22
+    vocabulary: 22
+    length: 33
+    calculated_length: 81.0965087756926
+    volume: 147.1612434150308
+    difficulty: 3.235294117647059
+    effort: 476.1099051662762
+    time: 26.450550287015343
+    bugs: 0.04905374780501027
+xrpl_controller\interceptor_manager.py:
+    h1: 3
+    h2: 6
+    N1: 3
+    N2: 6
+    vocabulary: 9
+    length: 9
+    calculated_length: 20.264662506490406
+    volume: 28.529325012980813
+    difficulty: 1.5
+    effort: 42.793987519471216
+    time: 2.377443751081734
+    bugs: 0.009509775004326938
+xrpl_controller\iteration_type.py:
+    h1: 10
+    h2: 32
+    N1: 22
+    N2: 43
+    vocabulary: 42
+    length: 65
+    calculated_length: 193.21928094887363
+    volume: 350.50063248061946
+    difficulty: 6.71875
+    effort: 2354.926124479162
+    time: 130.8292291377312
+    bugs: 0.11683354416020648
+xrpl_controller\message_action.py:
+    h1: 0
+    h2: 0
+    N1: 0
+    N2: 0
+    vocabulary: 0
+    length: 0
+    calculated_length: 0
+    volume: 0
+    difficulty: 0
+    effort: 0
+    time: 0.0
+    bugs: 0.0
+xrpl_controller\network_manager.py:
+    h1: 9
+    h2: 27
+    N1: 16
+    N2: 27
+    vocabulary: 36
+    length: 43
+    calculated_length: 156.9112875713945
+    volume: 222.30677506201943
+    difficulty: 4.5
+    effort: 1000.3804877790874
+    time: 55.57669376550486
+    bugs: 0.07410225835400648
+xrpl_controller\packet_server.py:
+    h1: 5
+    h2: 10
+    N1: 6
+    N2: 10
+    vocabulary: 15
+    length: 16
+    calculated_length: 44.82892142331043
+    volume: 62.5102495297363
+    difficulty: 2.5
+    effort: 156.27562382434076
+    time: 8.681979101352264
+    bugs: 0.020836749843245433
+xrpl_controller\validator_node_info.py:
+    h1: 0
+    h2: 0
+    N1: 0
+    N2: 0
+    vocabulary: 0
+    length: 0
+    calculated_length: 0
+    volume: 0
+    difficulty: 0
+    effort: 0
+    time: 0.0
+    bugs: 0.0
+xrpl_controller\__init__.py:
+    h1: 0
+    h2: 0
+    N1: 0
+    N2: 0
+    vocabulary: 0
+    length: 0
+    calculated_length: 0
+    volume: 0
+    difficulty: 0
+    effort: 0
+    time: 0.0
+    bugs: 0.0
+xrpl_controller\__main__.py:
+    h1: 1
+    h2: 2
+    N1: 1
+    N2: 2
+    vocabulary: 3
+    length: 3
+    calculated_length: 2.0
+    volume: 4.754887502163469
+    difficulty: 0.5
+    effort: 2.3774437510817346
+    time: 0.1320802083934297
+    bugs: 0.0015849625007211565
+xrpl_controller\strategies\encoder_decoder.py:
+    h1: 3
+    h2: 16
+    N1: 8
+    N2: 16
+    vocabulary: 19
+    length: 24
+    calculated_length: 68.75488750216347
+    volume: 101.95026032264605
+    difficulty: 1.5
+    effort: 152.92539048396907
+    time: 8.49585502688717
+    bugs: 0.03398342010754868
+xrpl_controller\strategies\mutation_example.py:
+    h1: 1
+    h2: 1
+    N1: 1
+    N2: 1
+    vocabulary: 2
+    length: 2
+    calculated_length: 0.0
+    volume: 2.0
+    difficulty: 0.5
+    effort: 1.0
+    time: 0.05555555555555555
+    bugs: 0.0006666666666666666
+xrpl_controller\strategies\random_fuzzer.py:
+    h1: 6
+    h2: 27
+    N1: 16
+    N2: 32
+    vocabulary: 33
+    length: 48
+    calculated_length: 143.89173756274062
+    volume: 242.13091772920575
+    difficulty: 3.5555555555555554
+    effort: 860.9099297038426
+    time: 47.82832942799126
+    bugs: 0.08071030590973526
+xrpl_controller\strategies\strategy.py:
+    h1: 4
+    h2: 11
+    N1: 7
+    N2: 13
+    vocabulary: 15
+    length: 20
+    calculated_length: 46.053747805010275
+    volume: 78.13781191217038
+    difficulty: 2.3636363636363638
+    effort: 184.68937361058454
+    time: 10.260520756143585
+    bugs: 0.026045937304056792
+xrpl_controller\strategies\__init__.py:
+    h1: 0
+    h2: 0
+    N1: 0
+    N2: 0
+    vocabulary: 0
+    length: 0
+    calculated_length: 0
+    volume: 0
+    difficulty: 0
+    effort: 0
+    time: 0.0
+    bugs: 0.0
