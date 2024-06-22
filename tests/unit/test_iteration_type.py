@@ -418,16 +418,3 @@ def test_reset_values_time_iter():
     assert iteration._max_iterations == 1
     assert iteration.cur_iteration == 0
     assert iteration._timeout_seconds == 30
-
-
-def test_reset_values_time_iter():
-    """Test whether calling _reset_values does not do anything when not implemented."""
-    iteration = TimeBasedIteration(1)
-    assert iteration._max_iterations == 1
-    assert iteration.cur_iteration == 0
-    assert iteration._timeout_seconds == 30
-
-    iteration._reset_values()
-    assert iteration._max_iterations == 1
-    assert iteration.cur_iteration == 0
-    assert iteration._timeout_seconds == 30
