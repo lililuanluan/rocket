@@ -7,7 +7,12 @@ class MessageActionBuffer:
     """MessageAction list which holds the last `capacity` amount of given entries."""
 
     def __init__(self, capacity: int):
-        """Initialize fields."""
+        """
+        Initialize fields.
+
+        Args:
+            capacity (int): Maximum number of entries to store in buffer.
+        """
         if capacity < 1:
             raise ValueError("Capacity must be greater than 0")
 
@@ -15,7 +20,12 @@ class MessageActionBuffer:
         self.messages: list[MessageAction] = []
 
     def add(self, message: MessageAction):
-        """Add a new MessageAction entry."""
+        """
+        Add a new MessageAction entry.
+
+        Args:
+            message (MessageAction): MessageAction to add.
+        """
         while len(self.messages) >= self.capacity:
             self.messages.pop(0)
 
@@ -30,7 +40,7 @@ class MessageActionBuffer:
 
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
-            Returns empty byte as message and -1 as action when no match was found.
+            Returns original message and 0 as action when no match was found.
         """
         for message_action in self.messages:
             if message == message_action.initial_message:
