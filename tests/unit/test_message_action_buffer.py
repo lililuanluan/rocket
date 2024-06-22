@@ -42,4 +42,4 @@ def test_check_message():
 
     assert stack.match_previous_messages(b"2") == (True, (b"m2", 11))
 
-    assert stack.match_previous_messages(b"3") == (False, (b"", -1))
+    assert stack.match_previous_messages(b"3") == (False, (b"3", 0))

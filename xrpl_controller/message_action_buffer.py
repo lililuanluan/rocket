@@ -6,13 +6,13 @@ from xrpl_controller.message_action import MessageAction
 class MessageActionBuffer:
     """MessageAction list which holds the last `capacity` amount of given entries."""
 
-    def __init__(self, capacity):
+    def __init__(self, capacity: int):
         """Initialize fields."""
         if capacity < 1:
             raise ValueError("Capacity must be greater than 0")
 
         self.capacity = capacity
-        self.messages = []
+        self.messages: list[MessageAction] = []
 
     def add(self, message: MessageAction):
         """Add a new MessageAction entry."""
@@ -36,4 +36,4 @@ class MessageActionBuffer:
             if message == message_action.initial_message:
                 return True, (message_action.final_message, message_action.action)
 
-        return False, (b"", -1)
+        return False, (message, 0)

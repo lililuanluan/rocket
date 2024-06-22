@@ -18,7 +18,7 @@ def test_auto_parsing():
     network.set_message_action(0, 1, b"test", b"mutated", 42)
     res = network.check_previous_message(0, 1, b"notest")
     assert not res[0]
-    assert res[1] == (b"", -1)
+    assert res[1] == (b"notest", 0)
 
     res2 = network.check_previous_message(0, 1, b"test")
     assert res2[0]
@@ -26,7 +26,7 @@ def test_auto_parsing():
 
     res3 = network.check_previous_message(0, 2, b"test")
     assert not res3[0]
-    assert res3[1] == (b"", -1)
+    assert res3[1] == (b"test", 0)
 
     with pytest.raises(ValueError):
         network.set_message_action(0, 0, b"test", b"mutated", 42)
@@ -72,7 +72,7 @@ def test_auto_parsing_subsets(mock_init_configs):
     assert strategy.network.check_subsets(2, 1, b"testtest") == (True, (b"mutated", 42))
     assert strategy.network.check_subsets(2, 1, b"testtest2") == (
         False,
-        (b"", -1),
+        (b"testtest2", 0),
     )
 
     # Entry is now wrapped in another list
@@ -85,7 +85,7 @@ def test_auto_parsing_subsets(mock_init_configs):
     )
     assert strategy.network.check_subsets(2, 1, b"testtestF") == (
         False,
-        (b"", -1),
+        (b"testtestF", 0),
     )
 
     packet_ack = packet_pb2.Packet(data=b"testtest", from_port=10, to_port=11)
