@@ -89,18 +89,26 @@ class IterationType(ABC):
         self.log_consensus_property_results(max_ledger_seq)
 
         if self.cur_iteration < self._max_iterations:
+            self._interceptor_manager.stop()
+            self._reset_values()
+            self._interceptor_manager.start_new()
+
             self._start_timeout_timer()
 
-            self._interceptor_manager.restart()
             self.cur_iteration += 1
             logger.info(f"Starting iteration {self.cur_iteration}")
         else:
             self._stop_all()
 
     @abstractmethod
+    def _reset_values(self):  # pragma: no cover
+        """Abstract method which is used to reset state variables between iterations."""
+        pass
+
+    @abstractmethod
     def on_status_change(self, status: ripple_pb2.TMStatusChange):  # pragma: no cover
         """Abstract method that keeps track of TMStatusChange messages."""
-        raise NotImplementedError()
+        pass
 
 
 class LedgerBasedIteration(IterationType):
@@ -128,6 +136,7 @@ class LedgerBasedIteration(IterationType):
 
     def _reset_values(self):
         """Reset state variables, called when interceptor is restarted."""
+        logger.debug("Resetting state variables...")
         if self._timer:
             self._timer.cancel()
         self._timer = None
@@ -148,10 +157,10 @@ class LedgerBasedIteration(IterationType):
             status: The TMStatusChange message received on the network.
         """
         # Check whether the event contains an accepted ledger which is exactly 1 sequence no. more than the prev ledger
-        if status.newEvent == 2 and status.ledgerSeq == self.ledger_seq + 1:
+        if status.newEvent == 1 and status.ledgerSeq == self.ledger_seq + 1:
             self.accept_count += 1
 
-            # Only when every single node sends ACCEPTED to all other nodes, we consider the ledger validated.
+            # Only when every single node sends neCLOSING_LEDGER to all other nodes, we consider the ledger validated.
             if self._validator_nodes and self.accept_count == (
                 len(self._validator_nodes) * (len(self._validator_nodes) - 1)
             ):
@@ -167,7 +176,6 @@ class LedgerBasedIteration(IterationType):
                 )
         if self.ledger_seq == self._max_ledger_seq:
             self.add_iteration(self._max_ledger_seq)
-            self._reset_values()
 
 
 class TimeBasedIteration(IterationType):
@@ -176,6 +184,10 @@ class TimeBasedIteration(IterationType):
     def __init__(self, max_iterations: int, timeout_seconds: int = 30):
         """Init the TimeIteration class with a specified timeout in seconds."""
         super().__init__(max_iterations=max_iterations, timeout_seconds=timeout_seconds)
+
+    def _reset_values(self):
+        """Do nothing when called, needed to satisfy abstract base class constraints."""
+        pass
 
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
         """Override the method since time based iteration does not need to keep track of ledgers."""
@@ -203,6 +215,10 @@ class NoneIteration(IterationType):
         """Override the add_iteration function to prevent the interceptor subprocess from starting."""
         self._start_timeout_timer()
         self.cur_iteration += 1
+
+    def _reset_values(self):
+        """Do nothing when called, needed to satisfy abstract base class constraints."""
+        pass
 
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
         """Override the method since none iteration does not need to keep track of ledgers."""

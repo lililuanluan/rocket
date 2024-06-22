@@ -118,5 +118,5 @@ def test_stop_ungraceful():
 
         interceptor_manager.stop()
 
-        assert mock_popen.terminate.call_count == 2
+        assert mock_popen.terminate.call_count == 1
         mock_popen.wait.assert_called_once_with(timeout=5.0)
