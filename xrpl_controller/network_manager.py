@@ -1,8 +1,13 @@
 """Class that holds information about a network of validator nodes."""
-
+import json
 from typing import Any
 
 import base58
+from xrpl.asyncio.transaction.main import _prepare_transaction
+from xrpl.clients import JsonRpcClient
+from xrpl.clients.sync_client import SyncClient
+from xrpl.core.binarycodec import encode_for_signing
+from xrpl.wallet import Wallet
 
 from xrpl_controller.core import (
     flatten,
@@ -12,6 +17,9 @@ from xrpl_controller.core import (
 )
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.validator_node_info import ValidatorNode
+import websocket
+from xrpl.transaction import autofill_and_sign
+from xrpl.models.transactions import Payment
 
 
 class NetworkManager:
@@ -24,9 +32,9 @@ class NetworkManager:
     """
 
     def __init__(
-        self,
-        auto_parse_identical: bool | None = True,
-        auto_parse_subsets: bool | None = True,
+            self,
+            auto_parse_identical: bool | None = True,
+            auto_parse_subsets: bool | None = True,
     ):
         """Initialize fields for this object."""
         self.network_config: dict[str, Any] = {}
@@ -94,9 +102,9 @@ class NetworkManager:
         """
         flattened_partitions = flatten(partitions)
         if (
-            set(flattened_partitions)
-            != set([peer_id for peer_id in range(len(self.validator_node_list))])
-            or len(flattened_partitions) != self.node_amount
+                set(flattened_partitions)
+                != set([peer_id for peer_id in range(len(self.validator_node_list))])
+                or len(flattened_partitions) != self.node_amount
         ):
             raise ValueError(
                 "The given network partition is not valid for the current network."
@@ -173,7 +181,7 @@ class NetworkManager:
         )
 
     def set_subsets_dict_entry(
-        self, peer_id: int, subsets: list[list[int]] | list[int]
+            self, peer_id: int, subsets: list[list[int]] | list[int]
     ):
         """
         Set individual entries in the subsets_dict field.
@@ -212,12 +220,12 @@ class NetworkManager:
             self.set_subsets_dict_entry(peer_id, subsets)
 
     def set_message_action(
-        self,
-        peer_from_id: int,
-        peer_to_id: int,
-        initial_message: bytes,
-        final_message: bytes,
-        action: int,
+            self,
+            peer_from_id: int,
+            peer_to_id: int,
+            initial_message: bytes,
+            final_message: bytes,
+            action: int,
     ):
         """
         Set an entry in the message_action_matrix.
@@ -243,7 +251,7 @@ class NetworkManager:
         ).set_final_message(final_message).set_action(action)
 
     def check_previous_message(
-        self, peer_from_id: int, peer_to_id: int, message: bytes
+            self, peer_from_id: int, peer_to_id: int, message: bytes
     ) -> tuple[bool, tuple[bytes, int]]:
         """
         Parse a message automatically to a final state with an action if it was matching to the previous message.
@@ -276,7 +284,7 @@ class NetworkManager:
         )
 
     def check_subset_entry(
-        self, peer_from_id: int, peer_to_id: int, message: bytes, subset: list[int]
+            self, peer_from_id: int, peer_to_id: int, message: bytes, subset: list[int]
     ) -> tuple[bool, tuple[bytes, int]]:
         """
         Check a subset for identical messages.
@@ -295,9 +303,9 @@ class NetworkManager:
         if peer_to_id in subset:
             for peer_id in subset:
                 if (
-                    result := self.check_previous_message(
-                        peer_from_id, peer_id, message
-                    )
+                        result := self.check_previous_message(
+                            peer_from_id, peer_id, message
+                        )
                 )[0]:
                     # result is a tuple[bool, tuple[bytes, int]]
                     # The second tuple contains the processed message and an action
@@ -309,7 +317,7 @@ class NetworkManager:
         return False, self.check_previous_message(peer_from_id, peer_to_id, message)[1]
 
     def check_subsets(
-        self, peer_from_id: int, peer_to_id: int, message: bytes
+            self, peer_from_id: int, peer_to_id: int, message: bytes
     ) -> tuple[bool, tuple[bytes, int]]:
         """
         Check multiple subsets for identical messages.
@@ -333,14 +341,14 @@ class NetworkManager:
         # self.subsets_dict[peer_from_id] can contain a 1- or 2-dimensional integer list
         # We first check whether the list is 2-dimensional, if so, we handle the entry accordingly
         if len(self.subsets_dict[peer_from_id]) > 0 and isinstance(
-            self.subsets_dict[peer_from_id][0], list
+                self.subsets_dict[peer_from_id][0], list
         ):
             # We have to parse the list to a list[list[int]] type to suppress tox
             for subset in parse_to_2d_list_of_ints(self.subsets_dict[peer_from_id]):
                 if (
-                    result := self.check_subset_entry(
-                        peer_from_id, peer_to_id, message, subset
-                    )
+                        result := self.check_subset_entry(
+                            peer_from_id, peer_to_id, message, subset
+                        )
                 )[0]:
                     return result
             return False, self.check_previous_message(
@@ -391,3 +399,81 @@ class NetworkManager:
             return self.id_to_port_dict[peer_id]
         except KeyError as err:
             raise ValueError(f"peer ID {peer_id} not found in id_to_port_dict") from err
+
+    def submit_transaction(self, peer_id):
+
+        _GENESIS_SEED = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb"
+        _ACCOUNT_ID = "r9wRwVgL2vWVnKhTPdtxva5vdH7FNw1zPs"
+        _GENESIS_ADDRESS = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+
+        w = Wallet.from_seed(seed=_GENESIS_SEED)
+
+        uri = ""
+        for val in self.validator_node_list:
+            if val.peer.port == self.id_to_port(peer_id):
+                uri = f"ws://{val.ws_public.as_url()}/"
+
+        ws = websocket.create_connection(uri)
+
+        data = json.dumps({"id": "Ripple TXN",
+                           "command": "submit",
+                           "tx_json": {
+                               "TransactionType": "Payment",
+                               "Account": _GENESIS_ADDRESS,
+                               "Destination": _ACCOUNT_ID,
+                               "Amount": 1000000000,
+                           },
+                           "secret": _GENESIS_SEED})
+
+
+
+        try:
+            # pub: 0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020
+
+
+            # wallet = Wallet.from_seed(seed=_GENESIS_SEED)
+            # wallet.public_key =
+            #
+            # payment_tx = Payment(
+            #     account=_GENESIS_ADDRESS,
+            #     amount="1000000000",  # Amount in drops (1 XRP = 1,000,000 drops)
+            #     destination=_ACCOUNT_ID,
+            #     sequence=1,
+            #     fee="10"
+            # )
+            #
+            # from xrpl.core.keypairs.main import sign as keypairs_sign
+            #
+            # transaction_json = _prepare_transaction(payment_tx, wallet)
+            # serialized_for_signing = encode_for_signing(transaction_json)
+            # serialized_bytes = bytes.fromhex(serialized_for_signing)
+            # signature = keypairs_sign(serialized_bytes, wallet.private_key)
+            # transaction_json["TxnSignature"] = signature
+            #
+            # tx = Payment.from_xrpl(transaction_json)
+            #
+            # print(tx.blob())
+            #
+            #
+            # data = json.dumps({
+            #         "id": 3,
+            #         "command": "submit",
+            #         "tx_blob": tx.blob()
+            #     })
+
+            try:
+                # Send the JSON data over the WebSocket
+                ws.send(data)
+
+                # Optionally, you can receive a response from the server
+                response = ws.recv()
+                print("Received response:", response)
+
+            finally:
+                # Close the WebSocket connection
+                ws.close()
+
+        except Exception as e:
+            print(e)
+
+

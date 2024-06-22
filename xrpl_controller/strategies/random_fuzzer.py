@@ -69,6 +69,7 @@ class RandomFuzzer(Strategy):
         self.params["send_probability"] = (
             1 - self.params["drop_probability"] - self.params["delay_probability"]
         )
+        self.counter = 0
 
     def setup(self):
         """Setup method for RandomFuzzer."""
@@ -83,6 +84,14 @@ class RandomFuzzer(Strategy):
         Returns:
             Tuple[bytes, int]: the new packet and the random action.
         """
+
+        if self.counter > 170 and self.counter < 400 and self.network.port_to_id(packet.from_port) == 0:
+            print('HAHAHAHHAHHHAAAAA')
+            self.network.submit_transaction(0)
+            self.counter = 500
+        else:
+            self.counter += 1
+
         choice: float = random.random()
         if choice < self.params["send_probability"]:
             return packet.data, 0
@@ -92,3 +101,5 @@ class RandomFuzzer(Strategy):
             return packet.data, random.randint(
                 self.params["min_delay_ms"], self.params["max_delay_ms"]
             )
+
+
