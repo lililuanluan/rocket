@@ -23,7 +23,15 @@ class TimeBasedIteration:
         ledger_timeout: bool = False,
         max_ledger_seq: int = -1,
     ):
-        """Init Iteration Type with an InterceptorManager attached."""
+        """Init Iteration Type with an InterceptorManager attached.
+
+        Args:
+            max_iterations: The maximum number of iterations to run.
+            timeout_seconds: The maximum time in seconds for each iteration.
+            ledger_timeout: Whether the timeout should be reset after each ledger validation, True for LedgerBasedIteration.
+            max_ledger_seq: The maximum ledger sequence to validate (only for LedgerBasedIteration).
+
+        """
         self.cur_iteration = 1
         self._ledger_results = LedgerResult()
 
@@ -109,7 +117,7 @@ class TimeBasedIteration:
         """
         Update the iteration values, called when a TMStatusChange is received.
 
-        Resets the timeout when a new ledger gets validated.
+        When ledger_timout is True also reset the timeout when a new ledger gets validated.
 
         Args:
             status: The TMStatusChange message received on the network.

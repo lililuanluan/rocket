@@ -1,4 +1,4 @@
-"""This module contains a way to check various properties of the consensus algorithm after an iteration completes."""
+"""This module contains a way to log ledger results."""
 
 from typing import Any, List
 
@@ -11,7 +11,7 @@ from xrpl_controller.validator_node_info import ValidatorNode
 
 
 class LedgerResult:
-    """Base class for checking a consensus property."""
+    """Class for logging ledger results."""
 
     def __init__(self):
         """Initialize the LedgerResult object."""
@@ -19,7 +19,7 @@ class LedgerResult:
 
     def new_result_logger(self, log_dir: str, iteration: int):
         """
-        Create a new ResultLogger and close the existing one.
+        Create a new LedgerResult and close the existing one.
 
         Args:
             log_dir: The directory where the action log of the current iteration resides.
@@ -66,7 +66,7 @@ class LedgerResult:
         validator_nodes: List[ValidatorNode],
     ):
         """
-        Method for checking Consistency and Liveness.
+        Method for logging the ledger results.
 
         Args:
             ledger_count: The current ledger count.
