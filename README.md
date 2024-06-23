@@ -12,10 +12,11 @@ git clone git@gitlab.ewi.tudelft.nl:cse2000-software-project/2023-2024/cluster-q
 cd xrpl-controller-module
 ```
 
-### Prepare the Interceptor executable
-Place the xrpl-packet-interceptor executable in the `interceptor/` subfolder, located in the root of this repository.
-
-On Linux/macOS, make sure the executable is called `xrpl-packet-interceptor`. For windows, make sure it is called `xrpl-packet-interceptor.exe`
+In case the `xrpl-packet-inteceptor` subrepository is empty, run the following commands:
+```console
+git submodule init
+git submodule update --remote --merge
+```
 
 ### Configure the application
 The controller module has a few configuration files/steps you need to be aware of. 
