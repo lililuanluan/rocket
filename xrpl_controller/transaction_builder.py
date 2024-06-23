@@ -23,12 +23,21 @@ class TransactionBuilder:
         self.transactions: list[Transaction] = []
         self.tx_amount = 0
 
-    def build_transaction(self, amount: int = 1000000000) -> Transaction:
+    def build_transaction(
+        self,
+        amount: int = 1000000000,
+        sender_account: str | None = None,
+        sender_account_seed: str | None = None,
+        destination_account: str | None = None,
+    ) -> Transaction:
         """
         Build a XRPL Transaction.
 
         Args:
             amount: the amount of XRPL drops to be included in the transaction.
+            sender_account: the account address from which to send XRP in hex.
+            sender_account_seed: seed for account in SECP256K1 format in hex.
+            destination_account: the account id of the destination of the transaction in hex.
 
         Returns:
             Payment: a Payment object, which inherits the Transaction class.
@@ -41,10 +50,17 @@ class TransactionBuilder:
                 f"Amount must be greater than 1_000_000_000, given amount: {amount}"
             )
 
+        if sender_account_seed is not None:
+            self.wallet = Wallet.from_seed(
+                seed=sender_account_seed, algorithm=CryptoAlgorithm.SECP256K1
+            )
+
         payment_tx = Payment(
-            account=self.genesis_address,
+            account=self.genesis_address if sender_account is None else sender_account,
             amount=str(amount),  # Amount in drops (1 XRP = 1,000,000 drops)
-            destination=self.destination_account_id,
+            destination=self.destination_account_id
+            if destination_account is None
+            else destination_account,
         )
         return payment_tx
 
