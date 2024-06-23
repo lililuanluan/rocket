@@ -398,12 +398,13 @@ class NetworkManager:
         except KeyError as err:
             raise ValueError(f"peer ID {peer_id} not found in id_to_port_dict") from err
 
-    def submit_transaction(self, peer_id: int):
+    def submit_transaction(self, peer_id: int, amount: int = 1_000_000_000):
         """
         Submit a transaction to a peer of choice.
 
         Args:
             peer_id: the ID of the peer which will receive the transaction.
+            amount: the amount of XRP drops to be included in the transaction.
 
         Raises:
             ValueError: if peer_id is not in id_to_port_dict
@@ -418,7 +419,7 @@ class NetworkManager:
             if validator.peer.port == self.id_to_port(peer_id):
                 websocket_address = f"ws://{validator.ws_public.as_url()}/"
 
-        tx = self.tx_builder.build_transaction()
+        tx = self.tx_builder.build_transaction(amount=amount)
         with WebsocketClient(websocket_address) as client:
             complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
             response = submit(complete_tx, client)

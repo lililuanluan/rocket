@@ -25,7 +25,7 @@ class TransactionBuilder:
 
     def build_transaction(
         self,
-        amount: int = 1000000000,
+        amount: int = 1_000_000_000,
         sender_account: str | None = None,
         sender_account_seed: str | None = None,
         destination_account: str | None = None,
@@ -45,7 +45,7 @@ class TransactionBuilder:
         Raises:
             ValueError: if amount is smaller than 1_000_000_000
         """
-        if amount < 1000000000:
+        if amount < 1_000_000_000:
             raise ValueError(
                 f"Amount must be greater than 1_000_000_000, given amount: {amount}"
             )
