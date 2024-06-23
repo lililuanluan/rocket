@@ -3,9 +3,9 @@ import json
 from typing import Any
 
 import base58
+from xrpl import CryptoAlgorithm
 from xrpl.asyncio.transaction.main import _prepare_transaction
-from xrpl.clients import JsonRpcClient
-from xrpl.clients.sync_client import SyncClient
+from xrpl.core.keypairs.main import sign
 from xrpl.core.binarycodec import encode_for_signing
 from xrpl.wallet import Wallet
 
@@ -18,7 +18,6 @@ from xrpl_controller.core import (
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.validator_node_info import ValidatorNode
 import websocket
-from xrpl.transaction import autofill_and_sign
 from xrpl.models.transactions import Payment
 
 
@@ -48,6 +47,7 @@ class NetworkManager:
         self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.auto_parse_identical = auto_parse_identical
         self.auto_parse_subsets = auto_parse_subsets
+        self.tx_amount = 0
 
     def update_network(self, validator_node_list: list[ValidatorNode]):
         """Update the network with a list of validator nodes."""
@@ -402,11 +402,10 @@ class NetworkManager:
 
     def submit_transaction(self, peer_id):
 
+        # _GENESIS is the genesis account for every XRPL network.
+        _GENESIS_ADDRESS = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
         _GENESIS_SEED = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb"
         _ACCOUNT_ID = "r9wRwVgL2vWVnKhTPdtxva5vdH7FNw1zPs"
-        _GENESIS_ADDRESS = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
-
-        w = Wallet.from_seed(seed=_GENESIS_SEED)
 
         uri = ""
         for val in self.validator_node_list:
@@ -415,65 +414,41 @@ class NetworkManager:
 
         ws = websocket.create_connection(uri)
 
-        data = json.dumps({"id": "Ripple TXN",
-                           "command": "submit",
-                           "tx_json": {
-                               "TransactionType": "Payment",
-                               "Account": _GENESIS_ADDRESS,
-                               "Destination": _ACCOUNT_ID,
-                               "Amount": 1000000000,
-                           },
-                           "secret": _GENESIS_SEED})
+        # Public and Private keys are inferred from the seed.
+        wallet = Wallet.from_seed(seed=_GENESIS_SEED, algorithm=CryptoAlgorithm.SECP256K1)
 
+        payment_tx = Payment(
+            account=_GENESIS_ADDRESS,
+            amount="1000000000",            # Amount in drops (1 XRP = 1,000,000 drops)
+            destination=_ACCOUNT_ID,
+            sequence=self.tx_amount+1,      # Sequence must be increased by 1 per transaction, starting from 1.
+            fee="10"                        # Fee is required, 10 is practically negligible.
+        )
 
+        # Taken from XRPL's autofill_and_sign method from the xrpl.transactions package
+        # For the implemented method, a client is required, we do not need the client.
+        transaction_json = _prepare_transaction(payment_tx, wallet)
+        serialized_for_signing = encode_for_signing(transaction_json)
+        serialized_bytes = bytes.fromhex(serialized_for_signing)
+        signature = sign(serialized_bytes, wallet.private_key)
+        transaction_json["TxnSignature"] = signature
+        tx = Payment.from_xrpl(transaction_json)
+
+        # The transaction blob contains every information in the transaction, but encoded, including the sign.
+        data = json.dumps({
+                "id": 3,
+                "command": "submit",
+                "tx_blob": tx.blob()
+            })
 
         try:
-            # pub: 0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020
+            ws.send(data)
+            response: str = ws.recv()
+            if "tesSUCCESS" in response:
+                print("indeed")
+                self.tx_amount += 1
+            print("Received response:", response)
 
-
-            # wallet = Wallet.from_seed(seed=_GENESIS_SEED)
-            # wallet.public_key =
-            #
-            # payment_tx = Payment(
-            #     account=_GENESIS_ADDRESS,
-            #     amount="1000000000",  # Amount in drops (1 XRP = 1,000,000 drops)
-            #     destination=_ACCOUNT_ID,
-            #     sequence=1,
-            #     fee="10"
-            # )
-            #
-            # from xrpl.core.keypairs.main import sign as keypairs_sign
-            #
-            # transaction_json = _prepare_transaction(payment_tx, wallet)
-            # serialized_for_signing = encode_for_signing(transaction_json)
-            # serialized_bytes = bytes.fromhex(serialized_for_signing)
-            # signature = keypairs_sign(serialized_bytes, wallet.private_key)
-            # transaction_json["TxnSignature"] = signature
-            #
-            # tx = Payment.from_xrpl(transaction_json)
-            #
-            # print(tx.blob())
-            #
-            #
-            # data = json.dumps({
-            #         "id": 3,
-            #         "command": "submit",
-            #         "tx_blob": tx.blob()
-            #     })
-
-            try:
-                # Send the JSON data over the WebSocket
-                ws.send(data)
-
-                # Optionally, you can receive a response from the server
-                response = ws.recv()
-                print("Received response:", response)
-
-            finally:
-                # Close the WebSocket connection
-                ws.close()
-
-        except Exception as e:
-            print(e)
-
-
+        finally:
+            # Close the WebSocket connection
+            ws.close()
