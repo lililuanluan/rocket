@@ -1,4 +1,5 @@
 """Tests for NetworkStore class."""
+from unittest.mock import patch
 
 import pytest
 
@@ -46,8 +47,6 @@ def test_update_network():
             assert item.final_message == b""
             assert item.action == -1
 
-    assert network.tx_amount == 0
-
 
 def test_port_to_id_invalid():
     """Test whether port_to_id raises an error when an invalid port is given."""
@@ -63,3 +62,11 @@ def test_id_to_port_invalid():
     network.id_to_port_dict = {0: 10, 1: 11, 2: 12}
     with pytest.raises(ValueError):
         network.id_to_port(3)
+
+
+@patch("xrpl_controller.network_manager.websocket.create_connection")
+def test_submit_transaction(ws_client):
+    network = NetworkManager()
+    network.update_network([node_0, node_1])
+    network.submit_transaction(0)
+

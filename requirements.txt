@@ -52,4 +52,3 @@ base58~=2.1.1
 cryptography~=42.0.7
 PyYAML~=6.0.1
 typeguard~=4.3.0
-websocket-client~=1.8.0

@@ -4,13 +4,8 @@ import json
 from typing import Any
 
 import base58
-import websocket
-from xrpl import CryptoAlgorithm
-from xrpl.asyncio.transaction.main import _prepare_transaction
-from xrpl.core.binarycodec import encode_for_signing
-from xrpl.core.keypairs.main import sign
-from xrpl.models.transactions import Payment
-from xrpl.wallet import Wallet
+from xrpl.clients.websocket_client import WebsocketClient
+from xrpl.transaction import autofill_and_sign, submit
 
 from xrpl_controller.core import (
     flatten,
@@ -19,12 +14,8 @@ from xrpl_controller.core import (
     validate_ports_or_ids,
 )
 from xrpl_controller.message_action import MessageAction
+from xrpl_controller.transaction_builder import TransactionBuilder
 from xrpl_controller.validator_node_info import ValidatorNode
-
-# _GENESIS is the genesis account for every XRPL network.
-_GENESIS_ADDRESS = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
-_GENESIS_SEED = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb"
-_ACCOUNT_ID = "r9wRwVgL2vWVnKhTPdtxva5vdH7FNw1zPs"
 
 
 class NetworkManager:
@@ -53,7 +44,7 @@ class NetworkManager:
         self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.auto_parse_identical = auto_parse_identical
         self.auto_parse_subsets = auto_parse_subsets
-        self.tx_amount = 0
+        self.tx_builder = TransactionBuilder()
 
     def update_network(self, validator_node_list: list[ValidatorNode]):
         """Update the network with a list of validator nodes."""
@@ -406,54 +397,19 @@ class NetworkManager:
         except KeyError as err:
             raise ValueError(f"peer ID {peer_id} not found in id_to_port_dict") from err
 
-    def submit_transaction(self, peer_id: int, amount: int = 1000000000):
+    def submit_transaction(self, peer_id: int):
         """
         Submit a transaction to a peer of choice.
 
         Args:
             peer_id: the ID of the peer which will receive the transaction.
-            amount: the amount to be sent in the transaction in XRP drops.
         """
-        if amount < 1000000000:
-            raise ValueError(
-                f"Amount must be greater than 1_000_000_000, given amount: {amount}"
-            )
+        if peer_id not in self.id_to_port_dict.keys():
+            raise ValueError(f"Given peer ID does not exist in the current network: {peer_id}")
 
-        uri = ""
-        for val in self.validator_node_list:
-            if val.peer.port == self.id_to_port(peer_id):
-                uri = f"ws://{val.ws_public.as_url()}/"
-
-        ws = websocket.create_connection(uri)
-
-        # Public and Private keys are inferred from the seed.
-        wallet = Wallet.from_seed(
-            seed=_GENESIS_SEED, algorithm=CryptoAlgorithm.SECP256K1
-        )
-
-        payment_tx = Payment(
-            account=_GENESIS_ADDRESS,
-            amount=str(amount),  # Amount in drops (1 XRP = 1,000,000 drops)
-            destination=_ACCOUNT_ID,
-            sequence=self.tx_amount
-            + 1,  # Sequence must be increased by 1 per transaction, starting from 1.
-            fee="10",  # Fee is required, 10 is practically negligible.
-        )
-
-        # Taken from XRPL's autofill_and_sign method from the xrpl.transactions package
-        # For the implemented method, a client is required, we do not need the client.
-        transaction_json = _prepare_transaction(payment_tx, wallet)
-        serialized_for_signing = encode_for_signing(transaction_json)
-        serialized_bytes = bytes.fromhex(serialized_for_signing)
-        signature = sign(serialized_bytes, wallet.private_key)
-        transaction_json["TxnSignature"] = signature
-        tx = Payment.from_xrpl(transaction_json)
-
-        # The transaction blob contains every information in the transaction, but encoded, including the sign.
-        data = json.dumps({"id": 3, "command": "submit", "tx_blob": tx.blob()})
-
-        try:
-            ws.send(data)
-            self.tx_amount += 1
-        finally:
-            ws.close()
+        uri = next(f"ws://{val.ws_public.as_url()}/" for val in self.validator_node_list if val.peer.port == self.id_to_port(peer_id))
+        tx = self.tx_builder.build_transaction()
+        with WebsocketClient(uri) as client:
+            complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
+            submit(complete_tx, client)
+            self.tx_builder.add_transaction(complete_tx)

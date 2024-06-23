@@ -1,0 +1,50 @@
+"""Class which is able to build a transaction."""
+from xrpl import CryptoAlgorithm
+from xrpl.models import Payment, Transaction
+from xrpl.wallet import Wallet
+
+
+class TransactionBuilder:
+
+    def __init__(self):
+        # genesis_address  is the genesis account for every XRPL network.
+        self.genesis_address = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+        self.genesis_seed = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb"
+        self.destination_account_id = "r9wRwVgL2vWVnKhTPdtxva5vdH7FNw1zPs"
+
+        # Public and Private keys are inferred from the seed.
+        self.wallet = Wallet.from_seed(
+            seed=self.genesis_seed, algorithm=CryptoAlgorithm.SECP256K1
+        )
+
+        self.transactions: list[Transaction] = []
+        self.tx_amount = 0
+
+    def build_transaction(self, amount: int = 1000000000) -> Transaction:
+        """
+        Build a XRPL Transaction.
+
+        Args:
+            amount: the amount of XRPL drops to be included in the transaction.
+
+        Returns:
+            Payment: a Payment object, which inherits the Transaction class.
+
+        Raises:
+            ValueError: if amount is smaller than 1_000_000_000
+        """
+        if amount < 1000000000:
+            raise ValueError(
+                f"Amount must be greater than 1_000_000_000, given amount: {amount}"
+            )
+
+        payment_tx = Payment(
+            account=self.genesis_address,
+            amount=str(amount),  # Amount in drops (1 XRP = 1,000,000 drops)
+            destination=self.destination_account_id,
+        )
+        return payment_tx
+    
+    def add_transaction(self, transaction: Transaction):
+        self.transactions.append(transaction)
+        self.tx_amount += 1
