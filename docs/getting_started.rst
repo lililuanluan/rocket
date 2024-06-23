@@ -1,2 +1,0 @@
-Todo: Getting started Tutorial!
-====================================
