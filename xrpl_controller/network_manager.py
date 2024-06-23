@@ -1,12 +1,15 @@
 """Class that holds information about a network of validator nodes."""
+
 import json
 from typing import Any
 
 import base58
+import websocket
 from xrpl import CryptoAlgorithm
 from xrpl.asyncio.transaction.main import _prepare_transaction
-from xrpl.core.keypairs.main import sign
 from xrpl.core.binarycodec import encode_for_signing
+from xrpl.core.keypairs.main import sign
+from xrpl.models.transactions import Payment
 from xrpl.wallet import Wallet
 
 from xrpl_controller.core import (
@@ -17,8 +20,11 @@ from xrpl_controller.core import (
 )
 from xrpl_controller.message_action import MessageAction
 from xrpl_controller.validator_node_info import ValidatorNode
-import websocket
-from xrpl.models.transactions import Payment
+
+# _GENESIS is the genesis account for every XRPL network.
+_GENESIS_ADDRESS = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+_GENESIS_SEED = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb"
+_ACCOUNT_ID = "r9wRwVgL2vWVnKhTPdtxva5vdH7FNw1zPs"
 
 
 class NetworkManager:
@@ -31,9 +37,9 @@ class NetworkManager:
     """
 
     def __init__(
-            self,
-            auto_parse_identical: bool | None = True,
-            auto_parse_subsets: bool | None = True,
+        self,
+        auto_parse_identical: bool | None = True,
+        auto_parse_subsets: bool | None = True,
     ):
         """Initialize fields for this object."""
         self.network_config: dict[str, Any] = {}
@@ -102,9 +108,9 @@ class NetworkManager:
         """
         flattened_partitions = flatten(partitions)
         if (
-                set(flattened_partitions)
-                != set([peer_id for peer_id in range(len(self.validator_node_list))])
-                or len(flattened_partitions) != self.node_amount
+            set(flattened_partitions)
+            != set([peer_id for peer_id in range(len(self.validator_node_list))])
+            or len(flattened_partitions) != self.node_amount
         ):
             raise ValueError(
                 "The given network partition is not valid for the current network."
@@ -181,7 +187,7 @@ class NetworkManager:
         )
 
     def set_subsets_dict_entry(
-            self, peer_id: int, subsets: list[list[int]] | list[int]
+        self, peer_id: int, subsets: list[list[int]] | list[int]
     ):
         """
         Set individual entries in the subsets_dict field.
@@ -220,12 +226,12 @@ class NetworkManager:
             self.set_subsets_dict_entry(peer_id, subsets)
 
     def set_message_action(
-            self,
-            peer_from_id: int,
-            peer_to_id: int,
-            initial_message: bytes,
-            final_message: bytes,
-            action: int,
+        self,
+        peer_from_id: int,
+        peer_to_id: int,
+        initial_message: bytes,
+        final_message: bytes,
+        action: int,
     ):
         """
         Set an entry in the message_action_matrix.
@@ -251,7 +257,7 @@ class NetworkManager:
         ).set_final_message(final_message).set_action(action)
 
     def check_previous_message(
-            self, peer_from_id: int, peer_to_id: int, message: bytes
+        self, peer_from_id: int, peer_to_id: int, message: bytes
     ) -> tuple[bool, tuple[bytes, int]]:
         """
         Parse a message automatically to a final state with an action if it was matching to the previous message.
@@ -284,7 +290,7 @@ class NetworkManager:
         )
 
     def check_subset_entry(
-            self, peer_from_id: int, peer_to_id: int, message: bytes, subset: list[int]
+        self, peer_from_id: int, peer_to_id: int, message: bytes, subset: list[int]
     ) -> tuple[bool, tuple[bytes, int]]:
         """
         Check a subset for identical messages.
@@ -303,9 +309,9 @@ class NetworkManager:
         if peer_to_id in subset:
             for peer_id in subset:
                 if (
-                        result := self.check_previous_message(
-                            peer_from_id, peer_id, message
-                        )
+                    result := self.check_previous_message(
+                        peer_from_id, peer_id, message
+                    )
                 )[0]:
                     # result is a tuple[bool, tuple[bytes, int]]
                     # The second tuple contains the processed message and an action
@@ -317,7 +323,7 @@ class NetworkManager:
         return False, self.check_previous_message(peer_from_id, peer_to_id, message)[1]
 
     def check_subsets(
-            self, peer_from_id: int, peer_to_id: int, message: bytes
+        self, peer_from_id: int, peer_to_id: int, message: bytes
     ) -> tuple[bool, tuple[bytes, int]]:
         """
         Check multiple subsets for identical messages.
@@ -341,14 +347,14 @@ class NetworkManager:
         # self.subsets_dict[peer_from_id] can contain a 1- or 2-dimensional integer list
         # We first check whether the list is 2-dimensional, if so, we handle the entry accordingly
         if len(self.subsets_dict[peer_from_id]) > 0 and isinstance(
-                self.subsets_dict[peer_from_id][0], list
+            self.subsets_dict[peer_from_id][0], list
         ):
             # We have to parse the list to a list[list[int]] type to suppress tox
             for subset in parse_to_2d_list_of_ints(self.subsets_dict[peer_from_id]):
                 if (
-                        result := self.check_subset_entry(
-                            peer_from_id, peer_to_id, message, subset
-                        )
+                    result := self.check_subset_entry(
+                        peer_from_id, peer_to_id, message, subset
+                    )
                 )[0]:
                     return result
             return False, self.check_previous_message(
@@ -409,12 +415,9 @@ class NetworkManager:
             amount: the amount to be sent in the transaction in XRP drops.
         """
         if amount < 1000000000:
-            raise ValueError(f"Amount must be greater than 1_000_000_000, given amount: {amount}")
-
-        # _GENESIS is the genesis account for every XRPL network.
-        _GENESIS_ADDRESS = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
-        _GENESIS_SEED = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb"
-        _ACCOUNT_ID = "r9wRwVgL2vWVnKhTPdtxva5vdH7FNw1zPs"
+            raise ValueError(
+                f"Amount must be greater than 1_000_000_000, given amount: {amount}"
+            )
 
         uri = ""
         for val in self.validator_node_list:
@@ -424,14 +427,17 @@ class NetworkManager:
         ws = websocket.create_connection(uri)
 
         # Public and Private keys are inferred from the seed.
-        wallet = Wallet.from_seed(seed=_GENESIS_SEED, algorithm=CryptoAlgorithm.SECP256K1)
+        wallet = Wallet.from_seed(
+            seed=_GENESIS_SEED, algorithm=CryptoAlgorithm.SECP256K1
+        )
 
         payment_tx = Payment(
             account=_GENESIS_ADDRESS,
-            amount=str(amount),             # Amount in drops (1 XRP = 1,000,000 drops)
+            amount=str(amount),  # Amount in drops (1 XRP = 1,000,000 drops)
             destination=_ACCOUNT_ID,
-            sequence=self.tx_amount+1,      # Sequence must be increased by 1 per transaction, starting from 1.
-            fee="10"                        # Fee is required, 10 is practically negligible.
+            sequence=self.tx_amount
+            + 1,  # Sequence must be increased by 1 per transaction, starting from 1.
+            fee="10",  # Fee is required, 10 is practically negligible.
         )
 
         # Taken from XRPL's autofill_and_sign method from the xrpl.transactions package
@@ -444,11 +450,7 @@ class NetworkManager:
         tx = Payment.from_xrpl(transaction_json)
 
         # The transaction blob contains every information in the transaction, but encoded, including the sign.
-        data = json.dumps({
-                "id": 3,
-                "command": "submit",
-                "tx_blob": tx.blob()
-            })
+        data = json.dumps({"id": 3, "command": "submit", "tx_blob": tx.blob()})
 
         try:
             ws.send(data)

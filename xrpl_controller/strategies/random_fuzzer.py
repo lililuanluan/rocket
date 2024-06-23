@@ -93,5 +93,3 @@ class RandomFuzzer(Strategy):
             return packet.data, random.randint(
                 self.params["min_delay_ms"], self.params["max_delay_ms"]
             )
-
-

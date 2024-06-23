@@ -46,6 +46,8 @@ def test_update_network():
             assert item.final_message == b""
             assert item.action == -1
 
+    assert network.tx_amount == 0
+
 
 def test_port_to_id_invalid():
     """Test whether port_to_id raises an error when an invalid port is given."""
