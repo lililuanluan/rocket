@@ -6,19 +6,19 @@ Application Entry Point
         :members:
 
 
--------------------------
-Consensus Property Checks
--------------------------
-
-    .. automodule:: xrpl_controller.consensus_property
-        :members:
-
-
 ---------------
 CSV File Logger
 ---------------
 
     .. automodule:: xrpl_controller.csv_logger
+        :members:
+
+
+-------------------------
+Ledger Result Logging
+-------------------------
+
+    .. automodule:: xrpl_controller.ledger_result
         :members:
 
 
@@ -76,6 +76,15 @@ gRPC Server
 
     .. automodule:: xrpl_controller.packet_server
         :members:
+
+
+-------------------
+Transaction Builder
+-------------------
+
+    .. automodule:: xrpl_controller.transaction_builder
+        :members:
+
 
 --------------------------
 Validator Node Dataclasses
