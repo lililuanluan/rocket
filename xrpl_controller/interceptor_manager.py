@@ -66,4 +66,4 @@ class InterceptorManager:
             try:
                 self.process.wait(timeout=5.0)
             except TimeoutExpired:
-                self.process.terminate()
+                self.process.kill()
