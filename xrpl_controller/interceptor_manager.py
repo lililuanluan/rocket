@@ -1,5 +1,6 @@
 """Contains functionality to easily interact with the network packet interceptor subprocess."""
 
+import traceback
 from subprocess import PIPE, Popen, TimeoutExpired
 from sys import platform
 from threading import Thread
@@ -41,14 +42,22 @@ class InterceptorManager:
             else "/xrpl-packet-interceptor/xrpl-packet-interceptor.exe"
         )
         logger.info("Starting interceptor")
-        self.process = Popen(
-            [f"./{file}"],
-            cwd="./xrpl-packet-interceptor",
-            stdin=PIPE,
-            stdout=PIPE,
-            stderr=PIPE,
-            text=True,
-        )
+        try:
+            self.process = Popen(
+                [f"./{file}"],
+                cwd="./xrpl-packet-interceptor",
+                stdin=PIPE,
+                stdout=PIPE,
+                stderr=PIPE,
+                text=True,
+            )
+        except FileNotFoundError as exc:
+            logger.error(
+                "Could not find the xrpl-packet-interceptor executable. Did you build the interceptor?"
+            )
+            traceback.print_exception(exc)
+            exit(2)
+
         t = Thread(target=self.__check_output, args=[self.process])
         t.start()
 

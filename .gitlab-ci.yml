@@ -62,7 +62,7 @@ pages:
   needs: ["test"]
   stage: docs
   script:
-    - pip install sphinx sphinx-rtd-theme
+    - pip install -r requirements.txt
     - cd docs
     - make html
     - mv _build/html/ ../public/

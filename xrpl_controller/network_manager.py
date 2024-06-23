@@ -6,7 +6,7 @@ import base58
 from xrpl.clients.websocket_client import WebsocketClient
 from xrpl.transaction import autofill_and_sign, submit
 
-from xrpl_controller.core import (
+from xrpl_controller.helper import (
     flatten,
     parse_to_2d_list_of_ints,
     parse_to_list_of_ints,

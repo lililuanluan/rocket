@@ -120,3 +120,16 @@ def test_stop_ungraceful():
 
         assert mock_popen.terminate.call_count == 1
         mock_popen.wait.assert_called_once_with(timeout=5.0)
+
+
+@patch("xrpl_controller.interceptor_manager.exit", return_value=MagicMock())
+def test_exception_behavior(exit_mock):
+    """Test whether the exception behavior functions correctly."""
+    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen_class:
+        mock_popen_class.side_effect = FileNotFoundError()
+        interceptor_manager = InterceptorManager()
+
+        interceptor_manager.start_new()
+
+        assert interceptor_manager.process is None
+        assert exit_mock.call_count == 1

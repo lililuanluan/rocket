@@ -1,6 +1,6 @@
-"""Tests for yaml_to_dict method in core.py."""
+"""Tests for yaml_to_dict method in helper.py."""
 
-from xrpl_controller.core import yaml_to_dict
+from xrpl_controller.helper import yaml_to_dict
 
 test_dir = "./tests/test_configs/yaml_to_dict/"
 

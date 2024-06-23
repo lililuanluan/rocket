@@ -5,11 +5,11 @@ import datetime
 import os
 import unittest
 
-from xrpl_controller.core import format_datetime
 from xrpl_controller.csv_logger import (
     ResultLogger,
     result_log_columns,
 )
+from xrpl_controller.helper import format_datetime
 from xrpl_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,

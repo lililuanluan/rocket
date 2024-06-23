@@ -1,11 +1,12 @@
 Welcome to XRPL Controller Module's documentation!
 ==================================================
 
+
 .. toctree::
     :maxdepth: 1
-    :caption: Getting Started
+    :caption: How-To Tutorials
 
-    getting_started
+    mutation_how_to
 
 
 .. toctree::

@@ -1,8 +1,8 @@
-"""Tests for list parser functions in core.py."""
+"""Tests for list parser functions in helper.py."""
 
 import pytest
 
-from xrpl_controller.core import parse_to_2d_list_of_ints, parse_to_list_of_ints
+from xrpl_controller.helper import parse_to_2d_list_of_ints, parse_to_list_of_ints
 
 
 def test_parsers():
