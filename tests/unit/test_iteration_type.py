@@ -56,20 +56,22 @@ def test_ledger_based_iteration_init():
 def test_ledger_based_iteration_add():
     """Tests starting new iteration of IterationTemplate."""
     interceptor_manager = InterceptorManager()
-    interceptor_manager.restart = MagicMock()
+    interceptor_manager.start_new = MagicMock()
+    interceptor_manager.stop = MagicMock()
 
     iteration = LedgerBasedIteration(5, 10, interceptor_manager=interceptor_manager)
     iteration._start_timeout_timer = MagicMock()
     iteration.add_iteration()
 
     assert iteration.cur_iteration == 1
-    interceptor_manager.restart.assert_called_once()
+    interceptor_manager.start_new.assert_called_once()
+    interceptor_manager.stop.assert_called_once()
 
 
 def test_ledger_based_iteration_add_done():
     """Tests whether cleanup is performed properly when iterations reach maximum."""
     interceptor_manager = InterceptorManager()
-    interceptor_manager.restart = MagicMock()
+    interceptor_manager.start_new = MagicMock()
     interceptor_manager.stop = MagicMock()
     interceptor_manager.cleanup_docker_containers = MagicMock()
 
@@ -82,8 +84,8 @@ def test_ledger_based_iteration_add_done():
     iteration.add_iteration()
     iteration.add_iteration()
 
-    interceptor_manager.restart.assert_called_once()
-    interceptor_manager.stop.assert_called_once()
+    interceptor_manager.start_new.assert_called_once()
+    assert interceptor_manager.stop.call_count == 2
     interceptor_manager.cleanup_docker_containers.assert_called_once()
     grpc_server.stop.assert_called_once()
 
@@ -91,7 +93,7 @@ def test_ledger_based_iteration_add_done():
 def test_ledger_based_iteration_add_done_no_server():
     """Tests whether cleanup is performed properly when iterations reach maximum."""
     interceptor_manager = InterceptorManager()
-    interceptor_manager.restart = MagicMock()
+    interceptor_manager.start_new = MagicMock()
     interceptor_manager.stop = MagicMock()
     interceptor_manager.cleanup_docker_containers = MagicMock()
 
@@ -104,8 +106,8 @@ def test_ledger_based_iteration_add_done_no_server():
     iteration.add_iteration()
     iteration.add_iteration()
 
-    interceptor_manager.restart.assert_called_once()
-    interceptor_manager.stop.assert_called_once()
+    interceptor_manager.start_new.assert_called_once()
+    assert interceptor_manager.stop.call_count == 2
     interceptor_manager.cleanup_docker_containers.assert_called_once()
     grpc_server.stop.assert_not_called()
 
@@ -114,7 +116,7 @@ def test_ledger_based_iteration_update():
     """Tests updating IterationTemplate with new status change."""
     status_msg = TMStatusChange(
         newStatus=2,
-        newEvent=2,
+        newEvent=1,
         ledgerSeq=2,
         ledgerHash=b"abcdef",
         ledgerHashPrevious=b"123456",
@@ -140,7 +142,7 @@ def test_ledger_based_iteration_update_complete():
     """Tests updating IterationTemplate with new status change, which should start a new iteration."""
     status_msg_1 = TMStatusChange(
         newStatus=2,
-        newEvent=2,
+        newEvent=1,
         ledgerSeq=2,
         ledgerHash=b"abcdef",
         ledgerHashPrevious=b"123456",
@@ -150,7 +152,7 @@ def test_ledger_based_iteration_update_complete():
     )
     status_msg_2 = TMStatusChange(
         newStatus=2,
-        newEvent=2,
+        newEvent=1,
         ledgerSeq=2,
         ledgerHash=b"abcdefg",
         ledgerHashPrevious=b"1234567",
@@ -390,3 +392,29 @@ def test_log_results_error():
 
     with pytest.raises(RuntimeError):
         iteration.log_consensus_property_results(10)
+
+
+def test_reset_values_none_iter():
+    """Test whether calling _reset_values does not do anything when not implemented."""
+    iteration = NoneIteration(60)
+    assert iteration._max_iterations == 1
+    assert iteration.cur_iteration == 0
+    assert iteration._timeout_seconds == 60
+
+    iteration._reset_values()
+    assert iteration._max_iterations == 1
+    assert iteration.cur_iteration == 0
+    assert iteration._timeout_seconds == 60
+
+
+def test_reset_values_time_iter():
+    """Test whether calling _reset_values does not do anything when not implemented."""
+    iteration = TimeBasedIteration(1)
+    assert iteration._max_iterations == 1
+    assert iteration.cur_iteration == 0
+    assert iteration._timeout_seconds == 30
+
+    iteration._reset_values()
+    assert iteration._max_iterations == 1
+    assert iteration.cur_iteration == 0
+    assert iteration._timeout_seconds == 30
