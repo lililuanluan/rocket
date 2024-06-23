@@ -2,7 +2,7 @@
 
 import pytest
 
-from xrpl_controller.core import validate_ports_or_ids
+from xrpl_controller.helper import validate_ports_or_ids
 
 
 def test_validate_ports():

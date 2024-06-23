@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple
 from loguru import logger
 
 from protos import packet_pb2, ripple_pb2
-from xrpl_controller.core import (
+from xrpl_controller.helper import (
     MAX_U32,
     format_datetime,
     yaml_to_dict,
