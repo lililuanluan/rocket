@@ -400,7 +400,16 @@ class NetworkManager:
         except KeyError as err:
             raise ValueError(f"peer ID {peer_id} not found in id_to_port_dict") from err
 
-    def submit_transaction(self, peer_id):
+    def submit_transaction(self, peer_id: int, amount: int = 1000000000):
+        """
+        Submit a transaction to a peer of choice.
+
+        Args:
+            peer_id: the ID of the peer which will receive the transaction.
+            amount: the amount to be sent in the transaction in XRP drops.
+        """
+        if amount < 1000000000:
+            raise ValueError(f"Amount must be greater than 1_000_000_000, given amount: {amount}")
 
         # _GENESIS is the genesis account for every XRPL network.
         _GENESIS_ADDRESS = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
@@ -419,7 +428,7 @@ class NetworkManager:
 
         payment_tx = Payment(
             account=_GENESIS_ADDRESS,
-            amount="1000000000",            # Amount in drops (1 XRP = 1,000,000 drops)
+            amount=str(amount),             # Amount in drops (1 XRP = 1,000,000 drops)
             destination=_ACCOUNT_ID,
             sequence=self.tx_amount+1,      # Sequence must be increased by 1 per transaction, starting from 1.
             fee="10"                        # Fee is required, 10 is practically negligible.
@@ -443,12 +452,6 @@ class NetworkManager:
 
         try:
             ws.send(data)
-            response: str = ws.recv()
-            if "tesSUCCESS" in response:
-                print("indeed")
-                self.tx_amount += 1
-            print("Received response:", response)
-
+            self.tx_amount += 1
         finally:
-            # Close the WebSocket connection
             ws.close()

@@ -84,14 +84,6 @@ class RandomFuzzer(Strategy):
         Returns:
             Tuple[bytes, int]: the new packet and the random action.
         """
-
-        if self.counter > 170 and self.counter < 400 and self.network.port_to_id(packet.from_port) == 0 and self.network.tx_amount < 2:
-            print('HAHAHAHHAHHHAAAAA')
-            self.network.submit_transaction(0)
-            self.counter = 300
-        else:
-            self.counter += 1
-
         choice: float = random.random()
         if choice < self.params["send_probability"]:
             return packet.data, 0
