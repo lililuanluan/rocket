@@ -1,6 +1,5 @@
 """This module contains a way to check various properties of the consensus algorithm after an iteration completes."""
 
-from abc import abstractmethod
 from typing import Any, List
 
 from loguru import logger
@@ -59,11 +58,11 @@ class LedgerResult:
             return closed_ledger.get("ledger")
 
     def log_ledger_result(
-            self,
-            ledger_count: int,
-            goal_ledger: int,
-            time_to_consensus: float,
-            validator_nodes: List[ValidatorNode],
+        self,
+        ledger_count: int,
+        goal_ledger: int,
+        time_to_consensus: float,
+        validator_nodes: List[ValidatorNode],
     ):
         """
         Method for checking Consistency and Liveness.
@@ -99,7 +98,7 @@ class LedgerResult:
                 if ledger_index is None
                 else int(ledger_index)
                 if isinstance(ledger_index, (int, float, str))
-                   and str(ledger_index).isdigit()
+                and str(ledger_index).isdigit()
                 else -1
             )
 
@@ -108,7 +107,7 @@ class LedgerResult:
                 if close_time is None
                 else int(close_time)
                 if isinstance(close_time, (int, float, str))
-                   and str(close_time).isdigit()
+                and str(close_time).isdigit()
                 else -1
             )
 

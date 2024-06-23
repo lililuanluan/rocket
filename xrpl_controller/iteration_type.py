@@ -8,8 +8,8 @@ from grpc import Server
 from loguru import logger
 
 from protos import ripple_pb2
-from xrpl_controller.ledger_result import LedgerResult
 from xrpl_controller.interceptor_manager import InterceptorManager
+from xrpl_controller.ledger_result import LedgerResult
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
@@ -80,7 +80,6 @@ class TimeBasedIteration:
 
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
-
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._log_results.new_result_logger(self._log_dir, self.cur_iteration)
@@ -121,7 +120,7 @@ class TimeBasedIteration:
 
             # Only when every single node sends neCLOSING_LEDGER to all other nodes, we consider the ledger validated.
             if self._validator_nodes and self.accept_count == (
-                    len(self._validator_nodes) * (len(self._validator_nodes) - 1)
+                len(self._validator_nodes) * (len(self._validator_nodes) - 1)
             ):
                 # New ledger validated, we can reset timeout
                 if self.ledger_timeout:
@@ -147,9 +146,19 @@ class TimeBasedIteration:
 class LedgerBasedIteration(TimeBasedIteration):
     """Ledger Based iteration type, able to keep track of validated ledgers."""
 
-    def __init__(self, max_iterations: int, ledger_timeout_seconds: int = 60, max_ledger_seq: int = 10):
+    def __init__(
+        self,
+        max_iterations: int,
+        ledger_timeout_seconds: int = 60,
+        max_ledger_seq: int = 10,
+    ):
         """Init the TimeIteration class with a specified timeout in seconds."""
-        super().__init__(max_iterations=max_iterations, timeout_seconds=ledger_timeout_seconds, ledger_timeout=True, max_ledger_seq=max_ledger_seq)
+        super().__init__(
+            max_iterations=max_iterations,
+            timeout_seconds=ledger_timeout_seconds,
+            ledger_timeout=True,
+            max_ledger_seq=max_ledger_seq,
+        )
 
 
 class NoneIteration(TimeBasedIteration):

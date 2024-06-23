@@ -110,9 +110,7 @@ def test_update_status(mock_init_configs):
     message = PacketEncoderDecoder.encode_message(status_msg, message_type=34)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
-        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
-    )
+    iteration_type = LedgerBasedIteration(max_ledger_seq=5, max_iterations=10)
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
@@ -133,9 +131,7 @@ def test_update_status_exception(mock_init_configs):
     message = PacketEncoderDecoder.encode_message(status_msg, message_type=99)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
-        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
-    )
+    iteration_type = LedgerBasedIteration(max_ledger_seq=5, max_iterations=10)
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
@@ -156,9 +152,7 @@ def test_update_status_other_message(mock_init_configs):
     message = PacketEncoderDecoder.encode_message(status_msg, message_type=15)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
-        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
-    )
+    iteration_type = LedgerBasedIteration(max_ledger_seq=5, max_iterations=10)
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()

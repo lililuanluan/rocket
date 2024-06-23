@@ -19,14 +19,6 @@ action_log_columns = [
 ]
 
 result_log_columns = [
-    "node_id",
-    "ledger_hash",
-    "ledger_index",
-    "goal_ledger_index",
-    "close_time",
-]
-
-result_log_columns2 = [
     "ledger_count",
     "goal_ledger_count",
     "time_to_consensus",
@@ -184,7 +176,7 @@ class ResultLogger(CSVLogger):
         directory = f"action_logs/{sub_directory}"
         super().__init__(
             filename=final_filename,
-            columns=result_log_columns2,
+            columns=result_log_columns,
             directory=directory,
         )
 
@@ -211,7 +203,7 @@ class ResultLogger(CSVLogger):
             [
                 ledger_count,
                 goal_ledger_count,
-                time_to_consensus,
+                f"{time_to_consensus:.6f}",
                 close_times,
                 ledger_hashes,
                 ledger_indexes,

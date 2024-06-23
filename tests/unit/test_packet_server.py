@@ -67,6 +67,7 @@ def test_send_validator_node_info_with_log():
     """Test the send_validator_node_info method of PacketService with logging without existing logger."""
     mock_strategy = Mock()
     mock_strategy.keep_action_log = True
+    mock_strategy.iteration_type.cur_iteration = 1
     packet_server = PacketService(mock_strategy)
     request_iterator = [packet_pb2.ValidatorNodeInfo()]
     mock_logger = Mock()
@@ -80,6 +81,7 @@ def test_send_validator_node_info_with_existing_logger():
     """Test the send_validator_node_info method of PacketService with an existing logger."""
     mock_strategy = Mock()
     mock_strategy.keep_action_log = True
+    mock_strategy.iteration_type.cur_iteration = 1
     packet_server = PacketService(mock_strategy)
     mock_logger = Mock()
     with patch("xrpl_controller.packet_server.ActionLogger", return_value=mock_logger):
