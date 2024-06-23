@@ -4,7 +4,7 @@ import atexit
 import csv
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -24,6 +24,15 @@ result_log_columns = [
     "ledger_index",
     "goal_ledger_index",
     "close_time",
+]
+
+result_log_columns2 = [
+    "ledger_count",
+    "goal_ledger_count",
+    "time_to_consensus",
+    "close_times",
+    "ledger_hashes",
+    "ledger_indexes",
 ]
 
 
@@ -175,17 +184,18 @@ class ResultLogger(CSVLogger):
         directory = f"action_logs/{sub_directory}"
         super().__init__(
             filename=final_filename,
-            columns=result_log_columns,
+            columns=result_log_columns2,
             directory=directory,
         )
 
     def log_result(
         self,
-        node_id: int,
-        ledger_hash: str,
-        ledger_index: int,
-        goal_ledger_index: int,
-        close_time: int,
+        ledger_count: int,
+        goal_ledger_count: int,
+        time_to_consensus: float,
+        close_times: List[int],
+        ledger_hashes: List[str],
+        ledger_indexes: List[int],
     ):
         """
         Log a result row to the CSV file.
@@ -199,10 +209,11 @@ class ResultLogger(CSVLogger):
         """
         self.writer.writerow(
             [
-                node_id,
-                ledger_hash,
-                ledger_index,
-                goal_ledger_index,
-                close_time,
+                ledger_count,
+                goal_ledger_count,
+                time_to_consensus,
+                close_times,
+                ledger_hashes,
+                ledger_indexes,
             ]
         )

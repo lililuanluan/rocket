@@ -11,36 +11,28 @@ from xrpl_controller.csv_logger import ResultLogger
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
-class ConsensusProperty:
+class LedgerResult:
     """Base class for checking a consensus property."""
 
-    @staticmethod
-    @abstractmethod
-    def check(
-        validator_nodes: List[ValidatorNode],
-        log_dir: str,
-        iteration: int,
-        max_ledger: int,
-    ):
+    def __init__(self):
+        self.result_logger: ResultLogger | None = None
+
+    def new_result_logger(self, log_dir: str, iteration: int):
         """
-        Abstract method for checking a consensus property.
+        Create a new ResultLogger and close the existing one.
 
         Args:
-            validator_nodes: The list of validator nodes to check on.
             log_dir: The directory where the action log of the current iteration resides.
             iteration: The current iteration number.
-            max_ledger: The configured maximum number of ledgers per iteration.
-
-        Raises:
-            NotImplementedError: The method is not implemented, a child class should implement it.
         """
-        raise NotImplementedError(
-            "ConsensusProperty.check is an abstract method, and cannot be called directly"
-        )
+        self.close_and_flush()
+        self.result_logger = ResultLogger(log_dir, f"result-{iteration}")
 
-
-class ConsistencyLivenessProperty(ConsensusProperty):
-    """Class containing functionality to check Consistency and Liveness of the consensus algorithm."""
+    def close_and_flush(self):
+        """Close and flush the result logger."""
+        if self.result_logger:
+            self.result_logger.flush()
+            self.result_logger.close()
 
     @staticmethod
     def _fetch_ledger(ws_port: int) -> dict[str, Any] | None:
@@ -66,12 +58,12 @@ class ConsistencyLivenessProperty(ConsensusProperty):
                 return None
             return closed_ledger.get("ledger")
 
-    @staticmethod
-    def check(
-        validator_nodes: List[ValidatorNode],
-        log_dir: str,
-        iteration: int,
-        max_ledger: int,
+    def log_ledger_result(
+            self,
+            ledger_count: int,
+            goal_ledger: int,
+            time_to_consensus: float,
+            validator_nodes: List[ValidatorNode],
     ):
         """
         Method for checking Consistency and Liveness.
@@ -83,11 +75,10 @@ class ConsistencyLivenessProperty(ConsensusProperty):
             max_ledger: The configured maximum number of ledgers per iteration.
         """
         logger.info("Checking liveness and consistency...")
-        result_logger = ResultLogger(log_dir, f"result-{iteration}")
         results = []
 
         for node in validator_nodes:
-            res = ConsistencyLivenessProperty._fetch_ledger(node.ws_private.port)
+            res = self._fetch_ledger(node.ws_private.port)
             if res is None:
                 logger.error(
                     f"Could not retrieve ledger from node with port: {node.peer.port}"
@@ -95,7 +86,11 @@ class ConsistencyLivenessProperty(ConsensusProperty):
                 continue
             results.append(res)
 
-        for i, result in enumerate(results):
+        ledger_indexes = []
+        close_times = []
+        ledger_hashes = []
+
+        for _, result in enumerate(results):
             ledger_index = result.get("ledger_index")
             close_time = result.get("close_time")
 
@@ -104,24 +99,34 @@ class ConsistencyLivenessProperty(ConsensusProperty):
                 if ledger_index is None
                 else int(ledger_index)
                 if isinstance(ledger_index, (int, float, str))
-                and str(ledger_index).isdigit()
+                   and str(ledger_index).isdigit()
                 else -1
             )
+
             _close_time = (
                 -1
                 if close_time is None
                 else int(close_time)
                 if isinstance(close_time, (int, float, str))
-                and str(close_time).isdigit()
+                   and str(close_time).isdigit()
                 else -1
             )
-            result_logger.log_result(
-                i,
+
+            _ledger_hash = (
                 "NOT FOUND"
                 if result.get("ledger_hash") is None
-                else str(result.get("ledger_hash")),
-                _ledger_index,
-                max_ledger,
-                _close_time,
+                else str(result.get("ledger_hash"))
             )
-        result_logger.flush()
+
+            ledger_indexes.append(_ledger_index)
+            close_times.append(_close_time)
+            ledger_hashes.append(_ledger_hash)
+
+        self.result_logger.log_result(
+            ledger_count,
+            goal_ledger,
+            time_to_consensus,
+            close_times,
+            ledger_hashes,
+            ledger_indexes,
+        )

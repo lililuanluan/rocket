@@ -138,8 +138,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             self.logger = ActionLogger(
                 format_datetime(self.strategy.start_datetime),
                 validator_node_list,
-                f"action-{self.strategy.iteration_type.cur_iteration}",
-                f"node_info-{self.strategy.iteration_type.cur_iteration}",
+                f"action-{self.strategy.iteration_type.cur_iteration-1}",
+                f"node_info-{self.strategy.iteration_type.cur_iteration-1}",
             )
 
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")

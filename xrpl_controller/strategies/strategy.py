@@ -12,7 +12,7 @@ from xrpl_controller.core import (
     format_datetime,
     yaml_to_dict,
 )
-from xrpl_controller.iteration_type import IterationType, LedgerBasedIteration
+from xrpl_controller.iteration_type import LedgerBasedIteration, TimeBasedIteration
 from xrpl_controller.network_manager import NetworkManager
 from xrpl_controller.strategies.encoder_decoder import (
     DecodingNotSupportedError,
@@ -32,7 +32,7 @@ class Strategy(ABC):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
-        iteration_type: IterationType | None = None,
+        iteration_type: TimeBasedIteration | None = None,
     ):
         """
         Initialize the Strategy interface with needed fields.
@@ -60,7 +60,7 @@ class Strategy(ABC):
 
         self.start_datetime: datetime = datetime.now()
         self.iteration_type = (
-            LedgerBasedIteration(10, 5) if iteration_type is None else iteration_type
+            LedgerBasedIteration(10, 30, 5) if iteration_type is None else iteration_type
         )
         self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
 
