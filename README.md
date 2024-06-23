@@ -4,6 +4,7 @@
 
 ### Pre-Requisites
 - Python 3.12
+- All pre-requisites of the [xrpl-packet-interceptor](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor)
 - A compiled binary of the [xrpl-packet-interceptor](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor)
 
 ### Get the code
