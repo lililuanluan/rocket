@@ -402,6 +402,9 @@ class NetworkManager:
 
         Args:
             peer_id: the ID of the peer which will receive the transaction.
+
+        Raises:
+            ValueError: if peer_id is not in id_to_port_dict
         """
         if peer_id not in self.id_to_port_dict:
             raise ValueError(
