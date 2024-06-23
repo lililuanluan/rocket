@@ -69,7 +69,6 @@ class RandomFuzzer(Strategy):
         self.params["send_probability"] = (
             1 - self.params["drop_probability"] - self.params["delay_probability"]
         )
-        self.counter = 0
 
     def setup(self):
         """Setup method for RandomFuzzer."""
