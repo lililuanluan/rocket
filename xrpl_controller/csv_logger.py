@@ -4,7 +4,7 @@ import atexit
 import csv
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -19,11 +19,12 @@ action_log_columns = [
 ]
 
 result_log_columns = [
-    "node_id",
-    "ledger_hash",
-    "ledger_index",
-    "goal_ledger_index",
-    "close_time",
+    "ledger_count",
+    "goal_ledger_count",
+    "time_to_consensus",
+    "close_times",
+    "ledger_hashes",
+    "ledger_indexes",
 ]
 
 
@@ -181,28 +182,31 @@ class ResultLogger(CSVLogger):
 
     def log_result(
         self,
-        node_id: int,
-        ledger_hash: str,
-        ledger_index: int,
-        goal_ledger_index: int,
-        close_time: int,
+        ledger_count: int,
+        goal_ledger_count: int,
+        time_to_consensus: float,
+        close_times: List[int],
+        ledger_hashes: List[str],
+        ledger_indexes: List[int],
     ):
         """
         Log a result row to the CSV file.
 
         Args:
-            node_id: ID of the node to be logged.
-            ledger_hash: Ledger hash of the node to be logged.
-            ledger_index: Ledger index of the node to be logged.
-            goal_ledger_index: Goal ledger index of the iteration.
-            close_time: Close time of the node to be logged.
+            ledger_count: Ledger count of the iteration.
+            goal_ledger_count: Goal ledger index of the iteration.
+            time_to_consensus: Time taken to reach consensus.
+            ledger_hashes: Ledger hashes of the nodes to be logged.
+            ledger_indexes: Ledger indexes of the nodes to be logged.
+            close_times: Close times of the nodes to be logged.
         """
         self.writer.writerow(
             [
-                node_id,
-                ledger_hash,
-                ledger_index,
-                goal_ledger_index,
-                close_time,
+                ledger_count,
+                goal_ledger_count,
+                f"{time_to_consensus:.6f}",
+                close_times,
+                ledger_hashes,
+                ledger_indexes,
             ]
         )

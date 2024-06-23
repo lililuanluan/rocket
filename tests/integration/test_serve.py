@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 import grpc
 
 from protos import packet_pb2, packet_pb2_grpc
+from tests.default_test_variables import configs
 from tests.integration.dummy_strategy import DummyStrategy
-from tests.unit.test_strategy import configs
 from xrpl_controller.packet_server import serve
 
 

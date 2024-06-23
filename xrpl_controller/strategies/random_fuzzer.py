@@ -5,7 +5,7 @@ from typing import Tuple
 
 from protos import packet_pb2
 from xrpl_controller.helper import MAX_U32
-from xrpl_controller.iteration_type import IterationType
+from xrpl_controller.iteration_type import TimeBasedIteration
 from xrpl_controller.strategies.strategy import Strategy
 
 
@@ -18,7 +18,7 @@ class RandomFuzzer(Strategy):
         strategy_config_path: str = "./xrpl_controller/strategies/configs/RandomFuzzer.yaml",
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
-        iteration_type: IterationType | None = None,
+        iteration_type: TimeBasedIteration | None = None,
     ):
         """
         Initializes the random fuzzer.

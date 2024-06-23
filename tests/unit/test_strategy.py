@@ -4,7 +4,7 @@ from encodings.utf_8 import encode
 from unittest.mock import MagicMock, Mock, patch
 
 from protos import packet_pb2
-from tests.default_test_variables import configs, node_0, node_1, node_2, status_msg
+from tests.default_test_variables import configs, node_0, node_1, node_2, status_msg_1
 from xrpl_controller.helper import MAX_U32
 from xrpl_controller.iteration_type import LedgerBasedIteration
 from xrpl_controller.strategies import RandomFuzzer
@@ -106,12 +106,10 @@ def test_process_message(mock_init_configs):
 )
 def test_update_status(mock_init_configs):
     """Test whether a statuschange message correctly updates the iteration."""
-    message = PacketEncoderDecoder.encode_message(status_msg, message_type=34)
+    message = PacketEncoderDecoder.encode_message(status_msg_1, message_type=34)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
-        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
-    )
+    iteration_type = LedgerBasedIteration(max_ledger_seq=5, max_iterations=10)
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
@@ -129,12 +127,10 @@ def test_update_status(mock_init_configs):
 )
 def test_update_status_exception(mock_init_configs):
     """Test whether an invalid message type gets ignored."""
-    message = PacketEncoderDecoder.encode_message(status_msg, message_type=99)
+    message = PacketEncoderDecoder.encode_message(status_msg_1, message_type=99)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
-        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
-    )
+    iteration_type = LedgerBasedIteration(max_ledger_seq=5, max_iterations=10)
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
@@ -152,12 +148,10 @@ def test_update_status_exception(mock_init_configs):
 )
 def test_update_status_other_message(mock_init_configs):
     """Test whether a message type different from TMStatusChange 34 is ignored."""
-    message = PacketEncoderDecoder.encode_message(status_msg, message_type=15)
+    message = PacketEncoderDecoder.encode_message(status_msg_1, message_type=15)
     packet = packet_pb2.Packet(data=message, from_port=10, to_port=11)
 
-    iteration_type = LedgerBasedIteration(
-        max_ledger_seq=5, max_iterations=10, interceptor_manager=Mock()
-    )
+    iteration_type = LedgerBasedIteration(max_ledger_seq=5, max_iterations=10)
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
