@@ -48,9 +48,7 @@ def test_update_network():
     for row in network.prev_message_action_matrix:
         assert len(row) == 2
         for item in row:
-            assert item.initial_message == b""
-            assert item.final_message == b""
-            assert item.action == -1
+            assert len(item.messages) == 0
 
 
 def test_port_to_id_invalid():

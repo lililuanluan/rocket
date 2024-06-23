@@ -13,6 +13,7 @@ from xrpl_controller.core import (
     validate_ports_or_ids,
 )
 from xrpl_controller.message_action import MessageAction
+from xrpl_controller.message_action_buffer import MessageActionBuffer
 from xrpl_controller.transaction_builder import TransactionBuilder
 from xrpl_controller.validator_node_info import ValidatorNode
 
@@ -39,7 +40,7 @@ class NetworkManager:
         self.port_to_id_dict: dict[int, int] = {}
         self.id_to_port_dict: dict[int, int] = {}
         self.communication_matrix: list[list[bool]] = []
-        self.prev_message_action_matrix: list[list[MessageAction]] = []
+        self.prev_message_action_matrix: list[list[MessageActionBuffer]] = []
         self.subsets_dict: dict[int, list[list[int]] | list[int]] = {}
         self.auto_parse_identical = auto_parse_identical
         self.auto_parse_subsets = auto_parse_subsets
@@ -80,7 +81,10 @@ class NetworkManager:
         )
         if self.auto_parse_identical:
             self.prev_message_action_matrix = [
-                [MessageAction() for _ in range(self.node_amount)]
+                [
+                    MessageActionBuffer(self.node_amount + 1)
+                    for _ in range(self.node_amount)
+                ]
                 for _ in range(self.node_amount)
             ]
         if self.auto_parse_subsets:
@@ -242,9 +246,9 @@ class NetworkManager:
             )
 
         validate_ports_or_ids(peer_from_id, peer_to_id)
-        self.prev_message_action_matrix[peer_from_id][peer_to_id].set_initial_message(
-            initial_message
-        ).set_final_message(final_message).set_action(action)
+        self.prev_message_action_matrix[peer_from_id][peer_to_id].add(
+            MessageAction(initial_message, final_message, action)
+        )
 
     def check_previous_message(
         self, peer_from_id: int, peer_to_id: int, message: bytes
@@ -273,11 +277,9 @@ class NetworkManager:
                 "auto_parse_subsets or auto_parse_identical must be set to True when calling check_previous_message."
             )
 
-        message_action = self.prev_message_action_matrix[peer_from_id][peer_to_id]
-        return message == message_action.initial_message, (
-            message_action.final_message,
-            message_action.action,
-        )
+        return self.prev_message_action_matrix[peer_from_id][
+            peer_to_id
+        ].match_previous_messages(message)
 
     def check_subset_entry(
         self, peer_from_id: int, peer_to_id: int, message: bytes, subset: list[int]
