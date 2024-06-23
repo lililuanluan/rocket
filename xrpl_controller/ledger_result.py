@@ -14,6 +14,7 @@ class LedgerResult:
     """Base class for checking a consensus property."""
 
     def __init__(self):
+        """Initialize the LedgerResult object."""
         self.result_logger: ResultLogger | None = None
 
     def new_result_logger(self, log_dir: str, iteration: int):
@@ -24,10 +25,10 @@ class LedgerResult:
             log_dir: The directory where the action log of the current iteration resides.
             iteration: The current iteration number.
         """
-        self.close_and_flush()
+        self.flush_and_close()
         self.result_logger = ResultLogger(log_dir, f"result-{iteration}")
 
-    def close_and_flush(self):
+    def flush_and_close(self):
         """Close and flush the result logger."""
         if self.result_logger:
             self.result_logger.flush()
@@ -68,10 +69,10 @@ class LedgerResult:
         Method for checking Consistency and Liveness.
 
         Args:
+            ledger_count: The current ledger count.
+            goal_ledger: The configured maximum number of ledgers per iteration.
+            time_to_consensus: The time taken to reach consensus.
             validator_nodes: The list of validator nodes to check on.
-            log_dir: The directory where the action log of the current iteration resides.
-            iteration: The current iteration number.
-            max_ledger: The configured maximum number of ledgers per iteration.
         """
         logger.info("Checking liveness and consistency...")
         results = []
@@ -121,11 +122,12 @@ class LedgerResult:
             close_times.append(_close_time)
             ledger_hashes.append(_ledger_hash)
 
-        self.result_logger.log_result(
-            ledger_count,
-            goal_ledger,
-            time_to_consensus,
-            close_times,
-            ledger_hashes,
-            ledger_indexes,
-        )
+        if self.result_logger:
+            self.result_logger.log_result(
+                ledger_count,
+                goal_ledger,
+                time_to_consensus,
+                close_times,
+                ledger_hashes,
+                ledger_indexes,
+            )

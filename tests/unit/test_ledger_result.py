@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, call, patch
 
 from xrpl.models import Ledger
 
-from tests.unit.test_strategy import node_0, node_1
+from tests.default_test_variables import node_0, node_1
 from xrpl_controller.ledger_result import LedgerResult
 
 mock_response = {"ledger_hash": "hash123", "ledger_index": 3, "close_time": 1234}
@@ -99,7 +99,7 @@ def test_log_ledger_result(logger_mock):
 
     ledger_result._fetch_ledger.assert_has_calls(calls=[call(30), call(31)])
     logger_mock().log_result.assert_has_calls(
-        calls=[call(1, 5, 3.00, [1234, 1234], ["hash123", "hash123"], [1, 1])]
+        calls=[call(1, 5, 3.00, [1234, 1234], ["hash123", "hash123"], [3, 3])]
     )
 
 
@@ -114,3 +114,28 @@ def test_log_ledger_result_err(logger_mock):
 
     ledger_result._fetch_ledger.assert_has_calls(calls=[call(30), call(31)])
     logger_mock().log_result.assert_has_calls(calls=[call(1, 5, 3.0, [], [], [])])
+
+
+def test_close_and_flush():
+    """Test whether the close_and_flush function works correctly."""
+    ledger_result = LedgerResult()
+    ledger_result.result_logger = MagicMock()
+
+    ledger_result.flush_and_close()
+
+    ledger_result.result_logger.flush.assert_called_once()
+    ledger_result.result_logger.close.assert_called_once()
+
+    ledger_result.result_logger = None
+    ledger_result.flush_and_close()
+
+    assert ledger_result.result_logger is None
+
+
+def test_log_ledger_result_none_result_logger():
+    """Test whether the log_ledger_result function works correctly when result_logger is None."""
+    ledger_result = LedgerResult()
+    ledger_result._fetch_ledger = MagicMock(return_value=mock_response)
+    ledger_result.log_ledger_result(1, 5, 3.00, [node_0, node_1])
+
+    assert ledger_result.result_logger is None

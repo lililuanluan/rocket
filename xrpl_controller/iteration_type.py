@@ -25,7 +25,7 @@ class TimeBasedIteration:
     ):
         """Init Iteration Type with an InterceptorManager attached."""
         self.cur_iteration = 1
-        self._log_results = LedgerResult()
+        self._ledger_results = LedgerResult()
 
         self._max_iterations = max_iterations
         self._server: Server | None = None
@@ -82,7 +82,7 @@ class TimeBasedIteration:
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
-            self._log_results.new_result_logger(self._log_dir, self.cur_iteration)
+            self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
             self._reset_values()
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
@@ -133,7 +133,7 @@ class TimeBasedIteration:
                 logger.info(
                     f"Ledger {self.ledger_seq} validated, time elapsed: {self.validation_time}"
                 )
-                self._log_results.log_ledger_result(
+                self._ledger_results.log_ledger_result(
                     self.ledger_seq,
                     self._max_ledger_seq,
                     self.validation_time.total_seconds(),
@@ -149,8 +149,8 @@ class LedgerBasedIteration(TimeBasedIteration):
     def __init__(
         self,
         max_iterations: int,
-        ledger_timeout_seconds: int = 60,
         max_ledger_seq: int = 10,
+        ledger_timeout_seconds: int = 60,
     ):
         """Init the TimeIteration class with a specified timeout in seconds."""
         super().__init__(

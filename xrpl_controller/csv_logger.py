@@ -193,11 +193,12 @@ class ResultLogger(CSVLogger):
         Log a result row to the CSV file.
 
         Args:
-            node_id: ID of the node to be logged.
-            ledger_hash: Ledger hash of the node to be logged.
-            ledger_index: Ledger index of the node to be logged.
-            goal_ledger_index: Goal ledger index of the iteration.
-            close_time: Close time of the node to be logged.
+            ledger_count: Ledger count of the iteration.
+            goal_ledger_count: Goal ledger index of the iteration.
+            time_to_consensus: Time taken to reach consensus.
+            ledger_hashes: Ledger hashes of the nodes to be logged.
+            ledger_indexes: Ledger indexes of the nodes to be logged.
+            close_times: Close times of the nodes to be logged.
         """
         self.writer.writerow(
             [

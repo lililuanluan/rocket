@@ -57,13 +57,24 @@ configs = (
     },
 )
 
-status_msg = ripple_pb2.TMStatusChange(
+status_msg_1 = ripple_pb2.TMStatusChange(
     newStatus=2,
     newEvent=1,
-    ledgerSeq=3,
+    ledgerSeq=2,
     ledgerHash=b"abcdef",
     ledgerHashPrevious=b"123456",
     networkTime=1000,
     firstSeq=0,
     lastSeq=2,
+)
+
+status_msg_2 = ripple_pb2.TMStatusChange(
+    newStatus=2,
+    newEvent=1,
+    ledgerSeq=2,
+    ledgerHash=b"abcdefg",
+    ledgerHashPrevious=b"1234567",
+    networkTime=1000,
+    firstSeq=0,
+    lastSeq=3,
 )

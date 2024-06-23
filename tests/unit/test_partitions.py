@@ -2,7 +2,7 @@
 
 import pytest
 
-from tests.unit.test_strategy import node_0, node_1, node_2
+from tests.default_test_variables import node_0, node_1, node_2
 from xrpl_controller.network_manager import NetworkManager
 
 
