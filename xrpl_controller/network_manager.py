@@ -1,6 +1,5 @@
 """Class that holds information about a network of validator nodes."""
 
-import json
 from typing import Any
 
 import base58
@@ -404,12 +403,19 @@ class NetworkManager:
         Args:
             peer_id: the ID of the peer which will receive the transaction.
         """
-        if peer_id not in self.id_to_port_dict.keys():
-            raise ValueError(f"Given peer ID does not exist in the current network: {peer_id}")
+        if peer_id not in self.id_to_port_dict:
+            raise ValueError(
+                f"Given peer ID does not exist in the current network: {peer_id}"
+            )
 
-        uri = next(f"ws://{val.ws_public.as_url()}/" for val in self.validator_node_list if val.peer.port == self.id_to_port(peer_id))
+        uri = next(
+            f"ws://{val.ws_public.as_url()}/"
+            for val in self.validator_node_list
+            if val.peer.port == self.id_to_port(peer_id)
+        )
         tx = self.tx_builder.build_transaction()
         with WebsocketClient(uri) as client:
             complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
-            submit(complete_tx, client)
+            response = submit(complete_tx, client)
+            print(f"Response from submission: {response.result}")
             self.tx_builder.add_transaction(complete_tx)

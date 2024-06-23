@@ -1,12 +1,15 @@
 """Class which is able to build a transaction."""
+
 from xrpl import CryptoAlgorithm
 from xrpl.models import Payment, Transaction
 from xrpl.wallet import Wallet
 
 
 class TransactionBuilder:
+    """Builder for XRP Transactions."""
 
     def __init__(self):
+        """Initialize fields."""
         # genesis_address  is the genesis account for every XRPL network.
         self.genesis_address = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
         self.genesis_seed = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb"
@@ -44,7 +47,8 @@ class TransactionBuilder:
             destination=self.destination_account_id,
         )
         return payment_tx
-    
+
     def add_transaction(self, transaction: Transaction):
+        """Add a transaction to store in this builder."""
         self.transactions.append(transaction)
         self.tx_amount += 1
