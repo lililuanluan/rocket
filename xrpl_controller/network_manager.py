@@ -4,7 +4,7 @@ from typing import Any
 
 import base58
 
-from xrpl_controller.core import (
+from xrpl_controller.helper import (
     flatten,
     parse_to_2d_list_of_ints,
     parse_to_list_of_ints,

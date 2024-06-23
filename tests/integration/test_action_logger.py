@@ -6,8 +6,8 @@ import os
 import unittest
 
 from tests.default_test_variables import node_0
-from xrpl_controller.core import MAX_U32, format_datetime
 from xrpl_controller.csv_logger import ActionLogger, action_log_columns
+from xrpl_controller.helper import MAX_U32, format_datetime
 
 
 class TestActionLogger(unittest.TestCase):

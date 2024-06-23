@@ -1,6 +1,6 @@
-"""Tests for format_filename method in core.py."""
+"""Tests for format_filename method in helper.py."""
 
-from xrpl_controller.core import format_filename
+from xrpl_controller.helper import format_filename
 
 
 def test_format_filename():
