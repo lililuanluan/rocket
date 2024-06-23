@@ -60,7 +60,7 @@ class Strategy(ABC):
 
         self.start_datetime: datetime = datetime.now()
         self.iteration_type = (
-            LedgerBasedIteration(10, 30, 5)
+            LedgerBasedIteration(10, 5, 45)
             if iteration_type is None
             else iteration_type
         )
