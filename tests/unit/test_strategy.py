@@ -54,9 +54,7 @@ def test_update_network(mock_init_configs):
     for row in strategy.network.prev_message_action_matrix:
         assert len(row) == 3
         for item in row:
-            assert item.initial_message == b""
-            assert item.final_message == b""
-            assert item.action == -1
+            assert len(item.messages) == 0
 
 
 @patch(
@@ -78,18 +76,19 @@ def test_process_message(mock_init_configs):
 
     # Check whether set_message gets modified
     assert (
-        strategy.network.prev_message_action_matrix[0][1].initial_message
+        strategy.network.prev_message_action_matrix[0][1].messages[-1].initial_message
         == b"testtest2"
     )
-    assert strategy.network.prev_message_action_matrix[0][1].action == 13
+    assert strategy.network.prev_message_action_matrix[0][1].messages[-1].action == 13
     assert (
-        strategy.network.prev_message_action_matrix[0][1].final_message == b"testtest2"
+        strategy.network.prev_message_action_matrix[0][1].messages[-1].final_message
+        == b"testtest2"
     )
 
     # Check whether messages get dropped automatically through auto partition
     strategy.network.partition_network([[0, 1], [2]])
     for i in range(100):
-        msg = encode("testtest" + str(i))[0]  # Just arbitrary encoding
+        msg = encode("testtestd" + str(i))[0]  # Just arbitrary encoding
         packet_ack = packet_pb2.Packet(data=msg, from_port=10, to_port=12)
         assert strategy.process_packet(packet_ack) == (msg, MAX_U32)
 
