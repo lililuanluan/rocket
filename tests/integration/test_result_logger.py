@@ -9,23 +9,7 @@ from xrpl_controller.csv_logger import (
     ResultLogger,
     result_log_columns,
 )
-<<<<<<< HEAD
-=======
 from xrpl_controller.helper import format_datetime
-from xrpl_controller.validator_node_info import (
-    SocketAddress,
-    ValidatorKeyData,
-    ValidatorNode,
-)
-
-node = ValidatorNode(
-    SocketAddress("test_peer", 10),
-    SocketAddress("test-ws-pub", 20),
-    SocketAddress("test-ws-adm", 30),
-    SocketAddress("test-rpc", 40),
-    ValidatorKeyData("status", "key", "K3Y", "PUB", "T3ST"),
-)
->>>>>>> 98ee9a5f84cd895d102ebfce616bc59bb8de0af4
 
 
 class TestActionLogger(unittest.TestCase):
