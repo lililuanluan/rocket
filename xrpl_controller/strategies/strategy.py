@@ -1,6 +1,7 @@
 """This module is responsible for defining the Strategy interface."""
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
 from loguru import logger
@@ -8,6 +9,7 @@ from loguru import logger
 from protos import packet_pb2, ripple_pb2
 from xrpl_controller.core import (
     MAX_U32,
+    format_datetime,
     yaml_to_dict,
 )
 from xrpl_controller.iteration_type import IterationType, LedgerBasedIteration
@@ -55,9 +57,12 @@ class Strategy(ABC):
         self.network.network_config, self.params = self.init_configs(
             network_config_path, strategy_config_path
         )
+
+        self.start_datetime: datetime = datetime.now()
         self.iteration_type = (
             LedgerBasedIteration(10, 5) if iteration_type is None else iteration_type
         )
+        self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
 
     @staticmethod
     def init_configs(
@@ -84,18 +89,17 @@ class Strategy(ABC):
         """
         logger.info("Updating the strategy's network information")
         self.network.update_network(validator_node_list)
-        self.iteration_type.start_timeout_timer()
+        self.iteration_type.set_validator_nodes(validator_node_list)
         self.setup()
 
     def update_status(self, packet: packet_pb2.Packet):
         """Update the iteration's state variables, when a new TMStatusChange is received."""
-        if isinstance(self.iteration_type, LedgerBasedIteration):
-            try:
-                message, _ = PacketEncoderDecoder.decode_packet(packet)
-                if isinstance(message, ripple_pb2.TMStatusChange):
-                    self.iteration_type.update_iteration(message)
-            except DecodingNotSupportedError:
-                pass
+        try:
+            message, _ = PacketEncoderDecoder.decode_packet(packet)
+            if isinstance(message, ripple_pb2.TMStatusChange):
+                self.iteration_type.on_status_change(message)
+        except DecodingNotSupportedError:
+            pass
 
     def process_packet(
         self,

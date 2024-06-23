@@ -4,7 +4,7 @@ from xrpl_controller.packet_server import serve
 from xrpl_controller.strategies import Strategy
 from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     strategy: Strategy = RandomFuzzer()
     server = serve(strategy)
 
