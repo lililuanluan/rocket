@@ -7,5 +7,4 @@ from xrpl_controller.strategies.random_fuzzer import RandomFuzzer
 if __name__ == "__main__":  # pragma: no cover
     strategy: Strategy = RandomFuzzer()
     server = serve(strategy)
-
     server.wait_for_termination()
