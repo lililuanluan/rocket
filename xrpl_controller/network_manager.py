@@ -408,14 +408,15 @@ class NetworkManager:
                 f"Given peer ID does not exist in the current network: {peer_id}"
             )
 
-        uri = next(
-            f"ws://{val.ws_public.as_url()}/"
-            for val in self.validator_node_list
-            if val.peer.port == self.id_to_port(peer_id)
-        )
+        url = ""
+        for val in self.validator_node_list:
+            if val.peer.port == self.id_to_port(peer_id):
+                url = f"ws://{val.ws_public.as_url()}/"
+
         tx = self.tx_builder.build_transaction()
-        with WebsocketClient(uri) as client:
+        with WebsocketClient(url) as client:
             complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
             response = submit(complete_tx, client)
+            print(f"Sent a transaction submission to node {peer_id}, url: {url}")
             print(f"Response from submission: {response.result}")
             self.tx_builder.add_transaction(complete_tx)

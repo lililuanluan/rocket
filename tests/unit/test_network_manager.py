@@ -1,6 +1,12 @@
 """Tests for NetworkStore class."""
 
+import sys
+from io import StringIO
+from unittest.mock import patch
+
 import pytest
+from xrpl.models import Response
+from xrpl.models.response import ResponseStatus
 
 from tests.default_test_variables import node_0, node_1
 from xrpl_controller.network_manager import NetworkManager
@@ -61,3 +67,41 @@ def test_id_to_port_invalid():
     network.id_to_port_dict = {0: 10, 1: 11, 2: 12}
     with pytest.raises(ValueError):
         network.id_to_port(3)
+
+
+@patch("xrpl_controller.network_manager.WebsocketClient")
+@patch("xrpl_controller.network_manager.autofill_and_sign", return_value=None)
+@patch(
+    "xrpl_controller.network_manager.submit",
+    return_value=Response(status=ResponseStatus.SUCCESS, result={}),
+)
+def test_submit_transaction(wsm, autofill_and_sign_mock, submit_mock):
+    """Test whether method is creating transactions correctly and supposedly sending them to the correct address."""
+    network = NetworkManager()
+    captured_output = StringIO()
+    sys.stdout = captured_output
+
+    network.update_network([node_0, node_1])
+    network.submit_transaction(1)
+
+    sys.stdout = sys.__stdout__
+    assert (
+        "Sent a transaction submission to node 1, url: ws://test-ws-pub:21/"
+        in captured_output.getvalue()
+    )
+
+    assert (
+        autofill_and_sign_mock.call_args[0][0].blob()
+        == "120000220000000061400000003B9ACA0073008114B5F762798A53D543A014CAF8B297CFF8F2F937E883145988EBB744055F4E8BDC7F67FD53EB9FCF961DC0"
+    )
+    assert network.tx_builder.transactions == [None]
+    assert network.tx_builder.tx_amount == 1
+
+
+def test_submit_transaction_exception():
+    """Test whether a ValueError is raised when invalid ID is given."""
+    network = NetworkManager()
+    network.update_network([node_0, node_1])
+
+    with pytest.raises(ValueError):
+        network.submit_transaction(2)
