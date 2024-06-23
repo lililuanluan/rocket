@@ -1,0 +1,3 @@
+[submodule "xrpl-packet-interceptor"]
+	path = xrpl-packet-interceptor
+	url = git@gitlab.ewi.tudelft.nl:cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor.git

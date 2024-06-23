@@ -11,8 +11,8 @@ from xrpl_controller.validator_node_info import ValidatorNode
 action_log_columns = [
     "timestamp",
     "action",
-    "from_port",
-    "to_port",
+    "from_node_id",
+    "to_node_id",
     "message_type",
     "original_data",
     "possibly_mutated_data",
@@ -117,8 +117,8 @@ class ActionLogger(CSVLogger):
     def log_action(
         self,
         action: int,
-        from_port: int,
-        to_port: int,
+        from_node_id: int,
+        to_node_id: int,
         message_type: str,
         original_data: str,
         possibly_mutated_data: str,
@@ -129,8 +129,8 @@ class ActionLogger(CSVLogger):
 
         Args:
             action: action to be logged.
-            from_port: from_port of the message.
-            to_port: to_port of the message.
+            from_node_id: id of the node who sent the message.
+            to_node_id: id of the node who is supposed to receive the message.
             message_type: the message type as defined in the ripple.proto
             original_data: the message's original data.
             possibly_mutated_data: the message's possibly mutated data.
@@ -146,8 +146,8 @@ class ActionLogger(CSVLogger):
                 if custom_timestamp is None
                 else custom_timestamp,
                 action,
-                from_port,
-                to_port,
+                from_node_id,
+                to_node_id,
                 message_type,
                 original_data,
                 possibly_mutated_data,

@@ -38,12 +38,12 @@ class InterceptorManager:
         file = (
             "xrpl-packet-interceptor"
             if platform != "win32"
-            else "/interceptor/xrpl-packet-interceptor.exe"
+            else "/xrpl-packet-interceptor/xrpl-packet-interceptor.exe"
         )
         logger.info("Starting interceptor")
         self.process = Popen(
             [f"./{file}"],
-            cwd="./interceptor",
+            cwd="./xrpl-packet-interceptor",
             stdin=PIPE,
             stdout=PIPE,
             stderr=PIPE,
