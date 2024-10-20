@@ -19,20 +19,21 @@ from xrpl_controller.validator_node_info import ValidatorNode
 
 
 class NetworkManager:
-    """
-    Class which holds and handles information related to a network of validator nodes.
-
-    Args:
-        auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
-        auto_parse_subsets (bool, optional): Whether the strategy will perform same actions on defined subsets.
-    """
+    """Class which holds and handles information related to a network of validator nodes."""
 
     def __init__(
         self,
         auto_parse_identical: bool | None = True,
         auto_parse_subsets: bool | None = True,
     ):
-        """Initialize fields for this object."""
+        """
+        Initialize a new NetworkManager.
+
+        Args:
+            auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
+            auto_parse_subsets (bool, optional): Whether the strategy will perform same actions on defined subsets.
+        """
+        # Initialize all necessary fields for the NetworkManager
         self.network_config: dict[str, Any] = {}
         self.validator_node_list: list[ValidatorNode] = []
         self.public_to_private_key_map: dict[str, str] = {}
@@ -47,7 +48,12 @@ class NetworkManager:
         self.tx_builder = TransactionBuilder()
 
     def update_network(self, validator_node_list: list[ValidatorNode]):
-        """Update the network with a list of validator nodes."""
+        """
+        Update the network with a list of validator nodes.
+
+        Args:
+            validator_node_list: List of validator nodes.
+        """
         self.validator_node_list = validator_node_list
         self.public_to_private_key_map.clear()
         self.node_amount = len(validator_node_list)
@@ -63,6 +69,8 @@ class NetworkManager:
                 [node.peer.port for node in validator_node_list]
             )
         }
+
+        # Store all public-private-key pairs.
         for node in self.validator_node_list:
             decoded_pub_key = base58.b58decode(
                 node.validator_key_data.validation_public_key,
@@ -98,7 +106,7 @@ class NetworkManager:
             partitions (list[list[int]]): List containing the network partitions (as lists of peer ID's).
 
         Raises:
-            ValueError: if given partitions are invalid.
+            ValueError: If given partitions are invalid.
         """
         flattened_partitions = flatten(partitions)
         if (
@@ -264,13 +272,13 @@ class NetworkManager:
         Args:
             peer_from_id: Sender peer ID.
             peer_to_id: Receiving peer ID.
-            message: The message to be checked for parsing
+            message: The message to be checked for parsing.
 
         Returns:
             Tuple(bool, Tuple(bytes, int)): Boolean indicating success along with final message and action.
 
         Raises:
-            ValueError: if auto_parse_identical and auto_parse_subsets are False.
+            ValueError: If auto_parse_identical and auto_parse_subsets are False.
         """
         if not (self.auto_parse_identical or self.auto_parse_subsets):
             raise ValueError(
@@ -290,8 +298,8 @@ class NetworkManager:
         Args:
             peer_from_id: Sender peer ID.
             peer_to_id: Receiving peer ID.
-            message: The message to be checked for parsing
-            subset: The subset of ID's to check
+            message: The message to be checked for parsing.
+            subset: The subset of ID's to check.
 
         Returns:
             A tuple indicating success along with final message and action.
@@ -323,25 +331,25 @@ class NetworkManager:
         Args:
             peer_from_id: Sender peer ID.
             peer_to_id: Receiving peer ID.
-            message: The message to be checked for parsing
+            message: The message to be checked for parsing.
 
         Returns:
             A tuple indicating success along with final message and action.
 
         Raises:
-            ValueError: if auto_parse_identical is False.
+            ValueError: If auto_parse_identical is False.
         """
         if not self.auto_parse_subsets:
             raise ValueError(
                 "auto_parse_subsets must be set to True when calling check_subsets."
             )
 
-        # self.subsets_dict[peer_from_id] can contain a 1- or 2-dimensional integer list
-        # We first check whether the list is 2-dimensional, if so, we handle the entry accordingly
+        # self.subsets_dict[peer_from_id] can contain a 1- or 2-dimensional integer list.
+        # We first check whether the list is 2-dimensional, if so, we handle the entry accordingly.
         if len(self.subsets_dict[peer_from_id]) > 0 and isinstance(
             self.subsets_dict[peer_from_id][0], list
         ):
-            # We have to parse the list to a list[list[int]] type to suppress tox
+            # We have to parse the list to a list[list[int]] type to suppress tox.
             for subset in parse_to_2d_list_of_ints(self.subsets_dict[peer_from_id]):
                 if (
                     result := self.check_subset_entry(
@@ -353,8 +361,8 @@ class NetworkManager:
                 peer_from_id, peer_to_id, message
             )[1]
         else:
-            # In this branch, we know for certain that self.subsets_dict[peer_from_id] is 1-dimensional
-            # We have to parse the list to a list[int] type to suppress tox
+            # In this branch, we know for certain that self.subsets_dict[peer_from_id] is 1-dimensional.
+            # We have to parse the list to a list[int] type to suppress tox.
             return self.check_subset_entry(
                 peer_from_id,
                 peer_to_id,
@@ -373,7 +381,7 @@ class NetworkManager:
             int: The corresponding peer ID
 
         Raises:
-            ValueError: if port is not found in port_dict
+            ValueError: If port is not in port_dict.
         """
         try:
             return self.port_to_id_dict[port]
@@ -385,13 +393,13 @@ class NetworkManager:
         Transform a peer ID to its corresponding port.
 
         Args:
-            peer_id: the peer ID of which the port is needed
+            peer_id: the peer ID of which the port is needed.
 
         Returns:
-            The corresponding port
+            The corresponding port.
 
         Raises:
-            ValueError: if peer_id is not found in port_dict
+            ValueError: If peer_id is not in port_dict.
         """
         try:
             return self.id_to_port_dict[peer_id]
@@ -417,7 +425,7 @@ class NetworkManager:
             destination_account: the account id of the destination of the transaction in hex.
 
         Raises:
-            ValueError: if peer_id is not in id_to_port_dict
+            ValueError: if peer_id is not in id_to_port_dict.
         """
         if peer_id not in self.id_to_port_dict:
             raise ValueError(

@@ -18,11 +18,11 @@ class ValidatorKeyData:
         Initializes a new ValidatorKeyData object.
 
         Args:
-            status: return status for the creation of this data command.
-            validation_key: the secret key for these validation credentials, in RFC-1751 format.
-            validation_private_key: the secret key of the node itself, used in combination with the validation_seed to create this data.
-            validation_public_key: the public key for these validation credentials, in the XRP Ledger's base58 encoded string format.
-            validation_seed: the secret key for these validation credentials, in the XRP Ledger's base58 encoded string format.
+            status: Return status for the creation of this data command.
+            validation_key: The secret key for these validation credentials, in RFC-1751 format.
+            validation_private_key: The secret key of the node itself, used in combination with the validation_seed to create this data.
+            validation_public_key: The public key for these validation credentials, in the XRP Ledger's base58 encoded string format.
+            validation_seed: The secret key for these validation credentials, in the XRP Ledger's base58 encoded string format.
         """
         self.status = status
         self.validation_key = validation_key
@@ -48,18 +48,18 @@ class SocketAddress:
         Initializes a new SocketAddress object.
 
         Args:
-            host: the host address.
-            port:  the port for the address.
+            host: The host address.
+            port:  The port for the address.
         """
         self.host = host
         self.port = port
 
     def as_url(self) -> str:
         """
-        Makes an URL of the SocketAddress.
+        Makes a URL of the SocketAddress.
 
         Returns:
-            str: An URL as string.
+            str: A URL as string.
         """
         return f"{self.host}:{self.port}"
 
@@ -83,11 +83,11 @@ class ValidatorNode:
         Initializes a new ValidatorNode object.
 
         Args:
-            peer: the socket address fot the Peer connection
-            ws_public: the socket address for the public WebSocket connection.
-            ws_admin: the socket address for the admin WebSocket connection.
-            rpc: the socket address for Json-RPC requests.
-            validator_key_data: the validator data of this node
+            peer: The socket address fot the Peer connection.
+            ws_public: The socket address for the public WebSocket connection.
+            ws_admin: The socket address for the admin WebSocket connection.
+            rpc: The socket address for Json-RPC requests.
+            validator_key_data: The validator data of this node.
         """
         self.peer = peer
         self.ws_public = ws_public

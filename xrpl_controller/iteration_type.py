@@ -23,14 +23,14 @@ class TimeBasedIteration:
         ledger_timeout: bool = False,
         max_ledger_seq: int = -1,
     ):
-        """Init Iteration Type with an InterceptorManager attached.
+        """
+        Init Iteration Type with an InterceptorManager attached.
 
         Args:
             max_iterations: The maximum number of iterations to run.
             timeout_seconds: The maximum time in seconds for each iteration.
             ledger_timeout: Whether the timeout should be reset after each ledger validation, True for LedgerBasedIteration.
             max_ledger_seq: The maximum ledger sequence to validate (only for LedgerBasedIteration).
-
         """
         self.cur_iteration = 1
         self._ledger_results = LedgerResult()
@@ -75,15 +75,30 @@ class TimeBasedIteration:
         self.add_iteration()
 
     def set_server(self, server: Server):
-        """Set the server variable to the running instance of the gRPC server."""
+        """
+        Set the server variable to the running instance of the gRPC server.
+
+        Args:
+            server: New Server.
+        """
         self._server = server
 
     def set_validator_nodes(self, validator_nodes: List[ValidatorNode]):
-        """Setter for the validator_nodes list, since it needs to be updated every iteration."""
+        """
+        Setter for the validator_nodes list, since it needs to be updated every iteration.
+
+        Args:
+            validator_nodes: New list of validator nodes.
+        """
         self._validator_nodes = validator_nodes
 
     def set_log_dir(self, log_dir: str):
-        """Setter for the log_dir variable, since it needs to be updated every iteration."""
+        """
+        Setter for the log_dir variable, since it needs to be updated every iteration.
+
+        Args:
+            log_dir: New log directory.
+        """
         self._log_dir = log_dir
 
     def add_iteration(self):
@@ -122,7 +137,7 @@ class TimeBasedIteration:
         Args:
             status: The TMStatusChange message received on the network.
         """
-        # Check whether the event contains an accepted ledger which is exactly 1 sequence no. more than the prev ledger
+        # Check whether the event contains an accepted ledger which is exactly 1 sequence no. more than the prev ledger.
         if status.newEvent == 1 and status.ledgerSeq == self.ledger_seq + 1:
             self.accept_count += 1
 
@@ -160,7 +175,14 @@ class LedgerBasedIteration(TimeBasedIteration):
         max_ledger_seq: int = 10,
         ledger_timeout_seconds: int = 60,
     ):
-        """Init the TimeIteration class with a specified timeout in seconds."""
+        """
+        Init the TimeIteration class with a specified timeout in seconds.
+
+        Args:
+            max_iterations: Maximum iterations.
+            max_ledger_seq: Maximum ledger sequence.
+            ledger_timeout_seconds: Timeout value for validating a new ledger.
+        """
         super().__init__(
             max_iterations=max_iterations,
             timeout_seconds=ledger_timeout_seconds,
@@ -178,7 +200,12 @@ class NoneIteration(TimeBasedIteration):
     """
 
     def __init__(self, timeout_seconds: int = 300):
-        """Init the NoneIteration class with a specified timeout in seconds."""
+        """
+        Init the NoneIteration class with a specified timeout in seconds.
+
+        Args:
+            timeout_seconds: Timeout for validating a new ledger.
+        """
         super().__init__(max_iterations=1, timeout_seconds=timeout_seconds)
 
     def _timeout_reached(self):
@@ -187,7 +214,12 @@ class NoneIteration(TimeBasedIteration):
         self._stop_all()
 
     def add_iteration(self, max_ledger_seq: int = -1):
-        """Override the add_iteration function to prevent the interceptor subprocess from starting."""
+        """
+        Override the add_iteration function to prevent the interceptor subprocess from starting.
+
+        Args:
+            max_ledger_seq: Unused argument, required for the override.
+        """
         self._start_timeout_timer()
         self.cur_iteration += 1
 
