@@ -70,7 +70,16 @@ class Strategy(ABC):
     def init_configs(
         network_config_path: str, strategy_config_path: str
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Initialize the strategy and network configuration from the given paths."""
+        """
+        Initialize the strategy and network configuration from the given paths.
+
+        Args:
+            network_config_path: Path of the network config file.
+            strategy_config_path: Path of the strategy config path.
+
+        Returns:
+            Tuple[Dict[str, Any], Dict[str, Any]]: Tuple containing the config files transformed to dictionaries.
+        """
         params = yaml_to_dict(strategy_config_path)
         logger.debug(
             f"Initialized strategy parameters from configuration file:\n\t{params}"

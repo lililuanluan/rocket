@@ -61,7 +61,7 @@ class PacketEncoderDecoder:
             private_key: Private key of the original sender of the message in hex format.
 
         Returns:
-            Message: Message that is signed
+            Message: Signed Message.
         """
         raise NotImplementedError(f"No signing method implemented for {type(message)}.")
 
