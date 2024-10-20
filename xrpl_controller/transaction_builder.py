@@ -1,4 +1,4 @@
-"""Module with a class which is able to build a transaction."""
+"""Module with a class which is able to build transactions."""
 
 from xrpl import CryptoAlgorithm
 from xrpl.models import Payment, Transaction

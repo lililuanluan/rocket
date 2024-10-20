@@ -1,4 +1,4 @@
-"""Core module."""
+"""Helper module with useful shared functions."""
 
 from datetime import datetime
 from typing import Any

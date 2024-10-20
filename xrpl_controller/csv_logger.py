@@ -1,4 +1,4 @@
-"""CSVLogger class."""
+"""This module contains a base class to log csv files and two fine-tuned classes extended from said base class."""
 
 import atexit
 import csv

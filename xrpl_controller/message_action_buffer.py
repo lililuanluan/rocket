@@ -1,4 +1,4 @@
-"""Class which stores last received MessageAction entries."""
+"""This module contains a class which stores received MessageAction entries."""
 
 from xrpl_controller.message_action import MessageAction
 

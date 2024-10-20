@@ -1,4 +1,4 @@
-"""Class that holds information about a network of validator nodes."""
+"""This module holds functionalities to control a network of nodes."""
 
 from typing import Any
 

@@ -1,4 +1,4 @@
-"""Class which stores information on taken actions on intercepted messages."""
+"""This module contains a class which stores information on taken actions on intercepted messages."""
 
 
 class MessageAction:
