@@ -32,7 +32,14 @@ class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
 
     def __init__(self, filename: str, columns: list[Any], directory: str = ""):
-        """Initialize CSVLogger class."""
+        """
+        Initialize CSVLogger class.
+
+        Args:
+            filename: The name of the log file.
+            columns: The columns to be used in the log.
+            directory: The directory to store the log file in.
+        """
         Path("./logs/" + directory).mkdir(parents=True, exist_ok=True)
 
         filename = filename if filename.endswith(".csv") else filename + ".csv"
@@ -49,7 +56,7 @@ class CSVLogger:
         self.csv_file.close()
 
     def flush(self):
-        """Flush the csv file."""
+        """Flush the CSV file."""
         self.csv_file.flush()
 
     def log_row(self, row: list[Any]):
@@ -57,10 +64,10 @@ class CSVLogger:
         Log an arbitrary row.
 
         Args:
-            row (list[str]): row to be logged.
+            row (list[str]): Row to be logged.
 
         Raises:
-            ValueError: if length of row is not equal to the amount of columns
+            ValueError: If length of row is not equal to the amount of columns.
         """
         if len(self.columns) != len(row):
             raise ValueError(
@@ -70,20 +77,20 @@ class CSVLogger:
 
     def log_rows(self, rows: list[list[Any]]):
         """
-        Log multiple arbitrary row.
+        Log multiple arbitrary rows.
 
         Args:
-            rows (list[list[str]]): rows to be logged.
+            rows (list[list[str]]): Rows to be logged.
 
         Raises:
-            ValueError: if length of any row is not equal to the amount of columns
+            ValueError: If length of any given row is not equal to the amount of columns.
         """
         for row in rows:
             self.log_row(row)
 
 
 class ActionLogger(CSVLogger):
-    """CSVLogger child class which is dedicated to handle the logging of actions."""
+    """CSVLogger child class which is dedicated to handle the logging of taken actions."""
 
     def __init__(
         self,
@@ -92,7 +99,15 @@ class ActionLogger(CSVLogger):
         action_log_filename: str | None = None,
         node_log_filename: str | None = None,
     ):
-        """Initialize ActionLogger class."""
+        """
+        Initialize ActionLogger class.
+
+        Args:
+            sub_directory: Sub-directory to store the log files under.
+            validator_node_list: List of validator nodes in the network.
+            action_log_filename: Name of the action log file.
+            node_log_filename: Name of the node log file.
+        """
         final_filename = (
             action_log_filename if action_log_filename is not None else "action_log.csv"
         )
@@ -128,16 +143,13 @@ class ActionLogger(CSVLogger):
         Log an action according to a specific column format.
 
         Args:
-            action: action to be logged.
-            from_node_id: id of the node who sent the message.
-            to_node_id: id of the node who is supposed to receive the message.
-            message_type: the message type as defined in the ripple.proto
-            original_data: the message's original data.
-            possibly_mutated_data: the message's possibly mutated data.
-            custom_timestamp: a custom timestamp to log if desired.
-
-        Returns:
-            None
+            action: Action to be logged.
+            from_node_id: ID of the node who sent the message.
+            to_node_id: ID of the node who is supposed to receive the message.
+            message_type: The message type as defined in the ripple.proto file.
+            original_data: The message's original data.
+            possibly_mutated_data: The message's possibly mutated data.
+            custom_timestamp: A custom timestamp to log if desired.
         """
         # Note: timestamp is milliseconds since epoch (January 1, 1970)
         self.writer.writerow(
@@ -167,8 +179,8 @@ class ResultLogger(CSVLogger):
         Initialize ResultLogger class.
 
         Args:
-            sub_directory: The subdirectory in `action_logs` to store the results in
-            result_log_filename: The name of the log file to store the results in
+            sub_directory: The subdirectory in `action_logs` to store the results in.
+            result_log_filename: The name of the log file to store the results in.
         """
         final_filename = (
             result_log_filename if result_log_filename is not None else "result_log.csv"

@@ -10,7 +10,7 @@ from xrpl_controller.strategies.strategy import Strategy
 
 
 class RandomFuzzer(Strategy):
-    """Class that implements random fuzzer."""
+    """Class that implements a random fuzzer."""
 
     def __init__(
         self,
@@ -24,14 +24,14 @@ class RandomFuzzer(Strategy):
         Initializes the random fuzzer.
 
         Args:
-            network_config_path: the path to a network config file to be used
-            strategy_config_path: the path to a strategy config file to be used
-            auto_parse_identical: whether to auto-parse identical packages per peer combination.
-            auto_parse_subsets: whether to auto-parse identical packages w.r.t. defined subsets
-            iteration_type: The type of iteration to keep track of
+            network_config_path: The path to a network config file to be used.
+            strategy_config_path: The path to a strategy config file to be used.
+            auto_parse_identical: Whether to auto-parse identical packages per peer combination.
+            auto_parse_subsets: Whether to auto-parse identical packages w.r.t. defined subsets.
+            iteration_type: The type of iteration to keep track of.
 
         Raises:
-            ValueError: if retrieved probabilities or delays are invalid
+            ValueError: If retrieved probabilities or delays are invalid.
         """
         super().__init__(
             network_config_path=network_config_path,
@@ -78,10 +78,10 @@ class RandomFuzzer(Strategy):
         Implements the handle_packet method with a random action.
 
         Args:
-            packet: the original packet to be sent.
+            packet: The original packet to be sent.
 
         Returns:
-            Tuple[bytes, int]: the new packet and the random action.
+            Tuple[bytes, int]: The new packet and the random action.
         """
         choice: float = random.random()
         if choice < self.params["send_probability"]:
