@@ -1,4 +1,4 @@
-"""This module contains the class that implements a handling."""
+"""This module contains the class that implements an example Strategy using simple mutation."""
 
 from datetime import datetime
 from typing import Tuple
@@ -29,10 +29,10 @@ class MutationExample(Strategy):
         Handler method for receiving a packet.
 
         Args:
-            packet:  of the node
+            packet: Packet to handle.
 
         Returns:
-            A tuple of the possible mutated message as bytes, and action as int
+            Tuple[bytes, int]: A tuple of the possible mutated message as bytes, and action as int
         """
         # Decode the packet to figure out the type and length
         try:
@@ -40,7 +40,7 @@ class MutationExample(Strategy):
         except DecodingNotSupportedError:
             return packet.data, 0
 
-        # check whether message is of type TMProposeSet
+        # Check whether message is of type TMProposeSet
         if not isinstance(message, ripple_pb2.TMProposeSet):
             return packet.data, 0
 

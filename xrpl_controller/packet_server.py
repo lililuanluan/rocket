@@ -30,7 +30,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Constructor for the PacketService class.
 
         Args:
-            strategy: the strategy to use while serving packets
+            strategy: The Strategy to use while serving packets.
         """
         self.strategy = strategy
         self.logger: ActionLogger | None = None
@@ -44,14 +44,14 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         Every action taken by the defined strategy will be logged in ../execution_logs.
 
         Args:
-            request: packet containing intercepted data
-            context: grpc context
+            request: Packet containing intercepted data.
+            context: gRPC context.
 
         Returns:
-            the possibly modified packet and an action
+            The possibly modified packet and an action.
 
         Raises:
-            ValueError: if request.from_port == request.to_port or if any is negative
+            ValueError: If request.from_port == request.to_port or if any is negative.
         """
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
         validate_ports_or_ids(request.from_port, request.to_port)
@@ -94,7 +94,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         Args:
             request_iterator: Iterator of validator node info.
-            context: grpc context.
+            context: gRPC context.
 
         Returns:
             ValidatorNodeInfoAck: An acknowledgement.
@@ -146,7 +146,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
     def get_config(self, request, context):
         """
-        This function sends the network config specified in the self.strategy, to the interceptor.
+        This function sends the network config specified in the self.strategy field to the interceptor.
 
         Args:
             request: The request containing the network config.
@@ -156,8 +156,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             Config: The Config object.
 
         Raises:
-            ValueError: if an expected field is not set in the config file.
-            TypeError: if the type of a field does not match the expected type.
+            ValueError: If an expected field is not set in the config file.
+            TypeError: If the type of one of the fields in the config file does not match the expected type.
         """
         config = self.strategy.network.network_config
 
@@ -199,12 +199,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
 
 def serve(strategy: Strategy):
-    """
-    This function starts the server and listens for incoming packets.
-
-    Returns: None
-
-    """
+    """This function starts the server and listens for incoming packets."""
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")

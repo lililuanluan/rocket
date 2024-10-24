@@ -1,4 +1,4 @@
-"""Class which stores information on taken actions on intercepted messages."""
+"""This module contains a class which stores information on taken actions on intercepted messages."""
 
 
 class MessageAction:
@@ -27,7 +27,7 @@ class MessageAction:
             initial_message: The initial pre-processed message.
 
         Returns:
-            MessageAction: 'self'
+            MessageAction: The MessageAction this method was called on.
         """
         self.initial_message = initial_message
         return self
@@ -40,7 +40,7 @@ class MessageAction:
             final_message: The final processed message.
 
         Returns:
-            MessageAction: 'self'
+            MessageAction: The MessageAction this method was called on.
         """
         self.final_message = final_message
         return self
@@ -53,7 +53,7 @@ class MessageAction:
             action: The taken action.
 
         Returns:
-            MessageAction: 'self'
+            MessageAction: The MessageAction this method was called on.
         """
         self.action = action
         return self

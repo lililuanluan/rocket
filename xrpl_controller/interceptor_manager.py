@@ -1,4 +1,4 @@
-"""Contains functionality to easily interact with the network packet interceptor subprocess."""
+"""This module contains functionality to easily interact with the network packet interceptor subprocess."""
 
 import traceback
 from subprocess import PIPE, Popen, TimeoutExpired

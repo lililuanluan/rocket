@@ -1,4 +1,4 @@
-"""This module contains the class that implements a Decoder."""
+"""This module contains the class that implements an encoder and a decoder for XRPL packets."""
 
 import struct
 from functools import singledispatchmethod
@@ -58,10 +58,10 @@ class PacketEncoderDecoder:
 
         Args:
             message: Message to be signed.
-            private_key: Private key of the message in hex format.
+            private_key: Private key of the original sender of the message in hex format.
 
         Returns:
-            Message that is signed
+            Message: Signed Message.
         """
         raise NotImplementedError(f"No signing method implemented for {type(message)}.")
 
@@ -69,16 +69,16 @@ class PacketEncoderDecoder:
     @staticmethod
     def _(message: TMProposeSet, private_key: str) -> TMProposeSet:
         """
-        Method that takes in a proposeSet and does the hashing of it.
+        Method that takes in a ProposeSet and updates its signature.
 
         Args:
             message: ProposeSet.
-            private_key: Private key of the message in hex format
+            private_key: Private key of the original sender of the message in hex format.
 
         Returns:
-            message that needs to be signed
+            TMProposeSet: Message that needs to be signed
         """
-        # Collect the fields used to originally sign the message
+        # Acquire the fields used to originally sign the message
         bytes_to_sign = (
             b"\x50\x52\x50\x00"
             + message.proposeSeq.to_bytes(4, "big")
@@ -97,18 +97,17 @@ class PacketEncoderDecoder:
     @staticmethod
     def decode_packet(packet: packet_pb2.Packet) -> tuple[Message, int]:
         """
-        Decodes the given packet into a tuple containing the message object, and type number.
-
-        Throws an exception when trying to decode a message which is not supported
-        according to the 'ripple.proto' file.
+        Decodes a given packet into a tuple containing the message object and type number.
 
         Args:
-            packet:  packet to decode
+            packet: Packet to decode.
 
         Returns:
-            tuple of the message, and message type
+            tuple[Message, int]: Tuple of the message, and message type.
+
+        Raises:
+            DecodingNotSupportedError: If the given packet is not supported.
         """
-        # length = struct.unpack("!I", packet.data[:4])[0]
         message_type = struct.unpack("!H", packet.data[4:6])[0]
         if message_type not in PacketEncoderDecoder.message_type_map:
             raise DecodingNotSupportedError(
@@ -129,8 +128,11 @@ class PacketEncoderDecoder:
         This function supports method overloading, using the @singledispatchmethod decorator.
 
         Args:
-            message: message to encode
-            message_type: type of message
+            message: Message to encode
+            message_type: Type of message
+
+        Returns:
+            bytes: Encoded message.
         """
         # Serialize message to prepare sending to the interceptor
         serialized = message.SerializeToString()

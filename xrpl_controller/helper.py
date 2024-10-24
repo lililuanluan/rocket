@@ -1,42 +1,42 @@
-"""Core module."""
+"""Helper module with useful shared functions."""
 
 from datetime import datetime
 from typing import Any
 
 import yaml
 
-# The delay value which indicated a drop. This is the max value of an u32 datatype in Rust.
+# The delay value which indicates a drop. This is the max value of an u32 datatype in Rust.
 MAX_U32 = 2**32 - 1
 
 
 def flatten(xss: list[list[int]]) -> list[int]:
     """
-    Flatten a 2D list.
+    Flatten a 2D integer list.
 
     Args:
         xss: A 2D integer list to be flattened.
 
     Returns:
-        list[int]: A flattened list.
+        list[int]: A flattened integer list.
     """
     return [x for xs in xss for x in xs]
 
 
 def validate_ports_or_ids(num_1: int, num_2: int):
     """
-    Validate whether 2 ports are not equal to each other.
+    Validate whether 2 ports or ID's are not equal to each other.
 
     Args:
-        num_1: Port 1
-        num_2: Port 2
+        num_1: Port or ID 1.
+        num_2: Port or ID 2.
 
     Raises:
-        ValueError: if the ports or ID's are equal or if any of the ports or ID's are negative.
+        ValueError: If the ports or ID's are equal or if any of the ports or ID's are negative.
     """
     if num_1 < 0 or num_2 < 0:
-        raise ValueError("Received ports or ID's must be non-negative")
+        raise ValueError("Received ports or ID's must be non-negative.")
 
-    if num_1 == num_2:
+    elif num_1 == num_2:
         raise ValueError(
             f"Received ports or ID's can not be equal to each other, value: {num_1}."
         )
@@ -47,15 +47,15 @@ def format_datetime(time: datetime) -> str:
     Format a datetime to a fixed format.
 
     Args:
-        time: Timestamp
+        time: Timestamp.
 
     Returns:
-        str: Formatted time
+        str: Formatted timestamp.
     """
     return time.strftime("%Y_%m_%d_%Hh%Mm")
 
 
-# This method cannot have a return type, tox will complain
+# This method is not allowed to have a return type, tox will complain and will fail the pipeline.
 # This method is solely used to suppress tox warnings.
 def parse_to_list_of_ints(lst: list[list[int]] | list[int]):
     """
@@ -70,14 +70,14 @@ def parse_to_list_of_ints(lst: list[list[int]] | list[int]):
     Raises:
         ValueError: If lst is not a list[int].
     """
-    # Case when var is already a list of integers
+    # Case when var is indeed a 1D list of integers
     if isinstance(lst, list) and all(isinstance(i, int) for i in lst):
         return lst
 
     raise ValueError("Given argument is not a 1D integer list.")
 
 
-# This method cannot have a return type, tox will complain
+# This method is not allowed to have a return type, tox will complain and will fail the pipeline.
 # This method is solely used to suppress tox warnings.
 def parse_to_2d_list_of_ints(lst: list[list[int]] | list[int]):
     """

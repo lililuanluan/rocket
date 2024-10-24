@@ -35,7 +35,7 @@ class Strategy(ABC):
         iteration_type: TimeBasedIteration | None = None,
     ):
         """
-        Initialize the Strategy interface with needed fields.
+        Initialize the Strategy interface with necessary fields.
 
         Args:
             network_config_path (str): The path of a network configuration file
@@ -70,7 +70,16 @@ class Strategy(ABC):
     def init_configs(
         network_config_path: str, strategy_config_path: str
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Initialize the strategy and network configuration from the given paths."""
+        """
+        Initialize the strategy and network configuration from the given paths.
+
+        Args:
+            network_config_path: Path of the network config file.
+            strategy_config_path: Path of the strategy config path.
+
+        Returns:
+            Tuple[Dict[str, Any], Dict[str, Any]]: Tuple containing the config files transformed to dictionaries.
+        """
         params = yaml_to_dict(strategy_config_path)
         logger.debug(
             f"Initialized strategy parameters from configuration file:\n\t{params}"
@@ -87,7 +96,7 @@ class Strategy(ABC):
         Update the strategy's attributes.
 
         Args:
-            validator_node_list (list[ValidatorNode]): The list with (new) validator node information
+            validator_node_list (list[ValidatorNode]): The list with (new) validator node information.
         """
         logger.info("Updating the strategy's network information")
         self.network.update_network(validator_node_list)
@@ -95,7 +104,12 @@ class Strategy(ABC):
         self.setup()
 
     def update_status(self, packet: packet_pb2.Packet):
-        """Update the iteration's state variables, when a new TMStatusChange is received."""
+        """
+        Update the iteration's state variables, when a new TMStatusChange is received.
+
+        Args:
+            packet: The packet to check for a possible status update.
+        """
         try:
             message, _ = PacketEncoderDecoder.decode_packet(packet)
             if isinstance(message, ripple_pb2.TMStatusChange):
@@ -111,7 +125,7 @@ class Strategy(ABC):
         Process an incoming packet, applies automatic processes if applicable.
 
         Args:
-            packet: Packet object
+            packet: The packet to process.
 
         Returns:
             Tuple[bytes, int]: The processed packet as bytes and an action in a tuple.
@@ -121,8 +135,8 @@ class Strategy(ABC):
 
         # Check for identical previous messages or for identical messages within broadcasts.
         # This uses booleans to check whether the functionality has to be applied automatically.
-        # First check whether we want to automatically parse resent messages,
-        # then we check whether we want to perform identical actions for defined subsets of processes
+        # First check whether we want to automatically parse re-sent messages,
+        # then we check whether we want to perform identical actions for defined subsets of processes/peers.
         if (
             self.auto_parse_identical
             and (
@@ -158,7 +172,6 @@ class Strategy(ABC):
                 )
 
         self.update_status(packet)
-
         return final_data, action
 
     @abstractmethod
@@ -178,9 +191,9 @@ class Strategy(ABC):
         This method is responsible for returning a possibly mutated packet and an action.
 
         Args:
-            packet: the original packet.
+            packet: The original packet.
 
         Returns:
-            Tuple[bytes, int]: the new packet and the action.
+            Tuple[bytes, int]: The new packet and the action.
         """
         pass

@@ -1,4 +1,4 @@
-"""Class which is able to build a transaction."""
+"""Module with a class which is able to build transactions."""
 
 from xrpl import CryptoAlgorithm
 from xrpl.models import Payment, Transaction
@@ -9,7 +9,7 @@ class TransactionBuilder:
     """Builder for XRP Transactions."""
 
     def __init__(self):
-        """Initialize fields."""
+        """Initialize a new TransactionBuilder."""
         # genesis_address  is the genesis account for every XRPL network.
         self.genesis_address = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
         self.genesis_seed = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb"
@@ -34,16 +34,16 @@ class TransactionBuilder:
         Build a XRPL Transaction.
 
         Args:
-            amount: the amount of XRPL drops to be included in the transaction.
-            sender_account: the account address from which to send XRP in hex.
-            sender_account_seed: seed for account in SECP256K1 format in hex.
-            destination_account: the account id of the destination of the transaction in hex.
+            amount: The amount of XRPL drops to be included in the transaction.
+            sender_account: The account address from which to send XRP in hex.
+            sender_account_seed: Seed for account in SECP256K1 format in hex.
+            destination_account: The account id of the destination of the transaction in hex.
 
         Returns:
-            Payment: a Payment object, which inherits the Transaction class.
+            Payment: A Payment object, which inherits the Transaction class.
 
         Raises:
-            ValueError: if amount is smaller than 1_000_000_000
+            ValueError: If amount is smaller than 1_000_000_000.
         """
         if amount < 1_000_000_000:
             raise ValueError(
@@ -65,6 +65,11 @@ class TransactionBuilder:
         return payment_tx
 
     def add_transaction(self, transaction: Transaction):
-        """Add a transaction to store in this builder."""
+        """
+        Add a transaction to store in this builder.
+
+        Args:
+            transaction: A Transaction to add.
+        """
         self.transactions.append(transaction)
         self.tx_amount += 1

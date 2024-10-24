@@ -1,4 +1,4 @@
-"""This module contains a way to log ledger results."""
+"""This module contains an implementation to log ledger results."""
 
 from typing import Any, List
 
@@ -40,7 +40,7 @@ class LedgerResult:
         Fetch the node info from the websocket server at a specific port.
 
         Args:
-            ws_port: the websocket server port to retrieve the node info from.
+            ws_port: The websocket server port to retrieve the node info from.
 
         Returns:
             A dictionary containing the node info if available, None otherwise.

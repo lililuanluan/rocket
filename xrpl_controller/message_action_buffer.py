@@ -1,4 +1,4 @@
-"""Class which stores last received MessageAction entries."""
+"""This module contains a class which stores received MessageAction entries."""
 
 from xrpl_controller.message_action import MessageAction
 
@@ -8,13 +8,16 @@ class MessageActionBuffer:
 
     def __init__(self, capacity: int):
         """
-        Initialize fields.
+        Initialize a new MessageActionBuffer.
 
         Args:
             capacity (int): Maximum number of entries to store in buffer.
+
+        Raises:
+            ValueError: If given capacity is not greater than 0.
         """
         if capacity < 1:
-            raise ValueError("Capacity must be greater than 0")
+            raise ValueError("Capacity must be greater than 0.")
 
         self.capacity = capacity
         self.messages: list[MessageAction] = []
