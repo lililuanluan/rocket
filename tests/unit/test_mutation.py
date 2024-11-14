@@ -8,8 +8,8 @@ from xrpl.core.keypairs.secp256k1 import SECP256K1
 from protos import packet_pb2, ripple_pb2
 from protos.packet_pb2 import Packet
 from protos.ripple_pb2 import TMProposeSet
+from xrpl_controller.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.strategies import Strategy
-from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.strategies.mutation_example import MutationExample
 
 

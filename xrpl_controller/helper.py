@@ -128,6 +128,10 @@ def yaml_to_dict(filepath: str) -> dict[str, Any]:
     """
     path = format_filename(filepath, "yaml")
 
+    # Create the file if not exists
+    with open(path, "a+"):
+        pass
+
     with open(path, "rb") as f:
         result: dict[str, Any] = yaml.safe_load(f)
         result = result if result is not None else {}

@@ -1,7 +1,7 @@
 """This module contains the class that implements a random fuzzer."""
 
 import random
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 from protos import packet_pb2
 from xrpl_controller.helper import MAX_U32
@@ -14,11 +14,13 @@ class RandomFuzzer(Strategy):
 
     def __init__(
         self,
-        network_config_path: str = "./xrpl_controller/network_configs/default-network-config.yaml",
-        strategy_config_path: str = "./xrpl_controller/strategies/configs/RandomFuzzer.yaml",
+        network_config_path: str = "./config/network/default_network.yaml",
+        strategy_config_path: str | None = None,
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         iteration_type: TimeBasedIteration | None = None,
+        network_overrides: Dict[str, Any] | None = None,
+        strategy_overrides: Dict[str, Any] | None = None,
     ):
         """
         Initializes the random fuzzer.
@@ -29,6 +31,8 @@ class RandomFuzzer(Strategy):
             auto_parse_identical: Whether to auto-parse identical packages per peer combination.
             auto_parse_subsets: Whether to auto-parse identical packages w.r.t. defined subsets.
             iteration_type: The type of iteration to keep track of.
+            network_overrides: A dictionary containing parameter names and values which override the network config.
+            strategy_overrides: A dictionary containing parameter names and values which override the strategy config.
 
         Raises:
             ValueError: If retrieved probabilities or delays are invalid.
@@ -39,6 +43,8 @@ class RandomFuzzer(Strategy):
             auto_parse_identical=auto_parse_identical,
             auto_parse_subsets=auto_parse_subsets,
             iteration_type=iteration_type,
+            network_overrides=network_overrides,
+            strategy_overrides=strategy_overrides,
         )
 
         if self.params["seed"] is not None:

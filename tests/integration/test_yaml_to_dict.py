@@ -2,7 +2,7 @@
 
 from xrpl_controller.helper import yaml_to_dict
 
-test_dir = "./tests/test_configs/yaml_to_dict/"
+test_dir = "./tests/_configs/yaml_to_dict/"
 
 
 def test_yaml_to_dict():

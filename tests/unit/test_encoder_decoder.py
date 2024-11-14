@@ -6,7 +6,7 @@ from google.protobuf.message import EncodeError
 
 from protos import packet_pb2, ripple_pb2
 from protos.ripple_pb2 import TMProposeSet
-from xrpl_controller.strategies.encoder_decoder import (
+from xrpl_controller.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
 )
