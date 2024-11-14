@@ -94,7 +94,6 @@ def parse_args(args: argparse.Namespace) -> Dict[str, Any]:
     if args.overrides and len(args.overrides.keys()) > 0:
         params_dict["strategy_overrides"] = args.overrides
 
-    print(params_dict)
     return params_dict
 
 
@@ -107,7 +106,6 @@ def main(args: argparse.Namespace) -> None:
     """
     params_dict = parse_args(args)
     strategy: Strategy = str_to_strategy(args.strategy)(**params_dict)
-    return
     server = serve(strategy)
     server.wait_for_termination()
 

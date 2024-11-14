@@ -78,6 +78,15 @@ class Strategy(ABC):
                     strategy_overrides[parameter_name]
                 )
 
+        logger.debug(
+            f"Initialized final strategy parameters from configuration file:"
+            f"\n\t{self.params}"
+        )
+        logger.debug(
+            f"Initialized final strategy network configuration from configuration file:"
+            f"\n\t{self.network.network_config}"
+        )
+
         self.start_datetime: datetime = datetime.now()
         self.iteration_type = (
             LedgerBasedIteration(10, 5, 45)
@@ -101,14 +110,7 @@ class Strategy(ABC):
             Tuple[Dict[str, Any], Dict[str, Any]]: Tuple containing the config files transformed to dictionaries.
         """
         params = yaml_to_dict(strategy_config_path)
-        logger.debug(
-            f"Initialized strategy parameters from configuration file:\n\t{params}"
-        )
-
         network_config = yaml_to_dict(network_config_path)
-        logger.debug(
-            f"Initialized strategy network configuration from configuration file:\n\t{network_config}"
-        )
         return network_config, params
 
     def update_network(self, validator_node_list: List[ValidatorNode]):
