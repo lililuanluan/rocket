@@ -43,7 +43,7 @@ The automated documentation generation will only run on a merge to main. After s
 Below you can find how to generate documentation locally
 
 ### Linux
-```console
+```console & macOS
 cd docs
 make clean && make html
 ```

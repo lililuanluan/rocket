@@ -56,9 +56,9 @@ The configuration options for the specified strategy (RandomFuzzer in this examp
 
 ### Running manually
 
-Below is running the controller module in both Linux and Python manually.
+Below is running the controller module in both Linux & macOS and Python manually.
 
-#### Linux
+#### Linux & macOS
 ```console
 python -m venv .venv               # (optional) Create a virtual environment
 source .venv/bin/activate          # (optional) Activate the environment
@@ -79,8 +79,6 @@ python3 -m xrpl_controller         # Runs the application
 
 - To contribute to the controller module read: 
 [CONTRIBUTING.md](CONTRIBUTING.md)
-- To run and configure the controller module application read:
-[configuring-running.md](configuring-running.md)
 - To run tests read:
 [TESTING.md](TESTING.md)
 
