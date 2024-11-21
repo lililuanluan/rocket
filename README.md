@@ -32,7 +32,7 @@ file for every fuzzing strategy available to the tool.
 
 To change the network configuration, you can edit the 
 `config/network/default_network.yaml` file. Alternatively, 
-create a new file and pass its relative path to the tool using 
+you can create a new file and pass its relative path to the tool using 
 the `--network_config` flag.
 
 Documentation on the various configuration options are included in the default
@@ -47,7 +47,7 @@ following CLI options:
 #### Strategy configuration
 To change a specific strategy's configurable parameters (e.g. RandomFuzzer)
 you can edit the `config/default_RandomFuzzer.yaml` file. Alternatively, 
-create a new yaml file and pass its relative path to the CLI using 
+you can create a new YAML file and pass its relative path to the CLI using 
 the `--config` option.
 
 Overriding strategy parameters is also possible through the CLI using 
@@ -64,7 +64,7 @@ the included RandomFuzzer as the fuzzing strategy.
 python3 -m xrpl_controller RandomFuzzer
 ```
 
-The full list of CLI options can be viewed using the command below.
+For the full list of CLI options, run the following command:
 
 ```bash
 python3 -m xrpl_controller -h
@@ -72,7 +72,7 @@ python3 -m xrpl_controller -h
 
 ## Creating a new Strategy
 
-Rocket's design allows for easy addition of new fuzzing strategies. Below are
+Rocket's design allows for easy creation of new fuzzing strategies. Below are
 the steps needed to implement and use your new strategy.
 
 ### Creating the Strategy files
@@ -164,16 +164,16 @@ python -m xrpl_controller ExampleStrategy --config my_config_dir/config_1.yaml
 ### Additional notes
 
 The quickstart only covers the basic functionality. If you want to know more about how to implement
-message mutation, take alook at the `xrpl_controller/strategies/mutation_example.py` file.
+message mutation, take a look at the `xrpl_controller/strategies/mutation_example.py` file.
 
 ## Changing test iteration logic
 
 After defining a strategy and running it, you will see that, by default,
-a test strategy executed by Rocket runs for 10 total iterations, with 
-each iteration validating 5 ledgers. 
+a test strategy executed by Rocket runs for a total of 10 iterations, with 
+each iteration validating exactly 5 ledgers. 
 This is the `LedgerBasedIteration` type. You can change its parameters by 
 overriding the `iteration_type` parameter while initializing the `Strategy` 
-base class.
+superclass from your created strategy.
 
 ```python
 from xrpl_controller.strategies.strategy import Strategy
@@ -186,8 +186,8 @@ class ExampleStrategy(Strategy):
         )
 ```
 
-Or, for example, running 10 Rocket test iterations with a fixed time of 60 seconds
-instead of a fixed ledger number is done as follows:
+Running 10 Rocket test iterations with a fixed time of 60 seconds per iteration
+is done as follows using `TimeBasedIteration`:
 
 ```python
 from xrpl_controller.strategies.strategy import Strategy
@@ -202,6 +202,8 @@ class ExampleStrategy(Strategy):
 
 If these two possible iteration types do not cater for your strategy's needs,
 you can create your own custom iteration type in [xrpl_controller/iteration_type.py](xrpl_controller/iteration_type.py).
+
+Note: Make sure your iteration type inherits from `TimeBasedIteration`.
 
 ## Useful Resources
 
