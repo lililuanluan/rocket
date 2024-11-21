@@ -1,11 +1,15 @@
 """strategies package."""
 
-# https://stackoverflow.com/a/6246478
 import os
 import sys
 
+# Direct import for proper IDE integration (used in unit tests etc.)
+from .mutation_example import MutationExample
+from .random_fuzzer import RandomFuzzer
 from .strategy import Strategy
 
+# The following block of code dynamically imports all classes created in the strategies module.
+# https://stackoverflow.com/a/6246478
 path = os.path.dirname(os.path.abspath(__file__))
 
 for py in [
@@ -16,4 +20,4 @@ for py in [
     for cls in classes:
         setattr(sys.modules[__name__], cls.__name__, cls)
 
-__all__ = ["Strategy"]
+__all__ = ["MutationExample", "RandomFuzzer", "Strategy"]

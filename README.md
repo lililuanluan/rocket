@@ -1,5 +1,8 @@
 # Rocket's controller module
 
+Rocket is an easy-to-use and extendable system-level testing framework 
+for the XRP Ledger Consensus Algorithm.
+
 This module is the main part of Rocket and is responsible for 
 mutating the messages that have been intercepted from 
 the [packet-interceptor](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor)
@@ -21,7 +24,7 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Configuration files for Rocket are found in the `config` subdirectory, which 
+Configuration files for Rocket are found in the [config](config) subdirectory, which 
 includes a default network configuration file as well as a default configuration
 file for every fuzzing strategy available to the tool.
 
@@ -39,7 +42,7 @@ following CLI options:
 - `--nodes AMOUNT` will override the amount of nodes to start to `AMOUNT` (int)
 - `--partition PARTITION` will override the network partition to use to 
   the specified `PARTITION` (str) with format specified in the
-  `config/network/default_network.yaml` file. (e.g. `[[1,2,3]]` or `[[1,2], [2,3]]`)
+  `config/network/default_network.yaml` file. (e.g. `[[0,1,2]]` or `[[0,1], [1,2]]`)
 
 #### Strategy configuration
 To change a specific strategy's configurable parameters (e.g. RandomFuzzer)
@@ -135,6 +138,8 @@ foo: bar
 That's it! The parameter can now be accessed from anywhere in the ExampleStrategy:
 
 ```python
+from xrpl_controller.strategies.strategy import Strategy
+
 class ExampleStrategy(Strategy):
     def some_method(self):
         print(self.params["foo"]) # prints 'bar'
@@ -155,6 +160,48 @@ foo: bar baz
 ```bash
 python -m xrpl_controller ExampleStrategy --config my_config_dir/config_1.yaml
 ```
+
+### Additional notes
+
+The quickstart only covers the basic functionality. If you want to know more about how to implement
+message mutation, take alook at the `xrpl_controller/strategies/mutation_example.py` file.
+
+## Changing test iteration logic
+
+After defining a strategy and running it, you will see that, by default,
+a test strategy executed by Rocket runs for 10 total iterations, with 
+each iteration validating 5 ledgers. 
+This is the `LedgerBasedIteration` type. You can change its parameters by 
+overriding the `iteration_type` parameter while initializing the `Strategy` 
+base class.
+
+```python
+from xrpl_controller.strategies.strategy import Strategy
+from xrpl_controller.iteration_type import LedgerBasedIteration
+
+class ExampleStrategy(Strategy):
+    def __init__(self):
+        super().__init__(
+          iteration_type=LedgerBasedIteration(max_iterations=10, max_ledger_seq=5)
+        )
+```
+
+Or, for example, running 10 Rocket test iterations with a fixed time of 60 seconds
+instead of a fixed ledger number is done as follows:
+
+```python
+from xrpl_controller.strategies.strategy import Strategy
+from xrpl_controller.iteration_type import TimeBasedIteration
+
+class ExampleStrategy(Strategy):
+    def __init__(self):
+        super().__init__(
+          iteration_type=TimeBasedIteration(max_iterations=10, timeout_seconds=60)
+        )
+```
+
+If these two possible iteration types do not cater for your strategy's needs,
+you can create your own custom iteration type in [xrpl_controller/iteration_type.py](xrpl_controller/iteration_type.py).
 
 ## Useful Resources
 
