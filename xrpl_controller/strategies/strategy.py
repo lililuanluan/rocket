@@ -78,10 +78,7 @@ class Strategy(ABC):
                     strategy_overrides[parameter_name]
                 )
 
-        logger.debug(
-            f"Initialized final strategy parameters:"
-            f"\n\t{self.params}"
-        )
+        logger.debug(f"Initialized final strategy parameters:" f"\n\t{self.params}")
         logger.debug(
             f"Initialized final strategy network configuration:"
             f"\n\t{self.network.network_config}"
