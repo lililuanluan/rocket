@@ -40,15 +40,15 @@ class Strategy(ABC):
         Initialize the Strategy interface with necessary fields.
 
         Args:
-            network_config_path (str): The path of a network configuration file
-            strategy_config_path (str): The path of the strategy configuration file
+            network_config_path (str, optional): The path of a network configuration file
+            strategy_config_path (str, optional): The path of the strategy configuration file
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions.
             auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
             auto_parse_subsets (bool, optional): Whether the strategy will perform same actions on defined subsets.
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
-            iteration_type (IterationType, optional): Type of iteration logic to use.
-            network_overrides: A dictionary containing parameter names and values which override the network config.
-            strategy_overrides: A dictionary containing parameter names and values which override the strategy config.
+            iteration_type (TimeBasedIteration, optional): Type of iteration logic to use.
+            network_overrides (dict, optional): A dictionary containing parameter names and values which override the network config.
+            strategy_overrides (dict, optional): A dictionary containing parameter names and values which override the strategy config.
         """
         if strategy_config_path is None:
             strategy_config_path = f"./config/default_{self.__class__.__name__}.yaml"

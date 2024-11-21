@@ -9,7 +9,7 @@ We have included some system-level automated tests. These can be run using `pyth
 
 ### Generating testing reports
 To generate testing reports, you can run the following command:
-```console
+```bash
 pytest tests/ --cov=xrpl_controller --cov-branch --cov-report json:coverage_reports/coverage.json --ignore=tests/system_level
 python coverage_script.py
 ```
