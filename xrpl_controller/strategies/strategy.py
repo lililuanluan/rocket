@@ -79,11 +79,11 @@ class Strategy(ABC):
                 )
 
         logger.debug(
-            f"Initialized final strategy parameters from configuration file:"
+            f"Initialized final strategy parameters:"
             f"\n\t{self.params}"
         )
         logger.debug(
-            f"Initialized final strategy network configuration from configuration file:"
+            f"Initialized final strategy network configuration:"
             f"\n\t{self.network.network_config}"
         )
 

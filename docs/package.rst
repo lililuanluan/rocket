@@ -6,11 +6,27 @@ Application Entry Point
         :members:
 
 
+---------------------
+CLI Parsing Functions
+---------------------
+
+    .. automodule:: xrpl_controller.cli_helper
+        :members:
+
+
 ---------------
 CSV File Logger
 ---------------
 
     .. automodule:: xrpl_controller.csv_logger
+        :members:
+
+
+--------------------------------
+Encoder/Decoder of XRPL Messages
+--------------------------------
+
+    .. automodule:: xrpl_controller.encoder_decoder
         :members:
 
 
@@ -99,14 +115,6 @@ Strategy Base Class
 -------------------
 
     .. automodule:: xrpl_controller.strategies.strategy
-        :members:
-
-
---------------------------------
-Encoder/Decoder of XRPL Messages
---------------------------------
-
-    .. automodule:: xrpl_controller.strategies.encoder_decoder
         :members:
 
 
