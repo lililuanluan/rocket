@@ -7,6 +7,10 @@ from typing import Any, Dict, List, Tuple
 from loguru import logger
 
 from protos import packet_pb2, ripple_pb2
+from xrpl_controller.encoder_decoder import (
+    DecodingNotSupportedError,
+    PacketEncoderDecoder,
+)
 from xrpl_controller.helper import (
     MAX_U32,
     format_datetime,
@@ -14,10 +18,6 @@ from xrpl_controller.helper import (
 )
 from xrpl_controller.iteration_type import LedgerBasedIteration, TimeBasedIteration
 from xrpl_controller.network_manager import NetworkManager
-from xrpl_controller.strategies.encoder_decoder import (
-    DecodingNotSupportedError,
-    PacketEncoderDecoder,
-)
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
@@ -26,26 +26,35 @@ class Strategy(ABC):
 
     def __init__(
         self,
-        network_config_path: str = "./xrpl_controller/network_configs/default-network-config.yaml",
-        strategy_config_path: str = "./xrpl_controller/strategies/configs/default-strategy-config.yaml",
+        network_config_path: str | None = None,
+        strategy_config_path: str | None = None,
         auto_partition: bool = True,
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
         iteration_type: TimeBasedIteration | None = None,
+        network_overrides: Dict[str, Any] | None = None,
+        strategy_overrides: Dict[str, Any] | None = None,
     ):
         """
         Initialize the Strategy interface with necessary fields.
 
         Args:
-            network_config_path (str): The path of a network configuration file
-            strategy_config_path (str): The path of the strategy configuration file
+            network_config_path (str, optional): The path of a network configuration file
+            strategy_config_path (str, optional): The path of the strategy configuration file
             auto_partition (bool, optional): Whether the strategy will auto-apply network partitions.
             auto_parse_identical (bool, optional): Whether the strategy will perform same actions on identical messages.
             auto_parse_subsets (bool, optional): Whether the strategy will perform same actions on defined subsets.
             keep_action_log (bool, optional): Whether the strategy will keep an action log. Defaults to True.
-            iteration_type (IterationType, optional): Type of iteration logic to use.
+            iteration_type (TimeBasedIteration, optional): Type of iteration logic to use.
+            network_overrides (dict, optional): A dictionary containing parameter names and values which override the network config.
+            strategy_overrides (dict, optional): A dictionary containing parameter names and values which override the strategy config.
         """
+        if strategy_config_path is None:
+            strategy_config_path = f"./config/default_{self.__class__.__name__}.yaml"
+        if network_config_path is None:
+            network_config_path = "./config/network/default_network.yaml"
+
         self.network = NetworkManager(
             auto_parse_identical=auto_parse_identical,
             auto_parse_subsets=auto_parse_subsets,
@@ -56,6 +65,23 @@ class Strategy(ABC):
         self.keep_action_log = keep_action_log
         self.network.network_config, self.params = self.init_configs(
             network_config_path, strategy_config_path
+        )
+
+        if network_overrides:
+            for parameter_name in network_overrides:
+                self.network.network_config[parameter_name] = network_overrides[
+                    parameter_name
+                ]
+        if strategy_overrides:
+            for parameter_name in strategy_overrides:
+                self.params[parameter_name] = type(self.params[parameter_name])(
+                    strategy_overrides[parameter_name]
+                )
+
+        logger.debug(f"Initialized final strategy parameters:" f"\n\t{self.params}")
+        logger.debug(
+            f"Initialized final strategy network configuration:"
+            f"\n\t{self.network.network_config}"
         )
 
         self.start_datetime: datetime = datetime.now()
@@ -81,14 +107,7 @@ class Strategy(ABC):
             Tuple[Dict[str, Any], Dict[str, Any]]: Tuple containing the config files transformed to dictionaries.
         """
         params = yaml_to_dict(strategy_config_path)
-        logger.debug(
-            f"Initialized strategy parameters from configuration file:\n\t{params}"
-        )
-
         network_config = yaml_to_dict(network_config_path)
-        logger.debug(
-            f"Initialized strategy network configuration from configuration file:\n\t{network_config}"
-        )
         return network_config, params
 
     def update_network(self, validator_node_list: List[ValidatorNode]):

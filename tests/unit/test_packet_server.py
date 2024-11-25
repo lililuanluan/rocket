@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from protos import packet_pb2
+from xrpl_controller.encoder_decoder import PacketEncoderDecoder
 from xrpl_controller.packet_server import PacketService
-from xrpl_controller.strategies.encoder_decoder import PacketEncoderDecoder
 
 
 def test_send_packet_no_log():

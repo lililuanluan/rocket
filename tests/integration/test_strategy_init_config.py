@@ -8,7 +8,7 @@ from xrpl_controller.strategies import RandomFuzzer
 def test_strategy_init():
     """Test whether Strategy attributes get initialized correctly."""
     strategy = RandomFuzzer(
-        strategy_config_path="./tests/test_configs/random_fuzzer/TEST_INIT.yaml",
+        strategy_config_path="./tests/_configs/random_fuzzer/TEST_INIT.yaml",
         iteration_type=Mock(),
     )
     assert strategy.params == {
