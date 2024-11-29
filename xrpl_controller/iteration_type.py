@@ -10,6 +10,7 @@ from loguru import logger
 from protos import ripple_pb2
 from xrpl_controller.interceptor_manager import InterceptorManager
 from xrpl_controller.ledger_result import LedgerResult
+from xrpl_controller.spec_checker import SpecChecker
 from xrpl_controller.validator_node_info import ValidatorNode
 
 
@@ -32,8 +33,9 @@ class TimeBasedIteration:
             ledger_timeout: Whether the timeout should be reset after each ledger validation, True for LedgerBasedIteration.
             max_ledger_seq: The maximum ledger sequence to validate (only for LedgerBasedIteration).
         """
-        self.cur_iteration = 1
+        self.cur_iteration = 0
         self._ledger_results = LedgerResult()
+        self._spec_checker: SpecChecker | None = None
 
         self._max_iterations = max_iterations
         self._server: Server | None = None
@@ -59,6 +61,9 @@ class TimeBasedIteration:
         )
         self._interceptor_manager.stop()
         self._interceptor_manager.cleanup_docker_containers()
+
+    def _terminate_server(self):
+        """Terminate the gRPC server."""
         if self._server:
             self._server.stop(grace=1)
 
@@ -94,26 +99,32 @@ class TimeBasedIteration:
 
     def set_log_dir(self, log_dir: str):
         """
-        Setter for the log_dir variable, since it needs to be updated every iteration.
+        Setter for the log_dir variable and instantiate the SpecChecker.
 
         Args:
             log_dir: New log directory.
         """
         self._log_dir = log_dir
+        self._spec_checker = SpecChecker(log_dir)
 
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
+        self.cur_iteration += 1
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
             self._reset_values()
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
-
             self._start_timeout_timer()
-            self.cur_iteration += 1
+            if self.cur_iteration > 1:
+                self._spec_checker.spec_check(self.cur_iteration - 1)
         else:
             self._stop_all()
+            self._ledger_results.flush_and_close()
+            self._spec_checker.spec_check(self.cur_iteration - 1)
+            self._spec_checker.aggregate_spec_checks()
+            self._terminate_server()
 
     def _reset_values(self):
         """Reset state variables, called when interceptor is restarted."""
@@ -212,6 +223,7 @@ class NoneIteration(TimeBasedIteration):
         """Overrides _timeout_reached to stop the whole process after timeout completes."""
         logger.info("Final time reached.")
         self._stop_all()
+        self._terminate_server()
 
     def add_iteration(self, max_ledger_seq: int = -1):
         """

@@ -27,6 +27,13 @@ result_log_columns = [
     "ledger_indexes",
 ]
 
+spec_check_columns = [
+    "iteration",
+    "reached_goal_ledger",
+    "same_ledger_hashes",
+    "same_ledger_indexes",
+]
+
 
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
@@ -111,7 +118,7 @@ class ActionLogger(CSVLogger):
         final_filename = (
             action_log_filename if action_log_filename is not None else "action_log.csv"
         )
-        directory = f"action_logs/{sub_directory}"
+        directory = sub_directory
 
         node_logger = CSVLogger(
             filename=node_log_filename
@@ -179,13 +186,13 @@ class ResultLogger(CSVLogger):
         Initialize ResultLogger class.
 
         Args:
-            sub_directory: The subdirectory in `action_logs` to store the results in.
+            sub_directory: The subdirectory to store the results in.
             result_log_filename: The name of the log file to store the results in.
         """
         final_filename = (
             result_log_filename if result_log_filename is not None else "result_log.csv"
         )
-        directory = f"action_logs/{sub_directory}"
+        directory = sub_directory
         super().__init__(
             filename=final_filename,
             columns=result_log_columns,
@@ -222,3 +229,52 @@ class ResultLogger(CSVLogger):
                 ledger_indexes,
             ]
         )
+
+
+class SpecCheckLogger(CSVLogger):
+    """CSVLogger child class which is dedicated to handle the logging of specification checks."""
+
+    def __init__(
+        self,
+        sub_directory: str,
+    ):
+        """
+        Initialize SpecCheckLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the spec check results in.
+        """
+        directory = sub_directory
+        super().__init__(
+            filename="spec_check_log.csv",
+            columns=spec_check_columns,
+            directory=directory,
+        )
+        self.close()
+
+    def log_spec_check(
+        self,
+        iteration: int,
+        reached_goal_ledger: bool | str,
+        same_ledger_hashes: bool | str,
+        same_ledger_indexes: bool | str,
+    ):
+        """
+        Log a spec check row to the CSV file.
+
+        Args:
+            iteration: The current iteration.
+            reached_goal_ledger: Whether the goal ledger was reached.
+            same_ledger_hashes: Whether the ledger hashes were the same.
+            same_ledger_indexes: Whether the ledger indexes were the same.
+        """
+        with open(self.filepath, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(
+                [
+                    iteration,
+                    reached_goal_ledger,
+                    same_ledger_hashes,
+                    same_ledger_indexes,
+                ]
+            )

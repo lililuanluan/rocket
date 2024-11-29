@@ -113,6 +113,7 @@ def test_update_status(mock_init_configs):
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
+    iteration_type.set_log_dir = Mock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()
@@ -134,6 +135,7 @@ def test_update_status_exception(mock_init_configs):
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
+    iteration_type.set_log_dir = Mock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()
@@ -155,6 +157,7 @@ def test_update_status_other_message(mock_init_configs):
     iteration_type._start_timeout_timer = MagicMock()
     iteration_type.on_status_change = MagicMock()
     iteration_type.set_server = MagicMock()
+    iteration_type.set_log_dir = Mock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
     mock_init_configs.assert_called_once()

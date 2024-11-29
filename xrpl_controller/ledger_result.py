@@ -26,7 +26,9 @@ class LedgerResult:
             iteration: The current iteration number.
         """
         self.flush_and_close()
-        self.result_logger = ResultLogger(log_dir, f"result-{iteration}")
+        self.result_logger = ResultLogger(
+            f"{log_dir}/iteration-{iteration}", f"result-{iteration}"
+        )
 
     def flush_and_close(self):
         """Close and flush the result logger."""
@@ -74,7 +76,6 @@ class LedgerResult:
             time_to_consensus: The time taken to reach consensus.
             validator_nodes: The list of validator nodes to check on.
         """
-        logger.info("Checking liveness and consistency...")
         results = []
 
         for node in validator_nodes:

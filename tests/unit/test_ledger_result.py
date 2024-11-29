@@ -20,11 +20,12 @@ def test_init():
 @patch("xrpl_controller.ledger_result.ResultLogger", return_value=Mock())
 def test_new_result_logger(mock_logger):
     """Test whether the new_result_logger function works correctly."""
+    iteration = 1
     ledger_result = LedgerResult()
-    ledger_result.new_result_logger("test", 1)
+    ledger_result.new_result_logger("test", iteration)
 
     assert ledger_result.result_logger is not None
-    mock_logger.assert_called_with("test", "result-1")
+    mock_logger.assert_called_with(f"test/iteration-{iteration}", "result-1")
 
 
 @patch("xrpl_controller.ledger_result.ResultLogger")

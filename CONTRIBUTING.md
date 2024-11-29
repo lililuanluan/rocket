@@ -70,7 +70,7 @@ Users are able to log custom columns to a csv file using the class `CSVLogger` i
 
 ### Action Logs
 Action logs can be kept track of by using the `keep_log` boolean argument in the `__init__` method of `Strategy`. Users are able to set this boolean to true by calling `super.__init__` in classes that inherit from `Strategy`. When this argument is set to `True`,
-an action log (csv) will be kept under the `logs/action_logs/[start_time]` directory along with a csv file containing the information of the validator nodes which were used during logging process.
+an action log (csv) will be kept under the `logs/[start_time]` directory along with a csv file containing the information of the validator nodes which were used during logging process.
 This action log makes use of the `CSVLogger`'s child class `ActionLogger` which is dedicated to logging actions.
 The log contains the timestamp when the action was taken on a packet, the action, sender peer port, receiver peer port, and the packet data as a hex string.
 

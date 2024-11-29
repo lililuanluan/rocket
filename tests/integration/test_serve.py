@@ -16,10 +16,9 @@ from xrpl_controller.packet_server import serve
 )
 def run_server(mock_configs):
     """Run the packet server with a dummy strategy."""
-    strategy = DummyStrategy()
-    mock_configs.assert_called_once()
     mock_iteration_type = Mock()
-    strategy.iteration_type = mock_iteration_type
+    strategy = DummyStrategy(iteration_type=mock_iteration_type)
+    mock_configs.assert_called_once()
     strategy.network.port_to_id_dict = {10: 0, 20: 1}
     server = serve(strategy)
     mock_iteration_type.set_server.assert_called_once()
