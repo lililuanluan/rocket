@@ -1,3 +1,5 @@
+"""Tests for the SpecChecker class."""
+
 import csv
 import json
 import os
@@ -18,14 +20,23 @@ class TestSpecChecker(unittest.TestCase):
                 os.remove(f"./logs/TEST_SPECCHECK_DIR/{file}")
             os.rmdir("./logs/TEST_SPECCHECK_DIR")
 
-    @patch('xrpl_controller.spec_checker._get_last_row')
+    @patch("xrpl_controller.spec_checker._get_last_row")
     def test_spec_check(self, mock_get_last_row):
         """Test the spec_check method."""
-        mock_get_last_row.return_value = ["10", "10", "", "", "['hash1', 'hash1']", "['index1', 'index1']"]
+        mock_get_last_row.return_value = [
+            "10",
+            "10",
+            "",
+            "",
+            "['hash1', 'hash1']",
+            "['index1', 'index1']",
+        ]
         spec_checker = SpecChecker("TEST_SPECCHECK_DIR")
         spec_checker.spec_check(1)
 
-        mock_get_last_row.assert_called_once_with("logs/TEST_SPECCHECK_DIR/iteration-1/result-1.csv")
+        mock_get_last_row.assert_called_once_with(
+            "logs/TEST_SPECCHECK_DIR/iteration-1/result-1.csv"
+        )
 
         with open("./logs/TEST_SPECCHECK_DIR/spec_check_log.csv", newline="") as file:
             reader = csv.DictReader(file)

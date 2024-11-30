@@ -1,3 +1,5 @@
+"""Test for SpecCheckLogger."""
+
 import csv
 import datetime
 import os
