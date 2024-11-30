@@ -1,4 +1,4 @@
-"""Tests for ActionLogger."""
+"""Tests for ResultLogger."""
 
 import csv
 import datetime
@@ -12,8 +12,8 @@ from xrpl_controller.csv_logger import (
 from xrpl_controller.helper import format_datetime
 
 
-class TestActionLogger(unittest.TestCase):
-    """Test ActionLogger class."""
+class TestResultLogger(unittest.TestCase):
+    """Test ResultLogger class."""
 
     @classmethod
     def tearDownClass(cls):
@@ -26,11 +26,11 @@ class TestActionLogger(unittest.TestCase):
         time = datetime.datetime(2024, 1, 2, 3, 4, 5, 6)
         timestamp_str = format_datetime(time)
 
-        base_dir = "./logs/TEST_ACTION_LOG_DIR"
+        base_dir = "./logs/TEST_RESULT_LOG_DIR"
         directory = f"{base_dir}/{timestamp_str}"
         path_results = f"{base_dir}/{timestamp_str}/result_log.csv"
 
-        logger = ResultLogger("TEST_ACTION_LOG_DIR/" + timestamp_str)
+        logger = ResultLogger("TEST_RESULT_LOG_DIR/" + timestamp_str)
         logger.log_result(1, 5, 3.00, [1234, 1234], ["hash123", "hash123"], [1, 1])
         logger.log_result(2, 5, 3.00, [2234, 2234], ["hash123", "hash123"], [2, 2])
         logger.log_result(3, 5, 3.00, [3234, 3234], ["hash123", "hash123"], [3, 3])
