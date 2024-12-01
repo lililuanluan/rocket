@@ -287,6 +287,8 @@ def test_none_iter():
     iteration._stop_all.assert_called_once()
     iteration._terminate_server.assert_called_once()
     iteration.on_status_change(ripple_pb2.TMStatusChange())
+    iteration.set_log_dir("test")
+    assert iteration._log_dir is None
 
 
 def test_reset_values_none_iter():

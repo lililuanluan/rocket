@@ -9,7 +9,7 @@ from loguru import logger
 from xrpl_controller.csv_logger import SpecCheckLogger
 
 
-def _get_last_row(file_path: str) -> List[Any] | None:
+def _get_last_row(file_path: str) -> List[Any]:
     """
     Get the last row from a CSV file.
 
@@ -22,7 +22,7 @@ def _get_last_row(file_path: str) -> List[Any] | None:
     with open(file_path, newline="") as file:
         reader = csv.reader(file)
         rows = list(reader)
-        return rows[-1] if rows else None
+        return rows[-1] if rows else []
 
 
 class SpecChecker:
@@ -57,39 +57,36 @@ class SpecChecker:
             )
             return
 
-        if last_row:
-            try:
-                ledger_count = int(last_row[0])
-                goal_ledger_count = int(last_row[1])
-                ledger_hashes: List = eval(last_row[4])
-                ledger_indexes: List = eval(last_row[5])
-                ledger_hashes_same = all(x == ledger_hashes[0] for x in ledger_hashes)
-                ledger_indexes_same = all(
-                    x == ledger_indexes[0] for x in ledger_indexes
-                )
+        try:
+            ledger_count = int(last_row[0])
+            goal_ledger_count = int(last_row[1])
+            ledger_hashes: List = eval(last_row[4])
+            ledger_indexes: List = eval(last_row[5])
+            ledger_hashes_same = all(x == ledger_hashes[0] for x in ledger_hashes)
+            ledger_indexes_same = all(x == ledger_indexes[0] for x in ledger_indexes)
 
+            self.spec_check_logger.log_spec_check(
+                iteration,
+                ledger_count == goal_ledger_count,
+                ledger_hashes_same,
+                ledger_indexes_same,
+            )
+
+            logger.info(
+                f"Specification check for iteration {iteration}: "
+                f"reached goal ledger: {ledger_count == goal_ledger_count}, "
+                f"same ledger hashes: {ledger_hashes_same}, same ledger indexes: {ledger_indexes_same}"
+            )
+        except Exception as e:
+            logger.error(f"Error during specification check: {e}")
+            if last_row[0] == "ledger_count":
                 self.spec_check_logger.log_spec_check(
-                    iteration,
-                    ledger_count == goal_ledger_count,
-                    ledger_hashes_same,
-                    ledger_indexes_same,
+                    iteration, "timeout reached before startup", "-", "-"
                 )
-
-                logger.info(
-                    f"Specification check for iteration {iteration}: "
-                    f"reached goal ledger: {ledger_count == goal_ledger_count}, "
-                    f"same ledger hashes: {ledger_hashes_same}, same ledger indexes: {ledger_indexes_same}"
+            else:
+                self.spec_check_logger.log_spec_check(
+                    iteration, "error during spec check", "-", "-"
                 )
-            except Exception as e:
-                logger.error(f"Error during specification check: {e}")
-                if last_row[0] == "ledger_count":
-                    self.spec_check_logger.log_spec_check(
-                        iteration, "timeout reached before startup", "-", "-"
-                    )
-                else:
-                    self.spec_check_logger.log_spec_check(
-                        iteration, "error during spec check", "-", "-"
-                    )
 
     def aggregate_spec_checks(self):
         """Aggregate the spec check results and write them to a final file."""

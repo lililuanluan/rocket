@@ -241,3 +241,7 @@ class NoneIteration(TimeBasedIteration):
     def on_status_change(self, status: ripple_pb2.TMStatusChange):
         """Override the method since none iteration does not need to keep track of ledgers."""
         pass
+
+    def set_log_dir(self, log_dir: str):
+        """Override the method since none iteration does not need do any spec checking."""
+        pass
