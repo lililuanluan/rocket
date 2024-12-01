@@ -244,11 +244,10 @@ class SpecCheckLogger(CSVLogger):
         Args:
             sub_directory: The subdirectory to store the spec check results in.
         """
-        directory = sub_directory
         super().__init__(
             filename="spec_check_log.csv",
             columns=spec_check_columns,
-            directory=directory,
+            directory=sub_directory,
         )
         self.close()
 

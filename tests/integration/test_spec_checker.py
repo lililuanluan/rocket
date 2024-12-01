@@ -19,6 +19,8 @@ class TestSpecChecker(unittest.TestCase):
             for file in os.listdir("./logs/TEST_SPECCHECK_DIR"):
                 os.remove(f"./logs/TEST_SPECCHECK_DIR/{file}")
             os.rmdir("./logs/TEST_SPECCHECK_DIR")
+        if len(os.listdir("./logs/")) == 0:
+            os.rmdir("./logs/")
 
     @patch("xrpl_controller.spec_checker._get_last_row")
     def test_spec_check(self, mock_get_last_row):

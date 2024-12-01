@@ -110,6 +110,9 @@ class TimeBasedIteration:
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
         self.cur_iteration += 1
+        self._ledger_results.flush_and_close()
+        if self.cur_iteration > 1:
+            self._spec_checker.spec_check(self.cur_iteration - 1)
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
@@ -117,12 +120,8 @@ class TimeBasedIteration:
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
-            if self.cur_iteration > 1:
-                self._spec_checker.spec_check(self.cur_iteration - 1)
         else:
             self._stop_all()
-            self._ledger_results.flush_and_close()
-            self._spec_checker.spec_check(self.cur_iteration - 1)
             self._spec_checker.aggregate_spec_checks()
             self._terminate_server()
 

@@ -72,7 +72,7 @@ def test_time_based_iteration_add_done():
     assert mock_interceptor_manager.stop.call_count == 2
     mock_interceptor_manager.cleanup_docker_containers.assert_called_once()
     grpc_server.stop.assert_called_once()
-    mock_ledger_results.flush_and_close.assert_called_once()
+    assert mock_ledger_results.flush_and_close.call_count == 2
     mock_spec_checker.spec_check.assert_called_once()
     mock_spec_checker.aggregate_spec_checks.assert_called_once()
 

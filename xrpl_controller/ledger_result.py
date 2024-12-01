@@ -19,19 +19,18 @@ class LedgerResult:
 
     def new_result_logger(self, log_dir: str, iteration: int):
         """
-        Create a new LedgerResult and close the existing one.
+        Create a new LedgerResult.
 
         Args:
             log_dir: The directory where the action log of the current iteration resides.
             iteration: The current iteration number.
         """
-        self.flush_and_close()
         self.result_logger = ResultLogger(
             f"{log_dir}/iteration-{iteration}", f"result-{iteration}"
         )
 
     def flush_and_close(self):
-        """Close and flush the result logger."""
+        """Flush and close the result logger."""
         if self.result_logger:
             self.result_logger.flush()
             self.result_logger.close()
