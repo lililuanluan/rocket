@@ -205,6 +205,15 @@ you can create your own custom iteration type in [xrpl_controller/iteration_type
 
 Note: Make sure your iteration type inherits from `TimeBasedIteration`.
 
+# Analysing the performance of the consensus algorithm
+
+After running your test cases, you can analyse the performance of the consensus algorithm. Several logs are created in the `logs/{timestamp}` directory. 
+The most important log is the `aggregated_spec_check_log.json` file. This file contains the aggregated results of the spec checks that were performed during the test.
+- If all iterations were "correct_runs" or "timeout_before_startup", the consensus algorithm behaved as expected.
+- If any iteration was "error", "failed_termination" or "failed_agreement", the consensus algorithm did not behave as expected, and you should inspect the corresponding iteration logs in the `logs/{timestamp}/iteration_[number]` directory.
+
+Good luck protecting the XRP Ledger!
+
 ## Useful Resources
 
 - To contribute to the controller module read: 
