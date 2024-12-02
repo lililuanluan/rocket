@@ -16,8 +16,6 @@ class TestActionLogger(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Remove test directories."""
-        if len(os.listdir("./logs/action_logs/")) == 0:
-            os.rmdir("./logs/action_logs/")
         if len(os.listdir("./logs/")) == 0:
             os.rmdir("./logs/")
 
@@ -26,7 +24,7 @@ class TestActionLogger(unittest.TestCase):
         time = datetime.datetime(2024, 1, 2, 3, 4, 5, 6)
         timestamp_str = format_datetime(time)
 
-        base_dir = "./logs/action_logs/TEST_ACTION_LOG_DIR"
+        base_dir = "./logs/TEST_ACTION_LOG_DIR"
         directory = f"{base_dir}/{timestamp_str}"
         path_actions = f"{base_dir}/{timestamp_str}/action_log.csv"
         path_nodes = f"{base_dir}/{timestamp_str}/node_info.csv"
