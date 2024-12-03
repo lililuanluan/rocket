@@ -23,3 +23,10 @@ number_of_nodes: 3
 # [[0, 1], [1, 2]] -> 1 partition, node 0 <-> node 1 | node 1 <-> node 2 | node 0 <-X-> node 2
 # In the latter situation, all nodes have a direct connection except node 0 and node 2.
 network_partition: [[0, 1, 2]]
+
+# A 2-dimensional array containing the groups of node indices that should trust each other.
+# These nodes will be placed in each others UNL (Unique Node List).
+# [[0, 1, 2]] -> base config, all nodes in the same group and thus every node trusts each other
+# [[0, 1], [1, 2]] -> 1 partition, node 0 and 1 trust each other, node 1 and 2 trust each other,
+#                     node 0 and 2 do not trust each other.
+unl_partition: [[0, 1, 2]]
