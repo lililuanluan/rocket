@@ -30,9 +30,9 @@ class TestActionLogger(unittest.TestCase):
         path_nodes = f"{base_dir}/{timestamp_str}/node_info.csv"
 
         logger = ActionLogger("TEST_ACTION_LOG_DIR/" + timestamp_str, [node_0])
-        logger.log_action(0, 0, 1, "propose", "orig data", "new data")
-        logger.log_action(3, 0, 1, "validata", "orig data", "new data")
-        logger.log_action(MAX_U32, 0, 1, "close", "orig data", "new data")
+        logger.log_action(0, 1, 0, 1, "propose", "orig data", "new data")
+        logger.log_action(3, 1, 0, 1, "validata", "orig data", "new data")
+        logger.log_action(MAX_U32, 1, 0, 1, "close", "orig data", "new data")
         logger.close()
 
         with open(path_actions) as file:
@@ -40,6 +40,7 @@ class TestActionLogger(unittest.TestCase):
             assert next(csv_reader) == action_log_columns
             assert next(csv_reader)[1:] == [
                 "0",
+                "1",
                 "0",
                 "1",
                 "propose",
@@ -48,6 +49,7 @@ class TestActionLogger(unittest.TestCase):
             ]
             assert next(csv_reader)[1:] == [
                 "3",
+                "1",
                 "0",
                 "1",
                 "validata",
@@ -56,6 +58,7 @@ class TestActionLogger(unittest.TestCase):
             ]
             assert next(csv_reader)[1:] == [
                 MAX_U32.__str__(),
+                "1",
                 "0",
                 "1",
                 "close",

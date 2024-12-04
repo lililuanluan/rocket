@@ -45,7 +45,7 @@ class MutationExample(Strategy):
     def setup(self):
         """Setup method for MutationExample."""
 
-    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
+    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
         Handler method for receiving a packet.
 
@@ -53,17 +53,17 @@ class MutationExample(Strategy):
             packet: Packet to handle.
 
         Returns:
-            Tuple[bytes, int]: A tuple of the possible mutated message as bytes, and action as int
+            Tuple[bytes, int, int]: A tuple of the possible mutated message as bytes, an action as int and the send amount.
         """
         # Decode the packet to figure out the type and length
         try:
             message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
         except DecodingNotSupportedError:
-            return packet.data, 0
+            return packet.data, 0, 1
 
         # Check whether message is of type TMProposeSet
         if not isinstance(message, ripple_pb2.TMProposeSet):
-            return packet.data, 0
+            return packet.data, 0, 1
 
         # Mutate the closeTime of each message
         message.closeTime = datetime_to_ripple_time(datetime.now())
@@ -74,4 +74,8 @@ class MutationExample(Strategy):
             self.network.public_to_private_key_map[message.nodePubKey.hex()],
         )
 
-        return PacketEncoderDecoder.encode_message(signed_message, message_type_no), 0
+        return (
+            PacketEncoderDecoder.encode_message(signed_message, message_type_no),
+            0,
+            1,
+        )

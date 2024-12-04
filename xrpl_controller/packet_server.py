@@ -56,10 +56,12 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         timestamp = int(datetime.datetime.now().timestamp() * 1000)
         validate_ports_or_ids(request.from_port, request.to_port)
 
-        (new_data, action) = self.strategy.process_packet(request)
+        (new_data, action, send_amount) = self.strategy.process_packet(request)
 
         if not self.strategy.keep_action_log:
-            return packet_pb2.PacketAck(data=new_data, action=action)
+            return packet_pb2.PacketAck(
+                data=new_data, action=action, send_amount=send_amount
+            )
 
         if not self.logger:
             raise RuntimeError("Logger was not initialized")
@@ -72,6 +74,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         self.logger.log_action(
             action=action,
+            send_amount=send_amount,
             from_node_id=self.strategy.network.port_to_id(request.from_port),
             to_node_id=self.strategy.network.port_to_id(request.to_port),
             message_type=PacketEncoderDecoder.message_type_map[
@@ -82,7 +85,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             custom_timestamp=timestamp,
         )
 
-        return packet_pb2.PacketAck(data=new_data, action=action)
+        return packet_pb2.PacketAck(
+            data=new_data, action=action, send_amount=send_amount
+        )
 
     def send_validator_node_info(
         self,

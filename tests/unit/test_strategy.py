@@ -68,11 +68,11 @@ def test_process_message(mock_init_configs):
 
     strategy.update_network([node_0, node_1, node_2])
     packet_ack = packet_pb2.Packet(data=b"testtest", from_port=10, to_port=11)
-    assert strategy.process_packet(packet_ack) == (b"testtest", 119)
+    assert strategy.process_packet(packet_ack) == (b"testtest", 119, 1)
 
     # Check whether action differs from previous one, could be flaky, but we used a seed
     packet_ack = packet_pb2.Packet(data=b"testtest2", from_port=10, to_port=11)
-    assert strategy.process_packet(packet_ack) == (b"testtest2", 13)
+    assert strategy.process_packet(packet_ack) == (b"testtest2", 13, 1)
 
     # Check whether set_message gets modified
     assert (
@@ -90,7 +90,7 @@ def test_process_message(mock_init_configs):
     for i in range(100):
         msg = encode("testtestd" + str(i))[0]  # Just arbitrary encoding
         packet_ack = packet_pb2.Packet(data=msg, from_port=10, to_port=12)
-        assert strategy.process_packet(packet_ack) == (msg, MAX_U32)
+        assert strategy.process_packet(packet_ack) == (msg, MAX_U32, 1)
 
     # Check whether result will always stay the same with auto parse identical messages
     packet_ack = packet_pb2.Packet(data=b"testtest", from_port=10, to_port=12)

@@ -37,5 +37,6 @@ def test_serve_integration():
     response = stub.send_packet(packet)
     assert response.data == b"testtest"
     assert response.action == 0
+    assert response.send_amount == 1
 
     server.stop(grace=1)
