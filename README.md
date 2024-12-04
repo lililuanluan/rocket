@@ -47,7 +47,7 @@ following CLI options:
   the specified `UNL` (str) with format specified in the
   `config/network/default_network.yaml` file. (e.g. `[[0,1,2],[1,0,2],[2,0,1]]` or `[[0,1],[1,2]]`)
 
-Note: If any of your expressions for `PARTITION` or `UNL` contains spaces, make sure you
+Note: If any of your expressions for `PARTITION` or `UNL` contain spaces, make sure you
 surround your expression with double quotes: `"[[0, 1, 2], [1, 0, 2], [2, 0, 1]]"`
 
 #### Strategy configuration
