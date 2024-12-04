@@ -61,6 +61,14 @@ def parse_args() -> argparse.Namespace:
         metavar="PARTITION",
     )
     parser.add_argument(
+        "--nodes_unl",
+        type=check_valid_partition,
+        default=None,
+        help="The UNL (trusted nodes) configuration. "
+        "If set, overrides the UNL partition specified in the network configuration file.",
+        metavar="UNL",
+    )
+    parser.add_argument(
         "--overrides",
         type=check_valid_strategy_overrides,
         default=None,
@@ -147,6 +155,8 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
         network_overrides["number_of_nodes"] = args.nodes
     if args.partition:
         network_overrides["network_partition"] = args.partition
+    if args.nodes_unl:
+        network_overrides["unl_partition"] = args.nodes_unl
 
     if args.network_config:
         params_dict["network_config_path"] = args.network_config

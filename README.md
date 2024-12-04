@@ -42,7 +42,13 @@ following CLI options:
 - `--nodes AMOUNT` will override the amount of nodes to start to `AMOUNT` (int)
 - `--partition PARTITION` will override the network partition to use to 
   the specified `PARTITION` (str) with format specified in the
-  `config/network/default_network.yaml` file. (e.g. `[[0,1,2]]` or `[[0,1], [1,2]]`)
+  `config/network/default_network.yaml` file. (e.g. `[[0,1,2]]` or `[[0,1],[1,2]]`)
+- `--nodes_unl UNL` will override the node's UNLs (Unique Node List, i.e. trusted nodes) to 
+  the specified `UNL` (str) with format specified in the
+  `config/network/default_network.yaml` file. (e.g. `[[0,1,2],[1,0,2],[2,0,1]]` or `[[0,1],[1,2]]`)
+
+Note: If any of your expressions for `PARTITION` or `UNL` contains spaces, make sure you
+surround your expression with double quotes: `"[[0, 1, 2], [1, 0, 2], [2, 0, 1]]"`
 
 #### Strategy configuration
 To change a specific strategy's configurable parameters (e.g. RandomFuzzer)
@@ -102,10 +108,18 @@ class ExampleStrategy(Strategy):
         # Any setup logic can be added here, this method is called after the testing network is fully set up.
         pass
 
-    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
-        # Simplest case, return the packet immediately, with no delay.
+    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
+        # Simplest case, return the packet immediately, with no delay and no duplicate.
+        # 
         # This method is called for EVERY message that is transmitted between the XRPL validator nodes.
-        return packet.data, 0
+        # The return format is (bytes: Message Bytes, int: Delay in ms, int: Amount of duplicates to send)
+        # 
+        # The delay can to be set to the max unsigned integer value to simulate a drop, 
+        # any other value for delay (in ms), and 0 for direct send. 
+        # The duplicate amount signifies how many times the message will be sent.
+        # The below return statement sends the original message data without any delays, 
+        # once on the network (no duplicates).
+        return packet.data, 0, 1
 ```
 
 If you do not need configurable parameters, then this is it! You have successfully
