@@ -143,14 +143,17 @@ class Config(google.protobuf.message.Message):
     BASE_PORT_WS_ADMIN_FIELD_NUMBER: builtins.int
     BASE_PORT_RPC_FIELD_NUMBER: builtins.int
     NUMBER_OF_NODES_FIELD_NUMBER: builtins.int
-    PARTITIONS_FIELD_NUMBER: builtins.int
+    NET_PARTITIONS_FIELD_NUMBER: builtins.int
+    UNL_PARTITIONS_FIELD_NUMBER: builtins.int
     base_port_peer: builtins.int
     base_port_ws: builtins.int
     base_port_ws_admin: builtins.int
     base_port_rpc: builtins.int
     number_of_nodes: builtins.int
     @property
-    def partitions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Partition]: ...
+    def net_partitions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Partition]: ...
+    @property
+    def unl_partitions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Partition]: ...
     def __init__(
         self,
         *,
@@ -159,8 +162,9 @@ class Config(google.protobuf.message.Message):
         base_port_ws_admin: builtins.int = ...,
         base_port_rpc: builtins.int = ...,
         number_of_nodes: builtins.int = ...,
-        partitions: collections.abc.Iterable[global___Partition] | None = ...,
+        net_partitions: collections.abc.Iterable[global___Partition] | None = ...,
+        unl_partitions: collections.abc.Iterable[global___Partition] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["base_port_peer", b"base_port_peer", "base_port_rpc", b"base_port_rpc", "base_port_ws", b"base_port_ws", "base_port_ws_admin", b"base_port_ws_admin", "number_of_nodes", b"number_of_nodes", "partitions", b"partitions"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["base_port_peer", b"base_port_peer", "base_port_rpc", b"base_port_rpc", "base_port_ws", b"base_port_ws", "base_port_ws_admin", b"base_port_ws_admin", "net_partitions", b"net_partitions", "number_of_nodes", b"number_of_nodes", "unl_partitions", b"unl_partitions"]) -> None: ...
 
 global___Config = Config

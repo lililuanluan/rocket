@@ -106,6 +106,7 @@ def test_get_config():
         "base_port_rpc": 0,
         "number_of_nodes": 0,
         "network_partition": [[]],
+        "unl_partition": [[]],
     }
     packet_server = PacketService(mock_strategy)
     request = packet_pb2.Config()
@@ -125,10 +126,16 @@ def test_get_config():
     assert response.number_of_nodes == mock_strategy.network.network_config.get(
         "number_of_nodes"
     )
-    assert list(response.partitions) == list(
+    assert list(response.net_partitions) == list(
         map(
             lambda x: packet_pb2.Partition(nodes=x),
             mock_strategy.network.network_config.get("network_partition"),
+        )
+    )
+    assert list(response.unl_partitions) == list(
+        map(
+            lambda x: packet_pb2.Partition(nodes=x),
+            mock_strategy.network.network_config.get("unl_partition"),
         )
     )
 
