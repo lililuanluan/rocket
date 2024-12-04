@@ -139,7 +139,7 @@ class Strategy(ABC):
     def process_packet(
         self,
         packet: packet_pb2.Packet,
-    ) -> Tuple[bytes, int]:
+    ) -> Tuple[bytes, int, int]:
         """
         Process an incoming packet, applies automatic processes if applicable.
 
@@ -147,7 +147,7 @@ class Strategy(ABC):
             packet: The packet to process.
 
         Returns:
-            Tuple[bytes, int]: The processed packet as bytes and an action in a tuple.
+            Tuple[bytes, int, int]: The processed packet as bytes, the action and the send amount.
         """
         peer_from_id = self.network.port_to_id(packet.from_port)
         peer_to_id = self.network.port_to_id(packet.to_port)
@@ -173,6 +173,7 @@ class Strategy(ABC):
         ):
             # If result[0] is True, then result[1] will contain usable data
             (final_data, action) = result[1]
+            send_amount = 1
 
         # Handle the packet regularly
         else:
@@ -180,9 +181,9 @@ class Strategy(ABC):
             if self.auto_partition and not self.network.check_communication(
                 peer_from_id, peer_to_id
             ):
-                (final_data, action) = (packet.data, MAX_U32)
+                (final_data, action, send_amount) = (packet.data, MAX_U32, 1)
             else:
-                (final_data, action) = self.handle_packet(packet)
+                (final_data, action, send_amount) = self.handle_packet(packet)
 
             # This is needed to keep track of previously sent messages
             if self.auto_parse_identical or self.auto_parse_subsets:
@@ -191,7 +192,7 @@ class Strategy(ABC):
                 )
 
         self.update_status(packet)
-        return final_data, action
+        return final_data, action, send_amount
 
     @abstractmethod
     def setup(self):  # pragma: no cover
@@ -205,7 +206,7 @@ class Strategy(ABC):
     @abstractmethod
     def handle_packet(
         self, packet: packet_pb2.Packet
-    ) -> Tuple[bytes, int]:  # pragma: no cover
+    ) -> Tuple[bytes, int, int]:  # pragma: no cover
         """
         This method is responsible for returning a possibly mutated packet and an action.
 
@@ -213,6 +214,6 @@ class Strategy(ABC):
             packet: The original packet.
 
         Returns:
-            Tuple[bytes, int]: The new packet and the action.
+            Tuple[bytes, int]: The new packet, action and send amount..
         """
         pass

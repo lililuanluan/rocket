@@ -41,7 +41,7 @@ def test_mutation_propose():
     )
 
     # Mutate the packet data
-    mutated_data, action = strategy.handle_packet(packet)
+    mutated_data, action, send_amount = strategy.handle_packet(packet)
 
     # Create a new packet with mutated data
     mutated_packet = packet_pb2.Packet(
@@ -80,7 +80,7 @@ def test_no_mutation_not_propose():
     )
 
     # Mutate the packet data
-    mutated_data, action = strategy.handle_packet(packet)
+    mutated_data, action, send_amount = strategy.handle_packet(packet)
 
     # Create a new packet with mutated data
     mutated_packet = packet_pb2.Packet(
@@ -110,7 +110,7 @@ def test_mutation_decoding_not_support():
         + b"\x08\x01\x12\x06\x08\x02\x10\x00"
     )
 
-    result_data, action = strategy.handle_packet(encoded_packet)
+    result_data, action, send_amount = strategy.handle_packet(encoded_packet)
 
     assert result_data == encoded_packet.data
     assert action == 0
@@ -168,7 +168,7 @@ def test_mutation_propose_correct_signature_change():
     )
 
     # Mutate the packet data
-    mutated_data, action = strategy.handle_packet(packet)
+    mutated_data, action, send_amount = strategy.handle_packet(packet)
 
     # Create a new packet with mutated data
     mutated_packet = packet_pb2.Packet(

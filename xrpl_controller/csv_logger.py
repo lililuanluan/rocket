@@ -11,6 +11,7 @@ from xrpl_controller.validator_node_info import ValidatorNode
 action_log_columns = [
     "timestamp",
     "action",
+    "send_amount",
     "from_node_id",
     "to_node_id",
     "message_type",
@@ -139,6 +140,7 @@ class ActionLogger(CSVLogger):
     def log_action(
         self,
         action: int,
+        send_amount: int,
         from_node_id: int,
         to_node_id: int,
         message_type: str,
@@ -151,6 +153,7 @@ class ActionLogger(CSVLogger):
 
         Args:
             action: Action to be logged.
+            send_amount: The amount of times the messages should be sent.
             from_node_id: ID of the node who sent the message.
             to_node_id: ID of the node who is supposed to receive the message.
             message_type: The message type as defined in the ripple.proto file.
@@ -165,6 +168,7 @@ class ActionLogger(CSVLogger):
                 if custom_timestamp is None
                 else custom_timestamp,
                 action,
+                send_amount,
                 from_node_id,
                 to_node_id,
                 message_type,

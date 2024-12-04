@@ -79,7 +79,7 @@ class RandomFuzzer(Strategy):
     def setup(self):
         """Setup method for RandomFuzzer."""
 
-    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int]:
+    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
         Implements the handle_packet method with a random action.
 
@@ -87,14 +87,18 @@ class RandomFuzzer(Strategy):
             packet: The original packet to be sent.
 
         Returns:
-            Tuple[bytes, int]: The new packet and the random action.
+            Tuple[bytes, int, int]: The new packet, the random action and the send amount.
         """
         choice: float = random.random()
         if choice < self.params["send_probability"]:
-            return packet.data, 0
+            return packet.data, 0, 1
         elif choice < self.params["send_probability"] + self.params["drop_probability"]:
-            return packet.data, MAX_U32
+            return packet.data, MAX_U32, 1
         else:
-            return packet.data, random.randint(
-                self.params["min_delay_ms"], self.params["max_delay_ms"]
+            return (
+                packet.data,
+                random.randint(
+                    self.params["min_delay_ms"], self.params["max_delay_ms"]
+                ),
+                1,
             )

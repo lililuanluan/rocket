@@ -13,12 +13,13 @@ def test_send_packet_no_log():
     """Test the send_packet method of PacketService without logging."""
     packet = packet_pb2.Packet(data=b"test", from_port=10, to_port=20)
     mock_strategy = Mock()
-    mock_strategy.process_packet.return_value = (packet.data, 0)
+    mock_strategy.process_packet.return_value = (packet.data, 0, 1)
     mock_strategy.keep_action_log = False
     packet_server = PacketService(mock_strategy)
     packet_ack = packet_server.send_packet(packet, None)
     assert packet_ack.data == b"test"
     assert packet_ack.action == 0
+    assert packet_ack.send_amount == 1
     mock_strategy.process_packet.assert_called_once()
 
 
@@ -26,7 +27,7 @@ def test_send_packet_with_log_no_logger():
     """Test the send_packet method of PacketService with logging but no existing logger."""
     packet = packet_pb2.Packet(data=b"test", from_port=10, to_port=20)
     mock_strategy = Mock()
-    mock_strategy.process_packet.return_value = (packet.data, 0)
+    mock_strategy.process_packet.return_value = (packet.data, 0, 1)
     mock_strategy.keep_action_log = True
     packet_server = PacketService(mock_strategy)
     with pytest.raises(RuntimeError):
@@ -38,7 +39,7 @@ def test_send_packet_with_log_and_logger():
     """Test the send_packet method of PacketService with logging and an existing logger."""
     packet = packet_pb2.Packet(data=b"test", from_port=10, to_port=20)
     mock_strategy = Mock()
-    mock_strategy.process_packet.return_value = (packet.data, 0)
+    mock_strategy.process_packet.return_value = (packet.data, 0, 1)
     mock_strategy.keep_action_log = True
     packet_server = PacketService(mock_strategy)
     packet_server.logger = Mock()
@@ -49,6 +50,7 @@ def test_send_packet_with_log_and_logger():
     assert mock_decode_packet.call_count == 2
     assert packet_ack.data == b"test"
     assert packet_ack.action == 0
+    assert packet_ack.send_amount == 1
     packet_server.logger.log_action.assert_called_once()
     mock_strategy.process_packet.assert_called_once()
 

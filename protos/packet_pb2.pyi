@@ -39,15 +39,18 @@ class PacketAck(google.protobuf.message.Message):
 
     DATA_FIELD_NUMBER: builtins.int
     ACTION_FIELD_NUMBER: builtins.int
+    SEND_AMOUNT_FIELD_NUMBER: builtins.int
     data: builtins.bytes
     action: builtins.int
+    send_amount: builtins.int
     def __init__(
         self,
         *,
         data: builtins.bytes = ...,
         action: builtins.int = ...,
+        send_amount: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["action", b"action", "data", b"data"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["action", b"action", "data", b"data", "send_amount", b"send_amount"]) -> None: ...
 
 global___PacketAck = PacketAck
 
