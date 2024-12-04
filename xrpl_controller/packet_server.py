@@ -183,9 +183,14 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                     )
                 ) from err
 
-        partitions = map(
+        net_partitions = map(
             lambda x: packet_pb2.Partition(nodes=x),
             config.get("network_partition"),
+        )
+
+        unl_partitions = map(
+            lambda x: packet_pb2.Partition(nodes=x),
+            config.get("unl_partition"),
         )
 
         return packet_pb2.Config(
@@ -194,7 +199,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             base_port_ws_admin=config.get("base_port_ws_admin"),
             base_port_rpc=config.get("base_port_rpc"),
             number_of_nodes=config.get("number_of_nodes"),
-            partitions=partitions,
+            net_partitions=net_partitions,
+            unl_partitions=unl_partitions,
         )
 
 
