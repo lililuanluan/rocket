@@ -22,11 +22,16 @@ number_of_nodes: 3
 # [[0, 1, 2]] -> base config, all nodes in the same group and thus fully connected
 # [[0, 1], [1, 2]] -> 1 partition, node 0 <-> node 1 | node 1 <-> node 2 | node 0 <-X-> node 2
 # In the latter situation, all nodes have a direct connection except node 0 and node 2.
-network_partition: [[0, 1, 2]]
+#
+# Leaving this empty means all nodes in the network will be connected.
+network_partition: []
 
-# A 2-dimensional array containing the groups of node indices that should trust each other.
+# A 2-dimensional array containing directional groups of node indices that should trust each other.
 # These nodes will be placed in each others UNL (Unique Node List).
-# [[0, 1, 2]] -> base config, all nodes in the same group and thus every node trusts each other
-# [[0, 1], [1, 2]] -> 1 partition, node 0 and 1 trust each other, node 1 and 2 trust each other,
-#                     node 0 and 2 do not trust each other.
-unl_partition: [[0, 1, 2]]
+# E.g. a group consisting of [0, 1, 2], means node 0 (first entry) will trust node 1 & 2, but
+# node 1 & 2 do not necessarily trust node 0. Some examples:
+# [[0, 1, 2], [1, 0, 2], [2, 0, 1]] -> All 3 nodes trust each other.
+# [[1, 0, 2], [2, 0, 1]] -> Node 1 and 2 trust all others, but node 0 trusts no one.
+#
+# Leaving this empty means all nodes in the network will trust each other.
+unl_partition: []
