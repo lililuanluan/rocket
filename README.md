@@ -5,7 +5,7 @@ for the XRP Ledger Consensus Algorithm.
 
 This module is the main part of Rocket and is responsible for 
 mutating the messages that have been intercepted from 
-the [packet-interceptor](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor)
+the [rocket_interceptor](https://github.com/diseb-lab/rocket-intercepter)
 as well as determining a network action for each message. 
 The interceptor is run as a subprocess from the controller.
 
@@ -14,13 +14,21 @@ The interceptor is run as a subprocess from the controller.
 ### Pre-Requisites
 
 - Python 3.12+
-- Docker engine (Docker Desktop for Windows)
 - All packages in `requirements.txt`
-- A compiled binary of the [packet-interceptor](https://gitlab.ewi.tudelft.nl/cse2000-software-project/2023-2024/cluster-q/13d/xrpl-packet-interceptor)
+- A compiled binary of the [rocket_interceptor](https://github.com/diseb-lab/rocket-intercepter)
+- The official `xrpld` [Docker image](https://hub.docker.com/r/xrpllabsofficial/xrpld/tags) locally available (version 2.3.0)
+- Docker engine (Docker Desktop for MacOS/Windows)
 
 ```bash
 pip install -r requirements.txt
+docker pull xrpllabsofficial/xrpld:2.3.0
 ```
+
+### Adding the interceptor binary
+
+After compiling the [rocket_interceptor](https://github.com/diseb-lab/rocket-intercepter) module,
+place the resulting binary in the `rocket_interceptor` subdirectory. This is where Rocket
+expects the binary to be.
 
 ### Configuration
 
@@ -219,14 +227,27 @@ you can create your own custom iteration type in [xrpl_controller/iteration_type
 
 Note: Make sure your iteration type inherits from `TimeBasedIteration`.
 
-# Analysing the performance of the consensus algorithm
+## Analysing the performance of the consensus algorithm
 
 After running your test cases, you can analyse the performance of the consensus algorithm. Several logs are created in the `logs/{start_time}` directory. 
 The most important log is the `aggregated_spec_check_log.json` file. This file contains the aggregated results of the spec checks that were performed during the test.
 - If all iterations were "correct_runs" or "timeout_before_startup", the consensus algorithm behaved as expected.
 - If any iteration was "error", "failed_termination" or "failed_agreement", the consensus algorithm did not behave as expected, and you should inspect the corresponding iteration logs in the `logs/{start_time}/iteration-{number}` directory.
 
-Good luck protecting the XRP Ledger!
+## Changing the xrpld version
+
+In case you want to change the version of the XRPL daemon used for the tests, navigate
+to the [rocket_interceptor](https://github.com/diseb-lab/rocket-intercepter) repository,
+and open the file `src/docker_manager.rs`. Replace the following line with your desired version:
+
+```rust
+const IMAGE: &str = "xrpllabsofficial/xrpld:2.3.0";
+```
+
+You can find which versions you can choose from on the [Docker Hub](https://hub.docker.com/r/xrpllabsofficial/xrpld/tags).
+
+Note: Changing the `xrpld` version may break the application. Rocket has currently only been tested
+on `xrpld` versions 2.1.x - 2.3.0 (latest as of writing).
 
 ## Useful Resources
 
@@ -234,5 +255,3 @@ Good luck protecting the XRP Ledger!
 [CONTRIBUTING.md](CONTRIBUTING.md)
 - To run tests read:
 [TESTING.md](TESTING.md)
-
-
