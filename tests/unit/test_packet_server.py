@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from protos import packet_pb2
-from xrpl_controller.encoder_decoder import PacketEncoderDecoder
-from xrpl_controller.packet_server import PacketService
+from rocket_controller.encoder_decoder import PacketEncoderDecoder
+from rocket_controller.packet_server import PacketService
 
 
 def test_send_packet_no_log():
@@ -73,7 +73,9 @@ def test_send_validator_node_info_with_log():
     packet_server = PacketService(mock_strategy)
     request_iterator = [packet_pb2.ValidatorNodeInfo()]
     mock_logger = Mock()
-    with patch("xrpl_controller.packet_server.ActionLogger", return_value=mock_logger):
+    with patch(
+        "rocket_controller.packet_server.ActionLogger", return_value=mock_logger
+    ):
         response = packet_server.send_validator_node_info(request_iterator, None)
         assert response.status == "Received validator node info"
         assert packet_server.logger is not None
@@ -86,7 +88,9 @@ def test_send_validator_node_info_with_existing_logger():
     mock_strategy.iteration_type.cur_iteration = 1
     packet_server = PacketService(mock_strategy)
     mock_logger = Mock()
-    with patch("xrpl_controller.packet_server.ActionLogger", return_value=mock_logger):
+    with patch(
+        "rocket_controller.packet_server.ActionLogger", return_value=mock_logger
+    ):
         packet_server.logger = mock_logger
         request_iterator = [packet_pb2.ValidatorNodeInfo()]
         response = packet_server.send_validator_node_info(request_iterator, None)

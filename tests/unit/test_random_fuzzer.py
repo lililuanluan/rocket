@@ -5,11 +5,13 @@ from unittest.mock import Mock, patch
 import pytest
 
 from protos import packet_pb2
-from xrpl_controller.strategies import RandomFuzzer
+from rocket_controller.strategies import RandomFuzzer
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init(mock_params, mock_super_init):
     """Tests whether the RandomFuzzer object is initialized correctly."""
     mock_params.__getitem__.side_effect = {
@@ -28,8 +30,10 @@ def test_init(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_bound_0(mock_params, mock_super_init):
     """Test whether values on the bounds still pass."""
     mock_params.__getitem__.side_effect = {
@@ -47,8 +51,10 @@ def test_init_bound_0(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_bound_1(mock_params, mock_super_init):
     """Test whether values on the bounds still pass."""
     mock_params.__getitem__.side_effect = {
@@ -66,8 +72,10 @@ def test_init_bound_1(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_invalid_sum_0(mock_params, mock_super_init):
     """Test whether probabilities sum to at most 1."""
     mock_params.__getitem__.side_effect = {
@@ -83,8 +91,10 @@ def test_init_invalid_sum_0(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_invalid_sum_1(mock_params, mock_super_init):
     """Test whether probabilities sum to at most 1. Overflow caused by drop_probability."""
     mock_params.__getitem__.side_effect = {
@@ -100,8 +110,10 @@ def test_init_invalid_sum_1(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_invalid_sum_2(mock_params, mock_super_init):
     """Test whether probabilities sum to at most 1. Overflow caused by delay_probability."""
     mock_params.__getitem__.side_effect = {
@@ -117,8 +129,10 @@ def test_init_invalid_sum_2(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_negative_drop(mock_params, mock_super_init):
     """Test whether drop probability is non-negative."""
     mock_params.__getitem__.side_effect = {
@@ -136,8 +150,10 @@ def test_init_negative_drop(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_negative_delay(mock_params, mock_super_init):
     """Test whether delay probability is non-negative."""
     mock_params.__getitem__.side_effect = {
@@ -155,8 +171,10 @@ def test_init_negative_delay(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_negative_min_delay(mock_params, mock_super_init):
     """Test whether min_delay_ms is non-negative."""
     mock_params.__getitem__.side_effect = {
@@ -172,8 +190,10 @@ def test_init_negative_min_delay(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_negative_max_delay(mock_params, mock_super_init):
     """Test whether max_delay_ms is non-negative."""
     mock_params.__getitem__.side_effect = {
@@ -189,8 +209,10 @@ def test_init_negative_max_delay(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_init_invalid_range(mock_params, mock_super_init):
     """Test whether min_delay_ms is not greater than max_delay_ms."""
     mock_params.__getitem__.side_effect = {
@@ -208,8 +230,10 @@ def test_init_invalid_range(mock_params, mock_super_init):
     mock_super_init.assert_called_once()
 
 
-@patch("xrpl_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None)
-@patch("xrpl_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
+@patch(
+    "rocket_controller.strategies.random_fuzzer.Strategy.__init__", return_value=None
+)
+@patch("rocket_controller.strategies.random_fuzzer.RandomFuzzer.params", create=True)
 def test_handle_packet(mock_params, mock_super_init):
     """Test the handle_packet method with a random seed."""
     mock_params.__getitem__.side_effect = {

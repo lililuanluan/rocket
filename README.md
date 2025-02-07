@@ -5,7 +5,7 @@ for the XRP Ledger Consensus Algorithm.
 
 This module is the main part of Rocket and is responsible for 
 mutating the messages that have been intercepted from 
-the [rocket_interceptor](https://github.com/diseb-lab/rocket-intercepter)
+the [rocket_interceptor](https://github.com/diseb-lab/rocket-interceptor)
 as well as determining a network action for each message. 
 The interceptor is run as a subprocess from the controller.
 
@@ -15,7 +15,7 @@ The interceptor is run as a subprocess from the controller.
 
 - Python 3.12+
 - All packages in `requirements.txt`
-- A compiled binary of the [rocket_interceptor](https://github.com/diseb-lab/rocket-intercepter)
+- A compiled binary of the [rocket_interceptor](https://github.com/diseb-lab/rocket-interceptor)
 - The official `xrpld` [Docker image](https://hub.docker.com/r/xrpllabsofficial/xrpld/tags) locally available (version 2.3.0)
 - Docker engine (Docker Desktop for MacOS/Windows)
 
@@ -26,7 +26,7 @@ docker pull xrpllabsofficial/xrpld:2.3.0
 
 ### Adding the interceptor binary
 
-After compiling the [rocket_interceptor](https://github.com/diseb-lab/rocket-intercepter) module,
+After compiling the [rocket_interceptor](https://github.com/diseb-lab/rocket-interceptor) module,
 place the resulting binary in the `rocket_interceptor` subdirectory. This is where Rocket
 expects the binary to be.
 
@@ -75,13 +75,13 @@ Below is a basic example of running the tool with default settings, using
 the included RandomFuzzer as the fuzzing strategy.
 
 ```bash
-python3 -m xrpl_controller RandomFuzzer
+python3 -m rocket_controller RandomFuzzer
 ```
 
 For the full list of CLI options, run the following command:
 
 ```bash
-python3 -m xrpl_controller -h
+python3 -m rocket_controller -h
 ```
 
 ## Creating a new Strategy
@@ -92,7 +92,7 @@ the steps needed to implement and use your new strategy.
 ### Creating the Strategy files
 
 To create your Strategy, create a new file as follows:
-`xrpl_controller/strategies/example_strategy.py`.
+`rocket_controller/strategies/example_strategy.py`.
 
 To initialize the strategy, add the following code to your newly
 created Strategy file.
@@ -100,41 +100,41 @@ created Strategy file.
 ```python
 from typing import Tuple
 from protos import packet_pb2
-from xrpl_controller.strategies.strategy import Strategy
+from rocket_controller.strategies.strategy import Strategy
 
 
 class ExampleStrategy(Strategy):
-    def __init__(
-        self,
-        # Add any parent class (Strategy) parameters you want to be able to override here.
-    ):
-        super().__init__(
-            # Override default parent class (Strategy) parameters here
-        )
+  def __init__(
+          self,
+          # Add any parent class (Strategy) parameters you want to be able to override here.
+  ):
+    super().__init__(
+      # Override default parent class (Strategy) parameters here
+    )
 
-    def setup(self):
-        # Any setup logic can be added here, this method is called after the testing network is fully set up.
-        pass
+  def setup(self):
+    # Any setup logic can be added here, this method is called after the testing network is fully set up.
+    pass
 
-    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
-        # Simplest case, return the packet immediately, with no delay and no duplicate.
-        # 
-        # This method is called for EVERY message that is transmitted between the XRPL validator nodes.
-        # The return format is (bytes: Message Bytes, int: Delay in ms, int: Amount of duplicates to send)
-        # 
-        # The delay can to be set to the max unsigned integer value to simulate a drop, 
-        # any other value for delay (in ms), and 0 for direct send. 
-        # The duplicate amount signifies how many times the message will be sent.
-        # The below return statement sends the original message data without any delays, 
-        # once on the network (no duplicates).
-        return packet.data, 0, 1
+  def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
+    # Simplest case, return the packet immediately, with no delay and no duplicate.
+    # 
+    # This method is called for EVERY message that is transmitted between the XRPL validator nodes.
+    # The return format is (bytes: Message Bytes, int: Delay in ms, int: Amount of duplicates to send)
+    # 
+    # The delay can to be set to the max unsigned integer value to simulate a drop, 
+    # any other value for delay (in ms), and 0 for direct send. 
+    # The duplicate amount signifies how many times the message will be sent.
+    # The below return statement sends the original message data without any delays, 
+    # once on the network (no duplicates).
+    return packet.data, 0, 1
 ```
 
 If you do not need configurable parameters, then this is it! You have successfully
 added a new strategy to Rocket, and you can now use it as follows:
 
 ```bash
-python -m xrpl_controller ExampleStrategy
+python -m rocket_controller ExampleStrategy
 ```
 
 Note: In the previous command, `ExampleStrategy` is the exact name of the created class.
@@ -144,7 +144,7 @@ Note: In the previous command, `ExampleStrategy` is the exact name of the create
 If you are planning to run large batches of tests with your new strategy,
 it can be useful to extract important parameters to a configuration file. 
 When running your Strategy for the first time using default settings 
-(`python -m xrpl_controller ExampleStrategy`), an empty configuration file is
+(`python -m rocket_controller ExampleStrategy`), an empty configuration file is
 automatically created at `config/default_ExampleStrategy.yaml`. If not, you can
 create it manually. As an example, we will create and implement a 
 custom parameter for the `ExampleStrategy` class created above.
@@ -160,11 +160,12 @@ foo: bar
 That's it! The parameter can now be accessed from anywhere in the ExampleStrategy:
 
 ```python
-from xrpl_controller.strategies.strategy import Strategy
+from rocket_controller.strategies.strategy import Strategy
+
 
 class ExampleStrategy(Strategy):
-    def some_method(self):
-        print(self.params["foo"]) # prints 'bar'
+  def some_method(self):
+    print(self.params["foo"])  # prints 'bar'
 ```
 
 (Note: The **default** configuration filename MUST follow the following format: 
@@ -180,13 +181,13 @@ foo: bar baz
 ```
 
 ```bash
-python -m xrpl_controller ExampleStrategy --config my_config_dir/config_1.yaml
+python -m rocket_controller ExampleStrategy --config my_config_dir/config_1.yaml
 ```
 
 ### Additional notes
 
 The quickstart only covers the basic functionality. If you want to know more about how to implement
-message mutation, take a look at the `xrpl_controller/strategies/mutation_example.py` file.
+message mutation, take a look at the `rocket_controller/strategies/mutation_example.py` file.
 
 ## Changing test iteration logic
 
@@ -198,32 +199,34 @@ overriding the `iteration_type` parameter while initializing the `Strategy`
 superclass from your created strategy.
 
 ```python
-from xrpl_controller.strategies.strategy import Strategy
-from xrpl_controller.iteration_type import LedgerBasedIteration
+from rocket_controller.strategies.strategy import Strategy
+from rocket_controller.iteration_type import LedgerBasedIteration
+
 
 class ExampleStrategy(Strategy):
-    def __init__(self):
-        super().__init__(
-          iteration_type=LedgerBasedIteration(max_iterations=10, max_ledger_seq=5)
-        )
+  def __init__(self):
+    super().__init__(
+      iteration_type=LedgerBasedIteration(max_iterations=10, max_ledger_seq=5)
+    )
 ```
 
 Running 10 Rocket test iterations with a fixed time of 60 seconds per iteration
 is done as follows using `TimeBasedIteration`:
 
 ```python
-from xrpl_controller.strategies.strategy import Strategy
-from xrpl_controller.iteration_type import TimeBasedIteration
+from rocket_controller.strategies.strategy import Strategy
+from rocket_controller.iteration_type import TimeBasedIteration
+
 
 class ExampleStrategy(Strategy):
-    def __init__(self):
-        super().__init__(
-          iteration_type=TimeBasedIteration(max_iterations=10, timeout_seconds=60)
-        )
+  def __init__(self):
+    super().__init__(
+      iteration_type=TimeBasedIteration(max_iterations=10, timeout_seconds=60)
+    )
 ```
 
 If these two possible iteration types do not cater for your strategy's needs,
-you can create your own custom iteration type in [xrpl_controller/iteration_type.py](xrpl_controller/iteration_type.py).
+you can create your own custom iteration type in [rocket_controller/iteration_type.py](rocket_controller/iteration_type.py).
 
 Note: Make sure your iteration type inherits from `TimeBasedIteration`.
 
@@ -237,7 +240,7 @@ The most important log is the `aggregated_spec_check_log.json` file. This file c
 ## Changing the xrpld version
 
 In case you want to change the version of the XRPL daemon used for the tests, navigate
-to the [rocket_interceptor](https://github.com/diseb-lab/rocket-intercepter) repository,
+to the [rocket_interceptor](https://github.com/diseb-lab/rocket-interceptor) repository,
 and open the file `src/docker_manager.rs`. Replace the following line with your desired version:
 
 ```rust

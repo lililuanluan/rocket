@@ -5,8 +5,8 @@ import datetime
 import os
 import unittest
 
-from xrpl_controller.csv_logger import SpecCheckLogger, spec_check_columns
-from xrpl_controller.helper import format_datetime
+from rocket_controller.csv_logger import SpecCheckLogger, spec_check_columns
+from rocket_controller.helper import format_datetime
 
 
 class TestSpecCheckLogger(unittest.TestCase):

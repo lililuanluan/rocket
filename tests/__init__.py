@@ -1,1 +1,1 @@
-"""This module contains all the tests for the xrpl_controller package."""
+"""This module contains all the tests for the rocket_controller package."""

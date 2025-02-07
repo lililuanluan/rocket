@@ -1,6 +1,6 @@
 """Tests for SocketAddress class."""
 
-from xrpl_controller.validator_node_info import SocketAddress
+from rocket_controller.validator_node_info import SocketAddress
 
 
 def test_constructor():

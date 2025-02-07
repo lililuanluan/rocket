@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock
 
-from xrpl_controller.strategies import RandomFuzzer
+from rocket_controller.strategies import RandomFuzzer
 
 
 def test_strategy_init():

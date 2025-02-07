@@ -1,7 +1,7 @@
 """File which stores interchangeably used variables."""
 
 from protos import ripple_pb2
-from xrpl_controller.validator_node_info import (
+from rocket_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,
     ValidatorNode,

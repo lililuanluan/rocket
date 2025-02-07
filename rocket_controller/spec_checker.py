@@ -6,7 +6,7 @@ from typing import Any, List
 
 from loguru import logger
 
-from xrpl_controller.csv_logger import SpecCheckLogger
+from rocket_controller.csv_logger import SpecCheckLogger
 
 
 def _get_last_row(file_path: str) -> List[Any]:

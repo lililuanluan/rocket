@@ -76,7 +76,7 @@ pages:
 # run:
 #   script:
 #     - pip install -r requirements.txt
-#     - python -m xrpl_controller
+#     - python -m rocket_controller
 #   artifacts:
 #     paths:
 #       - build/*

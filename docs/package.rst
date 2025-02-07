@@ -2,7 +2,7 @@
 Application Entry Point
 -----------------------
 
-    .. automodule:: xrpl_controller.__main__
+    .. automodule:: rocket_controller.__main__
         :members:
 
 
@@ -10,7 +10,7 @@ Application Entry Point
 CLI Parsing Functions
 ---------------------
 
-    .. automodule:: xrpl_controller.cli_helper
+    .. automodule:: rocket_controller.cli_helper
         :members:
 
 
@@ -18,7 +18,7 @@ CLI Parsing Functions
 CSV File Logger
 ---------------
 
-    .. automodule:: xrpl_controller.csv_logger
+    .. automodule:: rocket_controller.csv_logger
         :members:
 
 
@@ -26,7 +26,7 @@ CSV File Logger
 Encoder/Decoder of XRPL Messages
 --------------------------------
 
-    .. automodule:: xrpl_controller.encoder_decoder
+    .. automodule:: rocket_controller.encoder_decoder
         :members:
 
 
@@ -34,7 +34,7 @@ Encoder/Decoder of XRPL Messages
 Ledger Result Logging
 -------------------------
 
-    .. automodule:: xrpl_controller.ledger_result
+    .. automodule:: rocket_controller.ledger_result
         :members:
 
 
@@ -42,7 +42,7 @@ Ledger Result Logging
 Helper Functions
 ----------------
 
-    .. automodule:: xrpl_controller.helper
+    .. automodule:: rocket_controller.helper
         :members:
 
 
@@ -50,7 +50,7 @@ Helper Functions
 Interceptor Manager
 -------------------
 
-    .. automodule:: xrpl_controller.interceptor_manager
+    .. automodule:: rocket_controller.interceptor_manager
         :members:
 
 
@@ -58,7 +58,7 @@ Interceptor Manager
 Iteration Types
 ---------------
 
-    .. automodule:: xrpl_controller.iteration_type
+    .. automodule:: rocket_controller.iteration_type
         :members:
 
 
@@ -66,7 +66,7 @@ Iteration Types
 Message Action
 ---------------
 
-    .. automodule:: xrpl_controller.message_action
+    .. automodule:: rocket_controller.message_action
         :members:
 
 
@@ -74,7 +74,7 @@ Message Action
 Message Action Buffer
 ---------------------
 
-    .. automodule:: xrpl_controller.message_action_buffer
+    .. automodule:: rocket_controller.message_action_buffer
         :members:
 
 
@@ -82,7 +82,7 @@ Message Action Buffer
 Network Manager
 ---------------------
 
-    .. automodule:: xrpl_controller.network_manager
+    .. automodule:: rocket_controller.network_manager
         :members:
 
 
@@ -90,7 +90,7 @@ Network Manager
 gRPC Server
 -------------
 
-    .. automodule:: xrpl_controller.packet_server
+    .. automodule:: rocket_controller.packet_server
         :members:
 
 
@@ -98,7 +98,7 @@ gRPC Server
 Transaction Builder
 -------------------
 
-    .. automodule:: xrpl_controller.transaction_builder
+    .. automodule:: rocket_controller.transaction_builder
         :members:
 
 
@@ -106,7 +106,7 @@ Transaction Builder
 Validator Node Dataclasses
 --------------------------
 
-    .. automodule:: xrpl_controller.validator_node_info
+    .. automodule:: rocket_controller.validator_node_info
         :members:
 
 
@@ -114,7 +114,7 @@ Validator Node Dataclasses
 Strategy Base Class
 -------------------
 
-    .. automodule:: xrpl_controller.strategies.strategy
+    .. automodule:: rocket_controller.strategies.strategy
         :members:
 
 
@@ -122,7 +122,7 @@ Strategy Base Class
 Random Fuzzer Strategy
 ----------------------
 
-    .. automodule:: xrpl_controller.strategies.random_fuzzer
+    .. automodule:: rocket_controller.strategies.random_fuzzer
         :members:
 
 
@@ -130,7 +130,7 @@ Random Fuzzer Strategy
 Mutation Strategy
 -----------------
 
-    .. automodule:: xrpl_controller.strategies.mutation_example
+    .. automodule:: rocket_controller.strategies.mutation_example
         :members:
 
 

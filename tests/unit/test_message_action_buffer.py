@@ -2,8 +2,8 @@
 
 import pytest
 
-from xrpl_controller.message_action import MessageAction
-from xrpl_controller.message_action_buffer import MessageActionBuffer
+from rocket_controller.message_action import MessageAction
+from rocket_controller.message_action_buffer import MessageActionBuffer
 
 
 def test_init():

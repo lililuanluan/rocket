@@ -6,7 +6,7 @@ import unittest
 
 import pytest
 
-from xrpl_controller.csv_logger import CSVLogger
+from rocket_controller.csv_logger import CSVLogger
 
 test_dir = "TEST_LOG_DIR"
 
@@ -21,7 +21,7 @@ class TestCSVLogger(unittest.TestCase):
         if len(os.listdir("./logs/")) == 0:
             os.rmdir("./logs/")
 
-    # NOTE: Only run this test from the xrpl_controller module, tox does this automatically
+    # NOTE: Only run this test from the rocket_controller module, tox does this automatically
     # You are able to run this test regularly, but it will create the logs directory in the wrong location
     def test_construction(self):
         """Test CSVLogger construction."""

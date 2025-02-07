@@ -1,6 +1,6 @@
 """Tests for yaml_to_dict method in helper.py."""
 
-from xrpl_controller.helper import yaml_to_dict
+from rocket_controller.helper import yaml_to_dict
 
 test_dir = "./tests/_configs/yaml_to_dict/"
 

@@ -1,6 +1,6 @@
 """Tests for `flatten` function."""
 
-from xrpl_controller.helper import flatten
+from rocket_controller.helper import flatten
 
 
 def test_flatten_1():

@@ -2,7 +2,7 @@
 
 import pytest
 
-from xrpl_controller.helper import parse_to_2d_list_of_ints, parse_to_list_of_ints
+from rocket_controller.helper import parse_to_2d_list_of_ints, parse_to_list_of_ints
 
 
 def test_parsers():

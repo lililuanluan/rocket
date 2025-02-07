@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, Mock, call, patch
 import grpc
 
 from protos import ripple_pb2
-from tests.default_test_variables import node_0, node_1, status_msg_1, status_msg_2
-from xrpl_controller.interceptor_manager import InterceptorManager
-from xrpl_controller.iteration_type import (
+from rocket_controller.interceptor_manager import InterceptorManager
+from rocket_controller.iteration_type import (
     LedgerBasedIteration,
     NoneIteration,
     TimeBasedIteration,
 )
+from tests.default_test_variables import node_0, node_1, status_msg_1, status_msg_2
 
 validator_nodes = [node_0, node_1]
 
@@ -140,7 +140,7 @@ def test_ledger_based_iteration_reset_parameters():
     iteration.add_iteration = MagicMock()
     iteration._start_timeout_timer = MagicMock()
     with patch(
-        "xrpl_controller.iteration_type.threading.Timer", return_value=Mock()
+        "rocket_controller.iteration_type.threading.Timer", return_value=Mock()
     ) as mock_timer:
         iteration._timer = mock_timer.return_value
         iteration.on_status_change(status_msg_1)
@@ -165,7 +165,7 @@ def test_ledger_based_iteration_reset_parameters_no_timer():
     iteration.add_iteration = MagicMock()
     iteration._start_timeout_timer = MagicMock()
     with patch(
-        "xrpl_controller.iteration_type.threading.Timer", return_value=Mock()
+        "rocket_controller.iteration_type.threading.Timer", return_value=Mock()
     ) as mock_timer:
         iteration.on_status_change(status_msg_1)
         iteration._reset_values()
@@ -197,7 +197,7 @@ def test_ledger_based_iteration_reset_parameters_no_timer():
 #     iteration = TimeBasedIteration(max_iterations=5, timeout_seconds=0)
 #
 #     with patch(
-#         "xrpl_controller.iteration_type.threading.Timer", return_value=Mock()
+#         "rocket_controller.iteration_type.threading.Timer", return_value=Mock()
 #     ) as mock_timer:
 #         iteration._timer = mock_timer.return_value
 #         iteration.start_timeout_timer()
@@ -227,7 +227,7 @@ def test_timeout_timer():
     iteration.add_iteration = MagicMock()
 
     with patch(
-        "xrpl_controller.iteration_type.threading.Timer", return_value=Mock()
+        "rocket_controller.iteration_type.threading.Timer", return_value=Mock()
     ) as mock_timer:
         iteration._start_timeout_timer()
 
@@ -245,7 +245,7 @@ def test_timeout_timer_cancel():
     iteration._timer = prev_timer
 
     with patch(
-        "xrpl_controller.iteration_type.threading.Timer", return_value=Mock()
+        "rocket_controller.iteration_type.threading.Timer", return_value=Mock()
     ) as mock_timer:
         iteration._start_timeout_timer()
         mock_timer.assert_called_with(15, iteration._timeout_reached)
@@ -304,7 +304,7 @@ def test_reset_values_none_iter():
     assert iteration._timeout_seconds == 60
 
 
-@patch("xrpl_controller.iteration_type.SpecChecker")
+@patch("rocket_controller.iteration_type.SpecChecker")
 def test_set_log_dir(mock_spec_checker):
     """Test whether the log directory is set correctly."""
     iteration = TimeBasedIteration(5, 10)

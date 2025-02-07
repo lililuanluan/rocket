@@ -6,16 +6,16 @@ import base58
 from xrpl.clients.websocket_client import WebsocketClient
 from xrpl.transaction import autofill_and_sign, submit
 
-from xrpl_controller.helper import (
+from rocket_controller.helper import (
     flatten,
     parse_to_2d_list_of_ints,
     parse_to_list_of_ints,
     validate_ports_or_ids,
 )
-from xrpl_controller.message_action import MessageAction
-from xrpl_controller.message_action_buffer import MessageActionBuffer
-from xrpl_controller.transaction_builder import TransactionBuilder
-from xrpl_controller.validator_node_info import ValidatorNode
+from rocket_controller.message_action import MessageAction
+from rocket_controller.message_action_buffer import MessageActionBuffer
+from rocket_controller.transaction_builder import TransactionBuilder
+from rocket_controller.validator_node_info import ValidatorNode
 
 
 class NetworkManager:

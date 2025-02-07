@@ -2,7 +2,7 @@
 
 import datetime
 
-from xrpl_controller.helper import format_datetime
+from rocket_controller.helper import format_datetime
 
 
 def test_format():

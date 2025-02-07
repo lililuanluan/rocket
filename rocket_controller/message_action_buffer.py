@@ -1,6 +1,6 @@
 """This module contains a class which stores received MessageAction entries."""
 
-from xrpl_controller.message_action import MessageAction
+from rocket_controller.message_action import MessageAction
 
 
 class MessageActionBuffer:

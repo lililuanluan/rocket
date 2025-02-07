@@ -2,8 +2,8 @@
 
 import pytest
 
+from rocket_controller.network_manager import NetworkManager
 from tests.default_test_variables import node_0, node_1, node_2
-from xrpl_controller.network_manager import NetworkManager
 
 
 def test_custom_connections():

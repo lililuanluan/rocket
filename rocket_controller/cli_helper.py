@@ -5,7 +5,7 @@ import ast
 import sys
 from typing import Any, Dict, List, Type
 
-from xrpl_controller.strategies import Strategy
+from rocket_controller.strategies import Strategy
 
 
 def parse_args() -> argparse.Namespace:
@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
         An argparse namespace object, containing the parsed arguments.
     """
     parser = argparse.ArgumentParser(
-        prog="python -m xrpl_controller",
+        prog="python -m rocket_controller",
         description="A tool for testing the XRP Ledger consensus algorithm at the system-level, "
         "using easily adaptable fuzzing-based techniques.",
     )
@@ -90,7 +90,7 @@ def str_to_strategy(classname: str) -> Type[Strategy]:
     Returns:
         A Strategy class type.
     """
-    return getattr(sys.modules["xrpl_controller.strategies"], classname)
+    return getattr(sys.modules["rocket_controller.strategies"], classname)
 
 
 def check_valid_partition(partition: str) -> List[List[int]]:
