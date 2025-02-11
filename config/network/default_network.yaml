@@ -6,13 +6,13 @@
 # validator_2 -> 60002
 
 # base_port_peer -> the node's peer starting port
-base_port_peer: 60100
+base_port_peer: 60000
 # base_port_ws -> the node's Websocket API starting port
-base_port_ws: 61100
+base_port_ws: 61000
 # base_port_ws_admin -> the node's Websocket API (with admin methods) starting port
-base_port_ws_admin: 62100
+base_port_ws_admin: 62000
 # base_port_rpc -> the node's JSON RPC starting port
-base_port_rpc: 63100
+base_port_rpc: 63000
 
 # The number of validator nodes to configure and start
 number_of_nodes: 3

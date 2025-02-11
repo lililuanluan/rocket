@@ -104,30 +104,30 @@ from rocket_controller.strategies.strategy import Strategy
 
 
 class ExampleStrategy(Strategy):
-  def __init__(
-          self,
-          # Add any parent class (Strategy) parameters you want to be able to override here.
-  ):
-    super().__init__(
-      # Override default parent class (Strategy) parameters here
-    )
+    def __init__(
+        self,
+        # Add any parent class (Strategy) parameters you want to be able to override here.
+    ):
+        super().__init__(
+            # Override default parent class (Strategy) parameters here
+        )
 
-  def setup(self):
-    # Any setup logic can be added here, this method is called after the testing network is fully set up.
-    pass
+    def setup(self):
+        # Any setup logic can be added here, this method is called after the testing network is fully set up.
+        pass
 
-  def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
-    # Simplest case, return the packet immediately, with no delay and no duplicate.
-    # 
-    # This method is called for EVERY message that is transmitted between the XRPL validator nodes.
-    # The return format is (bytes: Message Bytes, int: Delay in ms, int: Amount of duplicates to send)
-    # 
-    # The delay can to be set to the max unsigned integer value to simulate a drop, 
-    # any other value for delay (in ms), and 0 for direct send. 
-    # The duplicate amount signifies how many times the message will be sent.
-    # The below return statement sends the original message data without any delays, 
-    # once on the network (no duplicates).
-    return packet.data, 0, 1
+    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
+        # Simplest case, return the packet immediately, with no delay and no duplicate.
+        # 
+        # This method is called for EVERY message that is transmitted between the XRPL validator nodes.
+        # The return format is (bytes: Message Bytes, int: Delay in ms, int: Amount of duplicates to send)
+        # 
+        # The delay can to be set to the max unsigned integer value to simulate a drop, 
+        # any other value for delay (in ms), and 0 for direct send. 
+        # The duplicate amount signifies how many times the message will be sent.
+        # The below return statement sends the original message data without any delays, 
+        # once on the network (no duplicates).
+        return packet.data, 0, 1
 ```
 
 If you do not need configurable parameters, then this is it! You have successfully
@@ -164,8 +164,8 @@ from rocket_controller.strategies.strategy import Strategy
 
 
 class ExampleStrategy(Strategy):
-  def some_method(self):
-    print(self.params["foo"])  # prints 'bar'
+    def some_method(self):
+        print(self.params["foo"]) # prints 'bar'
 ```
 
 (Note: The **default** configuration filename MUST follow the following format: 
@@ -204,10 +204,10 @@ from rocket_controller.iteration_type import LedgerBasedIteration
 
 
 class ExampleStrategy(Strategy):
-  def __init__(self):
-    super().__init__(
-      iteration_type=LedgerBasedIteration(max_iterations=10, max_ledger_seq=5)
-    )
+    def __init__(self):
+        super().__init__(
+          iteration_type=LedgerBasedIteration(max_iterations=10, max_ledger_seq=5)
+        )
 ```
 
 Running 10 Rocket test iterations with a fixed time of 60 seconds per iteration
@@ -219,10 +219,10 @@ from rocket_controller.iteration_type import TimeBasedIteration
 
 
 class ExampleStrategy(Strategy):
-  def __init__(self):
-    super().__init__(
-      iteration_type=TimeBasedIteration(max_iterations=10, timeout_seconds=60)
-    )
+    def __init__(self):
+        super().__init__(
+          iteration_type=TimeBasedIteration(max_iterations=10, timeout_seconds=60)
+        )
 ```
 
 If these two possible iteration types do not cater for your strategy's needs,
