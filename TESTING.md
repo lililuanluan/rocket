@@ -10,7 +10,7 @@ We have included some system-level automated tests. These can be run using `pyth
 ### Generating testing reports
 To generate testing reports, you can run the following command:
 ```bash
-pytest tests/ --cov=xrpl_controller --cov-branch --cov-report json:coverage_reports/coverage.json --ignore=tests/system_level
+pytest tests/ --cov=rocket_controller --cov-branch --cov-report json:coverage_reports/coverage.json --ignore=tests/system_level
 python coverage_script.py
 ```
 You can specify which tests to run by changing the path in the first command, for example to only run the unit tests you can use `tests/unit/`.

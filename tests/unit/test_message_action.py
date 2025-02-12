@@ -1,6 +1,6 @@
 """Tests for MessageAction class."""
 
-from xrpl_controller.message_action import MessageAction
+from rocket_controller.message_action import MessageAction
 
 
 def test_init():

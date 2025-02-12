@@ -1,6 +1,6 @@
 """This module contains a dummy strategy. It is used for testing purposes."""
 
-from xrpl_controller.strategies.strategy import Strategy
+from rocket_controller.strategies.strategy import Strategy
 
 
 class DummyStrategy(Strategy):

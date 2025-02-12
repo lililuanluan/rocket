@@ -4,15 +4,15 @@ from encodings.utf_8 import encode
 from unittest.mock import MagicMock, Mock, patch
 
 from protos import packet_pb2
+from rocket_controller.encoder_decoder import PacketEncoderDecoder
+from rocket_controller.helper import MAX_U32
+from rocket_controller.iteration_type import LedgerBasedIteration
+from rocket_controller.strategies import RandomFuzzer
 from tests.default_test_variables import configs, node_0, node_1, node_2, status_msg_1
-from xrpl_controller.encoder_decoder import PacketEncoderDecoder
-from xrpl_controller.helper import MAX_U32
-from xrpl_controller.iteration_type import LedgerBasedIteration
-from xrpl_controller.strategies import RandomFuzzer
 
 
 @patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    "rocket_controller.strategies.random_fuzzer.Strategy.init_configs",
     return_value=configs,
 )
 def test_init(mock_init_configs):
@@ -27,7 +27,7 @@ def test_init(mock_init_configs):
 
 
 @patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    "rocket_controller.strategies.random_fuzzer.Strategy.init_configs",
     return_value=configs,
 )
 def test_update_network(mock_init_configs):
@@ -58,7 +58,7 @@ def test_update_network(mock_init_configs):
 
 
 @patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    "rocket_controller.strategies.random_fuzzer.Strategy.init_configs",
     return_value=configs,
 )
 def test_process_message(mock_init_configs):
@@ -101,7 +101,7 @@ def test_process_message(mock_init_configs):
 
 
 @patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    "rocket_controller.strategies.random_fuzzer.Strategy.init_configs",
     return_value=configs,
 )
 def test_update_status(mock_init_configs):
@@ -123,7 +123,7 @@ def test_update_status(mock_init_configs):
 
 
 @patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    "rocket_controller.strategies.random_fuzzer.Strategy.init_configs",
     return_value=configs,
 )
 def test_update_status_exception(mock_init_configs):
@@ -145,7 +145,7 @@ def test_update_status_exception(mock_init_configs):
 
 
 @patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    "rocket_controller.strategies.random_fuzzer.Strategy.init_configs",
     return_value=configs,
 )
 def test_update_status_other_message(mock_init_configs):

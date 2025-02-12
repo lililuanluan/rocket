@@ -1,7 +1,7 @@
 How to do Message Mutation
 ==========================
 
-The first step of mutating messages, is creating a new strategy in the :code:`xrpl_controller/strategies` folder. For
+The first step of mutating messages, is creating a new strategy in the :code:`rocket_controller/strategies` folder. For
 the sake of this tutorial, we will name this strategy :code:`mutation_example.py`.
 
 For setting up the class, copy the following code in your newly created strategy.
@@ -14,12 +14,12 @@ For setting up the class, copy the following code in your newly created strategy
     from xrpl.utils import datetime_to_ripple_time
 
     from protos import packet_pb2, ripple_pb2
-    from xrpl_controller.iteration_type import IterationType
-    from xrpl_controller.strategies.encoder_decoder import (
+    from rocket_controller.iteration_type import IterationType
+    from rocket_controller.strategies.encoder_decoder import (
         DecodingNotSupportedError,
         PacketEncoderDecoder,
     )
-    from xrpl_controller.strategies.strategy import Strategy
+    from rocket_controller.strategies.strategy import Strategy
 
 
     class MutationExample(Strategy):
@@ -98,4 +98,4 @@ a utility method.
     return PacketEncoderDecoder.encode_message(signed_message, message_type_no), 0
 
 After completing all of these steps, you can verify you did everything correctly by comparing your file with the
-provided :code:`xrpl_controller/strategies/mutation_example.py` file.
+provided :code:`rocket_controller/strategies/mutation_example.py` file.

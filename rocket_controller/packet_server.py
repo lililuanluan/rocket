@@ -9,11 +9,11 @@ from typeguard import TypeCheckError, check_type  # type: ignore
 
 from protos import packet_pb2, packet_pb2_grpc
 from protos.packet_pb2 import Packet
-from xrpl_controller.csv_logger import ActionLogger
-from xrpl_controller.encoder_decoder import PacketEncoderDecoder
-from xrpl_controller.helper import format_datetime, validate_ports_or_ids
-from xrpl_controller.strategies.strategy import Strategy
-from xrpl_controller.validator_node_info import (
+from rocket_controller.csv_logger import ActionLogger
+from rocket_controller.encoder_decoder import PacketEncoderDecoder
+from rocket_controller.helper import format_datetime, validate_ports_or_ids
+from rocket_controller.strategies.strategy import Strategy
+from rocket_controller.validator_node_info import (
     SocketAddress,
     ValidatorKeyData,
     ValidatorNode,

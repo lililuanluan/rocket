@@ -6,7 +6,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from xrpl_controller.spec_checker import SpecChecker, _get_last_row
+from rocket_controller.spec_checker import SpecChecker, _get_last_row
 
 
 class TestSpecChecker(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestSpecChecker(unittest.TestCase):
         if len(os.listdir("./logs/")) == 0:
             os.rmdir("./logs/")
 
-    @patch("xrpl_controller.spec_checker._get_last_row")
+    @patch("rocket_controller.spec_checker._get_last_row")
     def test_spec_check(self, mock_get_last_row):
         """Test the spec_check method."""
         mock_get_last_row.return_value = [
@@ -100,7 +100,7 @@ class TestSpecChecker(unittest.TestCase):
             last_row, ["10", "10", "", "", "['hash1', 'hash1']", "['index1', 'index1']"]
         )
 
-    @patch("xrpl_controller.spec_checker._get_last_row")
+    @patch("rocket_controller.spec_checker._get_last_row")
     def test_spec_check_error_retrieving_last_row(self, mock_get_last_row):
         """Test the spec_check method when there is an error retrieving the last row."""
         mock_get_last_row.side_effect = Exception("Error")
@@ -118,7 +118,7 @@ class TestSpecChecker(unittest.TestCase):
             self.assertEqual(rows[-1]["same_ledger_hashes"], "-")
             self.assertEqual(rows[-1]["same_ledger_indexes"], "-")
 
-    @patch("xrpl_controller.spec_checker._get_last_row")
+    @patch("rocket_controller.spec_checker._get_last_row")
     def test_spec_check_error_during_spec_check_1(self, mock_get_last_row):
         """Test the spec_check method when there is an error, if the last row is the header row."""
         mock_get_last_row.return_value = [
@@ -143,7 +143,7 @@ class TestSpecChecker(unittest.TestCase):
             self.assertEqual(rows[-1]["same_ledger_hashes"], "-")
             self.assertEqual(rows[-1]["same_ledger_indexes"], "-")
 
-    @patch("xrpl_controller.spec_checker._get_last_row")
+    @patch("rocket_controller.spec_checker._get_last_row")
     def test_spec_check_error_during_spec_check_2(self, mock_get_last_row):
         """Test the spec_check method when there is an error, if the last row is not the header row."""
         mock_get_last_row.return_value = [

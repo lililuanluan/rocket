@@ -35,11 +35,11 @@ class InterceptorManager:
                 c.stop()
 
     def start_new(self):
-        """Starts the xrpl-packet-interceptor subprocess, and spawns a thread checking for output."""
+        """Starts the rocket-interceptor subprocess, and spawns a thread checking for output."""
         file = (
-            "xrpl-packet-interceptor"
+            "rocket-interceptor"
             if platform != "win32"
-            else "/rocket_interceptor/xrpl-packet-interceptor.exe"
+            else "/rocket_interceptor/rocket-interceptor.exe"
         )
         logger.info("Starting interceptor")
         try:
@@ -53,7 +53,7 @@ class InterceptorManager:
             )
         except FileNotFoundError as exc:
             logger.error(
-                "Could not find the xrpl-packet-interceptor executable. Did you build the interceptor?"
+                "Could not find the rocket-interceptor executable. Did you build the interceptor?"
             )
             traceback.print_exception(exc)
             exit(2)
@@ -62,12 +62,12 @@ class InterceptorManager:
         t.start()
 
     def restart(self):
-        """Stops and starts the xrpl-packet-interceptor subprocess."""
+        """Stops and starts the rocket-interceptor subprocess."""
         self.stop()
         self.start_new()
 
     def stop(self):
-        """Stops the xrpl-packet-interceptor subprocess."""
+        """Stops the rocket-interceptor subprocess."""
         # Check if this is the end of an active run
         if self.process:
             logger.info("Stopping interceptor")

@@ -1,6 +1,6 @@
 """Tests for format_filename method in helper.py."""
 
-from xrpl_controller.helper import format_filename
+from rocket_controller.helper import format_filename
 
 
 def test_format_filename():

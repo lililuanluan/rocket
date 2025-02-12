@@ -2,7 +2,7 @@
 
 import pytest
 
-from xrpl_controller.transaction_builder import TransactionBuilder
+from rocket_controller.transaction_builder import TransactionBuilder
 
 
 def test_init():

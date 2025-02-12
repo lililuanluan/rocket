@@ -6,8 +6,8 @@ from loguru import logger
 from xrpl.clients import WebsocketClient
 from xrpl.models import Ledger
 
-from xrpl_controller.csv_logger import ResultLogger
-from xrpl_controller.validator_node_info import ValidatorNode
+from rocket_controller.csv_logger import ResultLogger
+from rocket_controller.validator_node_info import ValidatorNode
 
 
 class LedgerResult:

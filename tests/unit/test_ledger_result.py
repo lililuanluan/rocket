@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, Mock, call, patch
 
 from xrpl.models import Ledger
 
+from rocket_controller.ledger_result import LedgerResult
 from tests.default_test_variables import node_0, node_1
-from xrpl_controller.ledger_result import LedgerResult
 
 mock_response = {"ledger_hash": "hash123", "ledger_index": 3, "close_time": 1234}
 
@@ -17,7 +17,7 @@ def test_init():
     assert ledger_result.result_logger is None
 
 
-@patch("xrpl_controller.ledger_result.ResultLogger", return_value=Mock())
+@patch("rocket_controller.ledger_result.ResultLogger", return_value=Mock())
 def test_new_result_logger(mock_logger):
     """Test whether the new_result_logger function works correctly."""
     iteration = 1
@@ -28,8 +28,8 @@ def test_new_result_logger(mock_logger):
     mock_logger.assert_called_with(f"test/iteration-{iteration}", "result-1")
 
 
-@patch("xrpl_controller.ledger_result.ResultLogger")
-@patch("xrpl_controller.ledger_result.WebsocketClient")
+@patch("rocket_controller.ledger_result.ResultLogger")
+@patch("rocket_controller.ledger_result.WebsocketClient")
 def test_fetch_ledger(ws_client, mock_logger):
     """Check whether fetching the ledger API is implemented correctly."""
     ws_client().__enter__().request.return_value = MagicMock()
@@ -42,8 +42,8 @@ def test_fetch_ledger(ws_client, mock_logger):
     ws_client().__enter__().request.assert_called_with(Ledger())
 
 
-@patch("xrpl_controller.ledger_result.ResultLogger")
-@patch("xrpl_controller.ledger_result.WebsocketClient")
+@patch("rocket_controller.ledger_result.ResultLogger")
+@patch("rocket_controller.ledger_result.WebsocketClient")
 def test_fetch_ledger_unsuccessful(ws_client, mock_logger):
     """Test whether unsuccessful results cause the function to return None."""
     ws_client().__enter__().request.return_value = MagicMock()
@@ -58,8 +58,8 @@ def test_fetch_ledger_unsuccessful(ws_client, mock_logger):
     assert res is None
 
 
-@patch("xrpl_controller.ledger_result.ResultLogger")
-@patch("xrpl_controller.ledger_result.WebsocketClient")
+@patch("rocket_controller.ledger_result.ResultLogger")
+@patch("rocket_controller.ledger_result.WebsocketClient")
 def test_fetch_ledger_result_none(ws_client, mock_logger):
     """Test whether None result, returns None."""
     ws_client().__enter__().request.return_value = MagicMock()
@@ -74,8 +74,8 @@ def test_fetch_ledger_result_none(ws_client, mock_logger):
     assert res is None
 
 
-@patch("xrpl_controller.ledger_result.ResultLogger")
-@patch("xrpl_controller.ledger_result.WebsocketClient")
+@patch("rocket_controller.ledger_result.ResultLogger")
+@patch("rocket_controller.ledger_result.WebsocketClient")
 def test_fetch_ledger_result_ledger_none(ws_client, mock_logger):
     """Test when get returns None, the function returns None."""
     ws_client().__enter__().request.return_value = MagicMock()
@@ -90,7 +90,7 @@ def test_fetch_ledger_result_ledger_none(ws_client, mock_logger):
     assert res is None
 
 
-@patch("xrpl_controller.ledger_result.ResultLogger")
+@patch("rocket_controller.ledger_result.ResultLogger")
 def test_log_ledger_result(logger_mock):
     """Test whether the logger is called correctly."""
     ledger_result = LedgerResult()
@@ -104,7 +104,7 @@ def test_log_ledger_result(logger_mock):
     )
 
 
-@patch("xrpl_controller.ledger_result.ResultLogger")
+@patch("rocket_controller.ledger_result.ResultLogger")
 def test_log_ledger_result_err(logger_mock):
     """Test whether the logger is called correctly."""
     ledger_result = LedgerResult()

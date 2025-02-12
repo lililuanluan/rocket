@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
-from xrpl_controller.validator_node_info import ValidatorNode
+from rocket_controller.validator_node_info import ValidatorNode
 
 action_log_columns = [
     "timestamp",

@@ -5,9 +5,9 @@ from unittest.mock import Mock, patch
 import pytest
 
 from protos import packet_pb2
+from rocket_controller.network_manager import NetworkManager
+from rocket_controller.strategies import RandomFuzzer
 from tests.default_test_variables import configs, node_0, node_1, node_2, node_3
-from xrpl_controller.network_manager import NetworkManager
-from xrpl_controller.strategies import RandomFuzzer
 
 
 def test_auto_parsing():
@@ -33,7 +33,7 @@ def test_auto_parsing():
 
 
 @patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    "rocket_controller.strategies.random_fuzzer.Strategy.init_configs",
     return_value=configs,
 )
 def test_auto_parsing_false(mock_init_configs):
@@ -56,7 +56,7 @@ def test_auto_parsing_false(mock_init_configs):
 
 
 @patch(
-    "xrpl_controller.strategies.random_fuzzer.Strategy.init_configs",
+    "rocket_controller.strategies.random_fuzzer.Strategy.init_configs",
     return_value=configs,
 )
 def test_auto_parsing_subsets(mock_init_configs):

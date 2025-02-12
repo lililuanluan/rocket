@@ -7,18 +7,18 @@ from typing import Any, Dict, List, Tuple
 from loguru import logger
 
 from protos import packet_pb2, ripple_pb2
-from xrpl_controller.encoder_decoder import (
+from rocket_controller.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
 )
-from xrpl_controller.helper import (
+from rocket_controller.helper import (
     MAX_U32,
     format_datetime,
     yaml_to_dict,
 )
-from xrpl_controller.iteration_type import LedgerBasedIteration, TimeBasedIteration
-from xrpl_controller.network_manager import NetworkManager
-from xrpl_controller.validator_node_info import ValidatorNode
+from rocket_controller.iteration_type import LedgerBasedIteration, TimeBasedIteration
+from rocket_controller.network_manager import NetworkManager
+from rocket_controller.validator_node_info import ValidatorNode
 
 
 class Strategy(ABC):

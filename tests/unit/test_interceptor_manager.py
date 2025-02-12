@@ -5,12 +5,12 @@ from unittest.mock import MagicMock, Mock, patch
 
 from docker.models.containers import Container
 
-from xrpl_controller.interceptor_manager import InterceptorManager
+from rocket_controller.interceptor_manager import InterceptorManager
 
 
 def test_start_new():
     """Test starting a new interceptor."""
-    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen:
+    with patch("rocket_controller.interceptor_manager.Popen") as mock_popen:
         mock_popen.return_value.communicate.side_effect = lambda: (None, None)
         interceptor_manager = InterceptorManager()
         interceptor_manager.start_new()
@@ -19,7 +19,7 @@ def test_start_new():
 
 def test_restart_existing():
     """Test restarting an existing interceptor."""
-    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen:
+    with patch("rocket_controller.interceptor_manager.Popen") as mock_popen:
         mock_popen.return_value.communicate.side_effect = lambda: (None, None)
         interceptor_manager = InterceptorManager()
         interceptor_manager.start_new()
@@ -29,7 +29,7 @@ def test_restart_existing():
 
 def test_restart_not_started():
     """Test restarting an interceptor that has not been started."""
-    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen:
+    with patch("rocket_controller.interceptor_manager.Popen") as mock_popen:
         mock_popen.return_value.communicate.side_effect = lambda: (None, None)
         interceptor_manager = InterceptorManager()
         interceptor_manager.restart()
@@ -38,7 +38,7 @@ def test_restart_not_started():
 
 def test_stop_existing():
     """Test stopping an existing interceptor."""
-    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen:
+    with patch("rocket_controller.interceptor_manager.Popen") as mock_popen:
         mock_popen.return_value.communicate.side_effect = lambda: (None, None)
         interceptor_manager = InterceptorManager()
         interceptor_manager.start_new()
@@ -48,7 +48,7 @@ def test_stop_existing():
 
 def test_stop_not_started():
     """Test stopping an interceptor that has not been started."""
-    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen:
+    with patch("rocket_controller.interceptor_manager.Popen") as mock_popen:
         mock_popen.return_value.communicate.side_effect = lambda: (None, None)
         interceptor_manager = InterceptorManager()
         interceptor_manager.stop()
@@ -59,7 +59,7 @@ def test_check_output_with_stdout_stderr():
     """Test check_output method with stdout and stderr."""
     mock_popen = Mock()
     mock_popen.communicate.return_value = ("stdout", "stderr")
-    with patch("xrpl_controller.interceptor_manager.Popen", return_value=mock_popen):
+    with patch("rocket_controller.interceptor_manager.Popen", return_value=mock_popen):
         interceptor_manager = InterceptorManager()
         interceptor_manager.start_new()
     mock_popen.communicate.assert_called_once()
@@ -69,7 +69,7 @@ def test_check_output_no_stdout_stderr():
     """Test check_output method without stdout and stderr."""
     mock_popen = Mock()
     mock_popen.communicate.return_value = (None, None)
-    with patch("xrpl_controller.interceptor_manager.Popen", return_value=mock_popen):
+    with patch("rocket_controller.interceptor_manager.Popen", return_value=mock_popen):
         interceptor_manager = InterceptorManager()
         interceptor_manager.start_new()
     mock_popen.communicate.assert_called_once()
@@ -109,7 +109,7 @@ def test_stop_ungraceful():
     mock_popen = Mock(spec=Popen)
     mock_popen.communicate.return_value = (None, None)
 
-    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen_class:
+    with patch("rocket_controller.interceptor_manager.Popen") as mock_popen_class:
         mock_popen_class.return_value = mock_popen
         interceptor_manager = InterceptorManager()
         interceptor_manager.process = mock_popen
@@ -122,10 +122,10 @@ def test_stop_ungraceful():
         mock_popen.wait.assert_called_once_with(timeout=5.0)
 
 
-@patch("xrpl_controller.interceptor_manager.exit", return_value=MagicMock())
+@patch("rocket_controller.interceptor_manager.exit", return_value=MagicMock())
 def test_exception_behavior(exit_mock):
     """Test whether the exception behavior functions correctly."""
-    with patch("xrpl_controller.interceptor_manager.Popen") as mock_popen_class:
+    with patch("rocket_controller.interceptor_manager.Popen") as mock_popen_class:
         mock_popen_class.side_effect = FileNotFoundError()
         interceptor_manager = InterceptorManager()
 

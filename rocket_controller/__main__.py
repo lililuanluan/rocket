@@ -1,10 +1,10 @@
-"""Entry point of the application, run with python -m xrpl_controller."""
+"""Entry point of the application, run with python -m rocket_controller."""
 
 import argparse
 
-from xrpl_controller.cli_helper import parse_args, process_args, str_to_strategy
-from xrpl_controller.packet_server import serve
-from xrpl_controller.strategies import Strategy
+from rocket_controller.cli_helper import parse_args, process_args, str_to_strategy
+from rocket_controller.packet_server import serve
+from rocket_controller.strategies import Strategy
 
 
 def main(args: argparse.Namespace) -> None:

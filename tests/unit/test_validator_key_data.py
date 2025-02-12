@@ -1,6 +1,6 @@
 """Tests the ValidatorKeyData class."""
 
-from xrpl_controller.validator_node_info import ValidatorKeyData
+from rocket_controller.validator_node_info import ValidatorKeyData
 
 
 def test_constructor():

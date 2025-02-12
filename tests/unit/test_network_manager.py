@@ -8,8 +8,8 @@ import pytest
 from xrpl.models import Response
 from xrpl.models.response import ResponseStatus
 
+from rocket_controller.network_manager import NetworkManager
 from tests.default_test_variables import node_0, node_1
-from xrpl_controller.network_manager import NetworkManager
 
 
 def test_init():
@@ -67,10 +67,10 @@ def test_id_to_port_invalid():
         network.id_to_port(3)
 
 
-@patch("xrpl_controller.network_manager.WebsocketClient")
-@patch("xrpl_controller.network_manager.autofill_and_sign", return_value=None)
+@patch("rocket_controller.network_manager.WebsocketClient")
+@patch("rocket_controller.network_manager.autofill_and_sign", return_value=None)
 @patch(
-    "xrpl_controller.network_manager.submit",
+    "rocket_controller.network_manager.submit",
     return_value=Response(status=ResponseStatus.SUCCESS, result={}),
 )
 def test_submit_transaction(wsm, autofill_and_sign_mock, submit_mock):

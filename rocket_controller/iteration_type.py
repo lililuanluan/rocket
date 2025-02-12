@@ -8,10 +8,10 @@ from grpc import Server
 from loguru import logger
 
 from protos import ripple_pb2
-from xrpl_controller.interceptor_manager import InterceptorManager
-from xrpl_controller.ledger_result import LedgerResult
-from xrpl_controller.spec_checker import SpecChecker
-from xrpl_controller.validator_node_info import ValidatorNode
+from rocket_controller.interceptor_manager import InterceptorManager
+from rocket_controller.ledger_result import LedgerResult
+from rocket_controller.spec_checker import SpecChecker
+from rocket_controller.validator_node_info import ValidatorNode
 
 
 class TimeBasedIteration:

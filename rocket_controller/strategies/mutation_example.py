@@ -6,12 +6,12 @@ from typing import Any, Dict, Tuple
 from xrpl.utils import datetime_to_ripple_time
 
 from protos import packet_pb2, ripple_pb2
-from xrpl_controller.encoder_decoder import (
+from rocket_controller.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
 )
-from xrpl_controller.iteration_type import TimeBasedIteration
-from xrpl_controller.strategies.strategy import Strategy
+from rocket_controller.iteration_type import TimeBasedIteration
+from rocket_controller.strategies.strategy import Strategy
 
 
 class MutationExample(Strategy):
