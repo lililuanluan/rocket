@@ -1,7 +1,6 @@
 """Tests for the TimeBasedIteration class and subclasses."""
 
 from concurrent import futures
-from datetime import datetime, timedelta
 from unittest.mock import MagicMock, Mock, call, patch
 
 import grpc
@@ -26,9 +25,6 @@ def test_ledger_based_iteration_init():
     assert iteration.cur_iteration == 0
     assert iteration._timeout_seconds == 60
     assert iteration.ledger_timeout is True
-    assert iteration.ledger_seq == 1
-    assert isinstance(iteration.prev_validation_time, datetime)
-    assert isinstance(iteration.validation_time, timedelta)
     assert isinstance(iteration._interceptor_manager, InterceptorManager)
 
 
@@ -43,6 +39,8 @@ def test_time_based_iteration_add():
     iteration._start_timeout_timer = MagicMock()
     mock_ledger_results = Mock()
     iteration._ledger_results = mock_ledger_results
+    iteration._spec_checker = Mock()
+    iteration._log_dir = Mock()
     iteration.add_iteration()
 
     assert iteration.cur_iteration == 1
@@ -60,6 +58,7 @@ def test_time_based_iteration_add_done():
     mock_ledger_results = Mock()
     iteration._ledger_results = mock_ledger_results
     mock_spec_checker = Mock()
+    iteration._log_dir = Mock()
     iteration._spec_checker = mock_spec_checker
     grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     grpc_server.stop = MagicMock()
@@ -72,7 +71,6 @@ def test_time_based_iteration_add_done():
     assert mock_interceptor_manager.stop.call_count == 2
     mock_interceptor_manager.cleanup_docker_containers.assert_called_once()
     grpc_server.stop.assert_called_once()
-    assert mock_ledger_results.flush_and_close.call_count == 2
     mock_spec_checker.spec_check.assert_called_once()
     mock_spec_checker.aggregate_spec_checks.assert_called_once()
 
@@ -85,6 +83,7 @@ def test_time_based_iteration_add_done_no_server():
     iteration._start_timeout_timer = MagicMock()
     iteration._ledger_results = Mock()
     iteration._spec_checker = Mock()
+    iteration._log_dir = Mock()
     grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     grpc_server.stop = MagicMock()
 
@@ -105,13 +104,12 @@ def test_time_based_iteration_update():
     iteration._interceptor_manager = mock_interceptor_manager
     iteration.set_validator_nodes(validator_nodes)
     iteration._start_timeout_timer = MagicMock()
-    iteration.start_timeout = MagicMock()
     iteration._ledger_results = Mock()
 
-    iteration.on_status_change(status_msg_1)
-    iteration.on_status_change(status_msg_1)
+    iteration.on_status_change(status_msg_1, 0, 1)
+    iteration.on_status_change(status_msg_1, 0, 1)
 
-    assert iteration.ledger_seq == 2
+    assert iteration.ledger_validation_map[0]["seq"] == 2
 
 
 def test_ledger_based_iteration_update_complete():
@@ -125,10 +123,9 @@ def test_ledger_based_iteration_update_complete():
     iteration._reset_values = MagicMock()
     iteration._ledger_results = Mock()
 
-    iteration.on_status_change(status_msg_1)
-    iteration.on_status_change(status_msg_2)
-
-    assert iteration.ledger_seq == 2
+    iteration.on_status_change(status_msg_1, 0, 1)
+    iteration.on_status_change(status_msg_2, 1, 0)
+    assert iteration.ledger_validation_map[0]["seq"] == 2
     iteration.add_iteration.assert_called_once()
 
 
@@ -139,11 +136,12 @@ def test_ledger_based_iteration_reset_parameters():
     iteration._interceptor_manager = mock_interceptor_manager
     iteration.add_iteration = MagicMock()
     iteration._start_timeout_timer = MagicMock()
+    iteration.set_validator_nodes(validator_nodes)
     with patch(
         "rocket_controller.iteration_type.threading.Timer", return_value=Mock()
     ) as mock_timer:
         iteration._timer = mock_timer.return_value
-        iteration.on_status_change(status_msg_1)
+        iteration.on_status_change(status_msg_1, 0, 1)
         iteration._reset_values()
 
         mock_timer.return_value.cancel.assert_has_calls([call()])
@@ -151,9 +149,6 @@ def test_ledger_based_iteration_reset_parameters():
     assert iteration._max_iterations == 5
     assert iteration._max_ledger_seq == 10
 
-    assert iteration.ledger_seq == 1
-    assert isinstance(iteration.prev_validation_time, datetime)
-    assert isinstance(iteration.validation_time, timedelta)
     assert isinstance(iteration._interceptor_manager, InterceptorManager)
 
 
@@ -164,10 +159,11 @@ def test_ledger_based_iteration_reset_parameters_no_timer():
     iteration._interceptor_manager = mock_interceptor_manager
     iteration.add_iteration = MagicMock()
     iteration._start_timeout_timer = MagicMock()
+    iteration.set_validator_nodes(validator_nodes)
     with patch(
         "rocket_controller.iteration_type.threading.Timer", return_value=Mock()
     ) as mock_timer:
-        iteration.on_status_change(status_msg_1)
+        iteration.on_status_change(status_msg_1, 0, 1)
         iteration._reset_values()
 
         mock_timer.return_value.cancel.assert_not_called()
@@ -175,10 +171,6 @@ def test_ledger_based_iteration_reset_parameters_no_timer():
     assert iteration._max_iterations == 5
     assert iteration._max_ledger_seq == 10
 
-    assert iteration.network_event_changes == 0
-    assert iteration.ledger_seq == 1
-    assert isinstance(iteration.prev_validation_time, datetime)
-    assert isinstance(iteration.validation_time, timedelta)
     assert isinstance(iteration._interceptor_manager, InterceptorManager)
 
 
@@ -266,11 +258,12 @@ def test_timeout_reached():
 def test_init_time_iter():
     """Test initialization of TimeIteration class."""
     iteration = TimeBasedIteration(max_iterations=1, timeout_seconds=15)
+    iteration.set_validator_nodes(validator_nodes)
     assert iteration._max_iterations == 1
     assert iteration.cur_iteration == 0
     assert iteration._timeout_seconds == 15
 
-    iteration.on_status_change(ripple_pb2.TMStatusChange())
+    iteration.on_status_change(ripple_pb2.TMStatusChange(), 0, 1)
 
 
 def test_none_iter():
@@ -286,7 +279,7 @@ def test_none_iter():
 
     iteration._stop_all.assert_called_once()
     iteration._terminate_server.assert_called_once()
-    iteration.on_status_change(ripple_pb2.TMStatusChange())
+    iteration.on_status_change(ripple_pb2.TMStatusChange(), 0, 1)
     iteration.set_log_dir("test")
     assert iteration._log_dir is None
 

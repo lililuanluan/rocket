@@ -116,6 +116,7 @@ def test_update_status(mock_init_configs):
     iteration_type.set_log_dir = Mock()
 
     strategy = RandomFuzzer(iteration_type=iteration_type)
+    strategy.update_network([node_0, node_1, node_2])
     mock_init_configs.assert_called_once()
 
     strategy.update_status(packet)

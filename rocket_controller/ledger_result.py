@@ -1,5 +1,6 @@
 """This module contains an implementation to log ledger results."""
 
+from time import sleep
 from typing import Any, List
 
 from loguru import logger
@@ -29,39 +30,38 @@ class LedgerResult:
             f"{log_dir}/iteration-{iteration}", f"result-{iteration}"
         )
 
-    def flush_and_close(self):
-        """Flush and close the result logger."""
-        if self.result_logger:
-            self.result_logger.flush()
-            self.result_logger.close()
-
     @staticmethod
-    def _fetch_ledger(ws_port: int) -> dict[str, Any] | None:
+    def _fetch_ledger(
+        ws_port: int, ledger_seq: int, retries: int = 3
+    ) -> dict[str, Any] | None:
         """
         Fetch the node info from the websocket server at a specific port.
 
         Args:
             ws_port: The websocket server port to retrieve the node info from.
+            ledger_seq: The ledger sequence number to fetch.
+            retries: The number of retries to attempt if the request fails (especially for early calls the node is not yet ready).
 
         Returns:
             A dictionary containing the node info if available, None otherwise.
         """
         with WebsocketClient(f"ws://localhost:{ws_port}") as client:
-            ledger_info = Ledger()
+            ledger_info = Ledger(ledger_index=ledger_seq)
             ledger_response = client.request(ledger_info)
             if not ledger_response.is_successful():
-                logger.error("request failed")
+                if retries > 0:
+                    sleep(5)
+                    return LedgerResult._fetch_ledger(ws_port, ledger_seq, retries - 1)
+                logger.error(
+                    f"Could not fetch ledger {ledger_seq} from port {ws_port}."
+                )
                 return None
-            if ledger_response.result is None:
-                return None
-            closed_ledger = ledger_response.result.get("closed")
-            if closed_ledger is None:
-                return None
-            return closed_ledger.get("ledger")
+            return ledger_response.result.get("ledger")
 
     def log_ledger_result(
         self,
-        ledger_count: int,
+        node_id: int,
+        ledger_seq: int,
         goal_ledger: int,
         time_to_consensus: float,
         validator_nodes: List[ValidatorNode],
@@ -70,64 +70,54 @@ class LedgerResult:
         Method for logging the ledger results.
 
         Args:
-            ledger_count: The current ledger count.
+            node_id: The ID of the node to log the ledger result for.
+            ledger_seq: The current ledger count.
             goal_ledger: The configured maximum number of ledgers per iteration.
             time_to_consensus: The time taken to reach consensus.
             validator_nodes: The list of validator nodes to check on.
         """
-        results = []
+        node = validator_nodes[node_id]
+        result = self._fetch_ledger(node.ws_private.port, ledger_seq)
+        if result is None:
+            logger.error(f"Could not retrieve ledger from node {node_id}")
+            return
 
-        for node in validator_nodes:
-            res = self._fetch_ledger(node.ws_private.port)
-            if res is None:
-                logger.error(
-                    f"Could not retrieve ledger from node with port: {node.peer.port}"
-                )
-                continue
-            results.append(res)
+        ledger_index = result.get("ledger_index")
+        close_time = result.get("close_time")
 
-        ledger_indexes = []
-        close_times = []
-        ledger_hashes = []
+        _ledger_index = (
+            -1
+            if ledger_index is None
+            else int(ledger_index)
+            if isinstance(ledger_index, (int, float, str))
+            and str(ledger_index).isdigit()
+            else -1
+        )
 
-        for _, result in enumerate(results):
-            ledger_index = result.get("ledger_index")
-            close_time = result.get("close_time")
+        _close_time = (
+            -1
+            if close_time is None
+            else int(close_time)
+            if isinstance(close_time, (int, float, str)) and str(close_time).isdigit()
+            else -1
+        )
 
-            _ledger_index = (
-                -1
-                if ledger_index is None
-                else int(ledger_index)
-                if isinstance(ledger_index, (int, float, str))
-                and str(ledger_index).isdigit()
-                else -1
-            )
+        _ledger_hash = (
+            "NOT FOUND"
+            if result.get("ledger_hash") is None
+            else str(result.get("ledger_hash"))
+        )
 
-            _close_time = (
-                -1
-                if close_time is None
-                else int(close_time)
-                if isinstance(close_time, (int, float, str))
-                and str(close_time).isdigit()
-                else -1
-            )
+        if not self.result_logger:
+            logger.error("No result logger configured")
+            return
 
-            _ledger_hash = (
-                "NOT FOUND"
-                if result.get("ledger_hash") is None
-                else str(result.get("ledger_hash"))
-            )
-
-            ledger_indexes.append(_ledger_index)
-            close_times.append(_close_time)
-            ledger_hashes.append(_ledger_hash)
-
-        if self.result_logger:
-            self.result_logger.log_result(
-                ledger_count,
-                goal_ledger,
-                time_to_consensus,
-                close_times,
-                ledger_hashes,
-                ledger_indexes,
-            )
+        self.result_logger.log_result(
+            node_id,
+            ledger_seq,
+            goal_ledger,
+            time_to_consensus,
+            _close_time,
+            _ledger_hash,
+            _ledger_index,
+        )

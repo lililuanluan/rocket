@@ -136,10 +136,6 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         self.strategy.update_network(validator_node_list)
 
         if self.strategy.keep_action_log:
-            if (
-                self.logger is not None
-            ):  # Close the previous logger if there was a previous one
-                self.logger.close()
             self.logger = ActionLogger(
                 f"{format_datetime(self.strategy.start_datetime)}/iteration-{self.strategy.iteration_type.cur_iteration}",
                 validator_node_list,

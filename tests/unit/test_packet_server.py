@@ -95,7 +95,6 @@ def test_send_validator_node_info_with_existing_logger():
         request_iterator = [packet_pb2.ValidatorNodeInfo()]
         response = packet_server.send_validator_node_info(request_iterator, None)
         assert response.status == "Received validator node info"
-        mock_logger.close.assert_called_once()
 
 
 def test_get_config():

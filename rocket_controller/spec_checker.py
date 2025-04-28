@@ -2,6 +2,7 @@
 
 import csv
 import json
+from collections import defaultdict
 from typing import Any, List
 
 from loguru import logger
@@ -48,45 +49,78 @@ class SpecChecker:
             f"logs/{self.log_dir}/iteration-{iteration}/result-{iteration}.csv"
         )
 
+        ledgers_data = defaultdict(list)
         try:
-            last_row = _get_last_row(result_file_path)
-        except Exception as e:
-            logger.error(f"Error retrieving last row: {e}")
+            with open(result_file_path) as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    # Basic type conversion and validation
+                    try:
+                        node_id = int(row["node_id"])
+                        ledger_seq = int(row["ledger_seq"])
+                        goal_ledger_seq = int(row["goal_ledger_seq"])
+                        ledger_hash = row["ledger_hash"]
+                        ledger_index = int(row["ledger_index"])
+                        parsed_row = {
+                            "node_id": node_id,
+                            "ledger_seq": ledger_seq,
+                            "goal_ledger_seq": goal_ledger_seq,
+                            "ledger_hash": ledger_hash,
+                            "ledger_index": ledger_index,
+                        }
+                        ledgers_data[ledger_seq].append(parsed_row)
+                    except (ValueError, KeyError) as e:
+                        logger.error(
+                            f"Skipping row due to parsing error: {e} in row: {row}"
+                        )
+                        continue
+        except csv.Error as e:
+            logger.critical(f"CSV Error: {e}")
             self.spec_check_logger.log_spec_check(
-                iteration, "error retrieving results", "-", "-"
+                iteration, f"CSV Error: {e}", "-", "-"
             )
             return
 
-        try:
-            ledger_count = int(last_row[0])
-            goal_ledger_count = int(last_row[1])
-            ledger_hashes: List = eval(last_row[4])
-            ledger_indexes: List = eval(last_row[5])
-            ledger_hashes_same = all(x == ledger_hashes[0] for x in ledger_hashes)
-            ledger_indexes_same = all(x == ledger_indexes[0] for x in ledger_indexes)
-
+        if not ledgers_data:
+            logger.critical("No valid ledger data found.")
             self.spec_check_logger.log_spec_check(
-                iteration,
-                ledger_count == goal_ledger_count,
-                ledger_hashes_same,
-                ledger_indexes_same,
+                iteration, "No valid ledger data found.", "-", "-"
             )
+            return
 
-            logger.info(
-                f"Specification check for iteration {iteration}: "
-                f"reached goal ledger: {ledger_count == goal_ledger_count}, "
-                f"same ledger hashes: {ledger_hashes_same}, same ledger indexes: {ledger_indexes_same}"
+        sorted_keys = sorted(ledgers_data.keys())
+        logger.debug(f"Found data for ledger sequences: {sorted_keys}")
+        max_seq = sorted_keys[-1]
+        min_seq = sorted_keys[0]
+
+        all_hashes_pass = True
+        all_indexes_pass = True
+        all_ledger_goal_reached = (
+            len(ledgers_data[max_seq]) == len(ledgers_data[min_seq])
+            and max_seq == ledgers_data[min_seq][0]["goal_ledger_seq"]
+        )
+        for _, records in ledgers_data.items():
+            ledger_hashes_same = all(
+                x["ledger_hash"] == records[0]["ledger_hash"] for x in records
             )
-        except Exception as e:
-            logger.error(f"Error during specification check: {e}")
-            if last_row[0] == "ledger_count":
-                self.spec_check_logger.log_spec_check(
-                    iteration, "timeout reached before startup", "-", "-"
-                )
-            else:
-                self.spec_check_logger.log_spec_check(
-                    iteration, "error during spec check", "-", "-"
-                )
+            ledger_indexes_same = all(
+                x["ledger_index"] == records[0]["ledger_index"] for x in records
+            )
+            all_hashes_pass &= ledger_hashes_same
+            all_indexes_pass &= ledger_indexes_same
+
+        self.spec_check_logger.log_spec_check(
+            iteration,
+            all_ledger_goal_reached,
+            all_hashes_pass,
+            all_indexes_pass,
+        )
+
+        logger.info(
+            f"Specification check for iteration {iteration}: "
+            f"reached goal ledger: {all_ledger_goal_reached}, "
+            f"same ledger hashes: {all_hashes_pass}, same ledger indexes: {all_indexes_pass}"
+        )
 
     def aggregate_spec_checks(self):
         """Aggregate the spec check results and write them to a final file."""
