@@ -204,6 +204,23 @@ class TimeBasedIteration:
                 self._reset_values()
                 self.add_iteration()
 
+    def get_ledger_sequence(self, node_id: int) -> int:
+        """
+        Get the current latest ledger sequence for a given node ID.
+
+        Args:
+            node_id: ID of the node to get the ledger sequence for.
+
+        Returns:
+            The current latest ledger sequence for the given node ID.
+
+        Raises:
+            ValueError: If the node ID is not found in the ledger validation map.
+        """
+        if node_id not in self.ledger_validation_map:
+            raise ValueError(f"Node {node_id} not found in ledger validation map.")
+        return self.ledger_validation_map[node_id]["seq"]
+
 
 class LedgerBasedIteration(TimeBasedIteration):
     """Ledger Based iteration type, able to keep track of validated ledgers."""
