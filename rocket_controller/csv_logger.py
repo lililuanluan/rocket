@@ -1,10 +1,10 @@
 """This module contains a base class to log csv files and two fine-tuned classes extended from said base class."""
 
-import atexit
 import csv
+import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 from rocket_controller.validator_node_info import ValidatorNode
 
@@ -20,12 +20,13 @@ action_log_columns = [
 ]
 
 result_log_columns = [
-    "ledger_count",
-    "goal_ledger_count",
-    "time_to_consensus",
-    "close_times",
-    "ledger_hashes",
-    "ledger_indexes",
+    "node_id",
+    "ledger_seq",
+    "goal_ledger_seq",
+    "time_to_validation",
+    "close_time",
+    "ledger_hash",
+    "ledger_index",
 ]
 
 spec_check_columns = [
@@ -53,19 +54,12 @@ class CSVLogger:
         filename = filename if filename.endswith(".csv") else filename + ".csv"
 
         self.filepath = "./logs/" + directory + "/" + filename
-        self.csv_file = open(self.filepath, mode="w", newline="")
-        self.writer = csv.writer(self.csv_file)
         self.columns = [col.__str__ for col in columns]
-        self.writer.writerow(columns)
-        atexit.register(self.close)
 
-    def close(self):
-        """Close the CSV file."""
-        self.csv_file.close()
-
-    def flush(self):
-        """Flush the CSV file."""
-        self.csv_file.flush()
+        self._lock = threading.Lock()
+        with open(self.filepath, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(columns)
 
     def log_row(self, row: list[Any]):
         """
@@ -81,7 +75,9 @@ class CSVLogger:
             raise ValueError(
                 f"Wrong number of column entries in the given row, required columns are: {self.columns}"
             )
-        self.writer.writerow(row)
+        with self._lock, open(self.filepath, mode="a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(row)
 
     def log_rows(self, rows: list[list[Any]]):
         """
@@ -129,7 +125,6 @@ class ActionLogger(CSVLogger):
             directory=directory,
         )
         node_logger.log_rows([[node] for node in validator_node_list])
-        node_logger.close()
 
         super().__init__(
             filename=final_filename,
@@ -162,7 +157,7 @@ class ActionLogger(CSVLogger):
             custom_timestamp: A custom timestamp to log if desired.
         """
         # Note: timestamp is milliseconds since epoch (January 1, 1970)
-        self.writer.writerow(
+        self.log_row(
             [
                 int(datetime.now().timestamp() * 1000)
                 if custom_timestamp is None
@@ -205,32 +200,35 @@ class ResultLogger(CSVLogger):
 
     def log_result(
         self,
-        ledger_count: int,
-        goal_ledger_count: int,
-        time_to_consensus: float,
-        close_times: List[int],
-        ledger_hashes: List[str],
-        ledger_indexes: List[int],
+        node_id: int,
+        ledger_seq: int,
+        goal_ledger_seq: int,
+        time_to_validation: float,
+        close_time: int,
+        ledger_hash: str,
+        ledger_index: int,
     ):
         """
         Log a result row to the CSV file.
 
         Args:
-            ledger_count: Ledger count of the iteration.
-            goal_ledger_count: Goal ledger index of the iteration.
-            time_to_consensus: Time taken to reach consensus.
-            ledger_hashes: Ledger hashes of the nodes to be logged.
-            ledger_indexes: Ledger indexes of the nodes to be logged.
-            close_times: Close times of the nodes to be logged.
+            node_id: Node ID of the node for which the result is being logged.
+            ledger_seq: Ledger count of the iteration.
+            goal_ledger_seq: Goal ledger index of the iteration.
+            time_to_validation: Time taken to validate the current ledger_seq.
+            ledger_hash: Ledger hash of the nodes to be logged.
+            ledger_index: Ledger index of the nodes to be logged.
+            close_time: Close time of the nodes to be logged.
         """
-        self.writer.writerow(
+        self.log_row(
             [
-                ledger_count,
-                goal_ledger_count,
-                f"{time_to_consensus:.6f}",
-                close_times,
-                ledger_hashes,
-                ledger_indexes,
+                node_id,
+                ledger_seq,
+                goal_ledger_seq,
+                f"{time_to_validation:.6f}",
+                close_time,
+                ledger_hash,
+                ledger_index,
             ]
         )
 
@@ -253,7 +251,6 @@ class SpecCheckLogger(CSVLogger):
             columns=spec_check_columns,
             directory=sub_directory,
         )
-        self.close()
 
     def log_spec_check(
         self,

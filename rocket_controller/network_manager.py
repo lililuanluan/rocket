@@ -3,7 +3,8 @@
 from typing import Any
 
 import base58
-from xrpl.clients.websocket_client import WebsocketClient
+from loguru import logger
+from xrpl.clients.json_rpc_client import JsonRpcClient
 from xrpl.transaction import autofill_and_sign, submit
 
 from rocket_controller.helper import (
@@ -432,10 +433,10 @@ class NetworkManager:
                 f"Given peer ID does not exist in the current network: {peer_id}"
             )
 
-        websocket_address = ""
+        rpc_address = ""
         for validator in self.validator_node_list:
             if validator.peer.port == self.id_to_port(peer_id):
-                websocket_address = f"ws://{validator.ws_public.as_url()}/"
+                rpc_address = f"http://{validator.rpc.as_url()}/"
 
         tx = self.tx_builder.build_transaction(
             amount=amount,
@@ -443,11 +444,11 @@ class NetworkManager:
             sender_account_seed=sender_account_seed,
             destination_account=destination_account,
         )
-        with WebsocketClient(websocket_address) as client:
-            complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
-            response = submit(complete_tx, client)
-            print(
-                f"Sent a transaction submission to node {peer_id}, url: {websocket_address}"
-            )
-            print(f"Response from submission: {response.result}")
-            self.tx_builder.add_transaction(complete_tx)
+        client = JsonRpcClient(rpc_address)
+        complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
+        response = submit(complete_tx, client)
+        logger.info(
+            f"Sent a transaction submission to node {peer_id}, url: {rpc_address}"
+        )
+        logger.info(f"Response from submission: {response.result}")
+        self.tx_builder.add_transaction(complete_tx)

@@ -86,7 +86,7 @@ class Strategy(ABC):
 
         self.start_datetime: datetime = datetime.now()
         self.iteration_type = (
-            LedgerBasedIteration(10, 5, 45)
+            LedgerBasedIteration(10, 4, 45)
             if iteration_type is None
             else iteration_type
         )
@@ -132,7 +132,11 @@ class Strategy(ABC):
         try:
             message, _ = PacketEncoderDecoder.decode_packet(packet)
             if isinstance(message, ripple_pb2.TMStatusChange):
-                self.iteration_type.on_status_change(message)
+                self.iteration_type.on_status_change(
+                    message,
+                    self.network.port_to_id(packet.from_port),
+                    self.network.port_to_id(packet.to_port),
+                )
         except DecodingNotSupportedError:
             pass
 

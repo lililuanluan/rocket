@@ -1,8 +1,8 @@
 """Module that defines certain Iteration Types."""
 
 import threading
-from datetime import datetime, timedelta
-from typing import List
+from datetime import datetime
+from typing import Dict, List, TypedDict
 
 from grpc import Server
 from loguru import logger
@@ -12,6 +12,13 @@ from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
 from rocket_controller.spec_checker import SpecChecker
 from rocket_controller.validator_node_info import ValidatorNode
+
+
+class LedgerValidationInfo(TypedDict):
+    """Information about the ledger validation."""
+
+    seq: int
+    time: datetime
 
 
 class TimeBasedIteration:
@@ -48,11 +55,8 @@ class TimeBasedIteration:
         self._log_dir: str | None = None
 
         self._max_ledger_seq = max_ledger_seq
-        self.accept_count = 0
-        self.network_event_changes = 0
-        self.ledger_seq = 1
-        self.prev_validation_time = datetime.now()
-        self.validation_time = timedelta()
+        self.ledger_validation_map: Dict[int, LedgerValidationInfo] = {}
+        self._lock = threading.Lock()
 
     def _stop_all(self):
         """Stop the interceptor along with the docker containers."""
@@ -96,6 +100,10 @@ class TimeBasedIteration:
             validator_nodes: New list of validator nodes.
         """
         self._validator_nodes = validator_nodes
+        _now = datetime.now()
+        self.ledger_validation_map = {
+            i: {"seq": 1, "time": _now} for i in range(len(validator_nodes))
+        }
 
     def set_log_dir(self, log_dir: str):
         """
@@ -109,14 +117,23 @@ class TimeBasedIteration:
 
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
+        if not self._spec_checker:
+            raise ValueError("SpecChecker not initialized")
+        if not self._log_dir:
+            raise ValueError("Log directory not initialized")
+
         self.cur_iteration += 1
-        self._ledger_results.flush_and_close()
+
+        # Wait for the logging threads to finish
+        for t in threading.enumerate():
+            if "LogLedgerResult" in t.name:
+                t.join()
+
         if self.cur_iteration > 1:
             self._spec_checker.spec_check(self.cur_iteration - 1)
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
-            self._reset_values()
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
@@ -131,14 +148,11 @@ class TimeBasedIteration:
         if self._timer:
             self._timer.cancel()
         self._timer = None
+        self.ledger_validation_map = {}
 
-        self.accept_count = 0
-        self.network_event_changes = 0
-        self.ledger_seq = 1
-        self.prev_validation_time = datetime.now()
-        self.validation_time = timedelta()
-
-    def on_status_change(self, status: ripple_pb2.TMStatusChange):
+    def on_status_change(
+        self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
+    ):
         """
         Update the iteration values, called when a TMStatusChange is received.
 
@@ -146,34 +160,66 @@ class TimeBasedIteration:
 
         Args:
             status: The TMStatusChange message received on the network.
+            from_id: The ID of the node that sent the status change message.
+            to_id: The ID of the node that received the status change message.
         """
-        # Check whether the event contains an accepted ledger which is exactly 1 sequence no. more than the prev ledger.
-        if status.newEvent == 1 and status.ledgerSeq == self.ledger_seq + 1:
-            self.accept_count += 1
+        if not self._validator_nodes:
+            raise ValueError("Validator nodes not initialized.")
 
-            # Only when every single node sends neCLOSING_LEDGER to all other nodes, we consider the ledger validated.
-            if self._validator_nodes and self.accept_count == (
-                len(self._validator_nodes) * (len(self._validator_nodes) - 1)
+        with self._lock:
+            # Check whether the event contains an accepted ledger which is exactly 1 sequence no. more than the prev ledger.
+            if (
+                status.newEvent == 1
+                and status.ledgerSeq > self.ledger_validation_map[from_id]["seq"]
             ):
-                # New ledger validated, we can reset timeout
+                self.ledger_validation_map[from_id]["seq"] = status.ledgerSeq
+                _now = datetime.now()
+                _validation_time = _now - self.ledger_validation_map[from_id]["time"]
+                self.ledger_validation_map[from_id]["time"] = _now
+
+                # At least one node has validated a new ledger, we can reset the timeout.
                 if self.ledger_timeout:
                     self._start_timeout_timer()
 
-                self.validation_time = datetime.now() - self.prev_validation_time
-                self.ledger_seq = status.ledgerSeq
-                self.accept_count = 0
-                self.prev_validation_time = datetime.now()
                 logger.info(
-                    f"Ledger {self.ledger_seq} validated, time elapsed: {self.validation_time}"
+                    f"Node {from_id} validated ledger {self.ledger_validation_map[from_id]['seq']} in {_validation_time}"
                 )
-                self._ledger_results.log_ledger_result(
-                    self.ledger_seq,
-                    self._max_ledger_seq,
-                    self.validation_time.total_seconds(),
-                    self._validator_nodes,
+                t = threading.Thread(
+                    name=f"LogLedgerResult-{from_id}-{self.ledger_validation_map[from_id]['seq']}",
+                    target=self._ledger_results.log_ledger_result,
+                    args=(
+                        from_id,
+                        self.ledger_validation_map[from_id]["seq"],
+                        self._max_ledger_seq,
+                        _validation_time.total_seconds(),
+                        self._validator_nodes,
+                    ),
                 )
-        if self.ledger_seq == self._max_ledger_seq:
-            self.add_iteration()
+                t.start()
+
+            if self._max_ledger_seq != -1 and all(
+                entry["seq"] >= self._max_ledger_seq
+                for entry in self.ledger_validation_map.values()
+            ):
+                self._reset_values()
+                self.add_iteration()
+
+    def get_ledger_sequence(self, node_id: int) -> int:
+        """
+        Get the current latest ledger sequence for a given node ID.
+
+        Args:
+            node_id: ID of the node to get the ledger sequence for.
+
+        Returns:
+            The current latest ledger sequence for the given node ID.
+
+        Raises:
+            ValueError: If the node ID is not found in the ledger validation map.
+        """
+        if node_id not in self.ledger_validation_map:
+            raise ValueError(f"Node {node_id} not found in ledger validation map.")
+        return self.ledger_validation_map[node_id]["seq"]
 
 
 class LedgerBasedIteration(TimeBasedIteration):
@@ -238,7 +284,9 @@ class NoneIteration(TimeBasedIteration):
         """Do nothing when called, needed to satisfy abstract base class constraints."""
         pass
 
-    def on_status_change(self, status: ripple_pb2.TMStatusChange):
+    def on_status_change(
+        self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
+    ):
         """Override the method since none iteration does not need to keep track of ledgers."""
         pass
 

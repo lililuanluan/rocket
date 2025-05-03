@@ -33,7 +33,6 @@ class TestActionLogger(unittest.TestCase):
         logger.log_action(0, 1, 0, 1, "propose", "orig data", "new data")
         logger.log_action(3, 1, 0, 1, "validata", "orig data", "new data")
         logger.log_action(MAX_U32, 1, 0, 1, "close", "orig data", "new data")
-        logger.close()
 
         with open(path_actions) as file:
             csv_reader = csv.reader(file)
