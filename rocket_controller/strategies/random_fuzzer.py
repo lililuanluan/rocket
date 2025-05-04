@@ -5,7 +5,7 @@ from typing import Any, Dict, Tuple
 
 from protos import packet_pb2
 from rocket_controller.helper import MAX_U32
-from rocket_controller.iteration_type import TimeBasedIteration
+from rocket_controller.iteration_type import TimeBasedIteration, LedgerBasedIteration
 from rocket_controller.strategies.strategy import Strategy
 
 
@@ -18,7 +18,7 @@ class RandomFuzzer(Strategy):
         strategy_config_path: str | None = None,
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
-        iteration_type: TimeBasedIteration | None = None,
+        iteration_type: TimeBasedIteration | None = LedgerBasedIteration(10, 10, 60),
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):

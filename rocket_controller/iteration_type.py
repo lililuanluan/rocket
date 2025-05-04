@@ -10,6 +10,7 @@ from loguru import logger
 from protos import ripple_pb2
 from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
+from rocket_controller.network_manager import NetworkManager
 from rocket_controller.spec_checker import SpecChecker
 from rocket_controller.validator_node_info import ValidatorNode
 
@@ -46,7 +47,9 @@ class TimeBasedIteration:
 
         self._max_iterations = max_iterations
         self._server: Server | None = None
+        self._network: NetworkManager | None = None
         self._timer: threading.Timer | None = None
+        self._transaction_timer: threading.Timer | None = None
         self._timeout_seconds = timeout_seconds
         self.ledger_timeout = ledger_timeout
 
@@ -83,6 +86,35 @@ class TimeBasedIteration:
         logger.info("Timeout reached.")
         self.add_iteration()
 
+    def _start_transactions(self):
+        if self._transaction_timer:
+            self._transaction_timer.cancel()
+        logger.info("Starting Transaction.")
+        self._transaction_timer = threading.Timer(20, self._perform_transactions)
+        self._transaction_timer.start()
+
+    def _perform_transactions(self):
+        logger.info("Performing Transaction.")
+        try:
+            if not self._validator_nodes:
+                logger.error("No validator nodes available. Cannot perform transaction.")
+                return
+
+            if not self._network:
+                logger.error("Network not initialized. Cannot perform transaction.")
+                return
+
+            # Wait until at least ledger 2 is validated before attempting transactions
+            if self.ledger_validation_map[1]["seq"] < 2:
+                logger.info("Waiting for ledger to be available before submitting transaction...")
+                self._transaction_timer = threading.Timer(2, self._perform_transactions)
+                self._transaction_timer.start()
+                return
+            # TODO Perform genesis transactions immidiatly, then perform configured transactions.
+            self._network.submit_transaction(peer_id=1)
+        except Exception as e:
+            logger.error(f"Error performing transaction: {e}")
+
     def set_server(self, server: Server):
         """
         Set the server variable to the running instance of the gRPC server.
@@ -91,6 +123,11 @@ class TimeBasedIteration:
             server: New Server.
         """
         self._server = server
+
+
+    def set_network(self, network: NetworkManager):
+        self._network = network
+
 
     def set_validator_nodes(self, validator_nodes: List[ValidatorNode]):
         """
@@ -137,6 +174,7 @@ class TimeBasedIteration:
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
+            self._start_transactions()
         else:
             self._stop_all()
             self._spec_checker.aggregate_spec_checks()
@@ -148,6 +186,9 @@ class TimeBasedIteration:
         if self._timer:
             self._timer.cancel()
         self._timer = None
+        if self._transaction_timer:
+            self._transaction_timer.cancel()
+        self._transaction_timer = None
         self.ledger_validation_map = {}
 
     def on_status_change(
@@ -180,7 +221,6 @@ class TimeBasedIteration:
                 _now = datetime.now()
                 _validation_time = _now - self.ledger_validation_map[from_id]["time"]
                 self.ledger_validation_map[from_id]["time"] = _now
-
                 # At least one node has validated a new ledger, we can reset the timeout.
                 if self.ledger_timeout:
                     self._start_timeout_timer()
