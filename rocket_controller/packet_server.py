@@ -212,6 +212,7 @@ def serve(strategy: Strategy):
     server.add_insecure_port("[::]:50051")
     server.start()
     strategy.iteration_type.set_server(server)
+    strategy.iteration_type.set_network(strategy.network)
     strategy.iteration_type.add_iteration()
 
     return server
