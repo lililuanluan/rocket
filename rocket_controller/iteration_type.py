@@ -1,5 +1,5 @@
 """Module that defines certain Iteration Types."""
-
+import random
 import threading
 import time
 from datetime import datetime
@@ -109,25 +109,28 @@ class TimeBasedIteration:
             logger.error("Network not initialized. Cannot perform transaction.")
             return
 
-        # Wait until at least ledger 2 is validated before attempting transactions
-        if self.ledger_validation_map[1]["seq"] < 2:
-            logger.info("Waiting for ledger to be available before submitting transaction...")
-            self._transaction_timer = threading.Timer(2, self._perform_transactions)
-            self._transaction_timer.start()
-            return
-        time.sleep(2)
+        logger.info("Waiting for ledger to be available before submitting transaction...")
+        while any(self.ledger_validation_map[node_id]["seq"] < 2 for node_id in range(len(self._validator_nodes))):
+            time.sleep(1)
+        time.sleep(5)
         genesis_transactions = self._network.network_config.get('transactions', {}).get('genesis', {})
         regular_transactions = self._network.network_config.get('transactions', {}).get('regular', {})
         logger.info(
             f"Attempting to submit {len(genesis_transactions)} Genesis Transactions and {len(regular_transactions)} Regular Transactions to the network."
         )
+        threads = []
         for tx in genesis_transactions:
             logger.info(f"Performing Genesis Transaction: {tx}")
             peer_id = tx.get('peer_id')
             amount = tx.get('amount')
             sender_alias = tx.get('sender_account')
             destination_alias = tx.get('destination_account')
-            self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
+            thread = threading.Thread(target=self.perform_transaction, args=(peer_id, amount, sender_alias, destination_alias))
+            thread.start()
+            threads.append(thread)
+        for thread in threads: # Wait for all genesis transactions to be submitted (account creation)
+            thread.join()
+        time.sleep(5) # min delay to make sure a ledger is validated before submitting regular transactions
         for tx in regular_transactions:
             logger.info(f"Performing Regular Transaction: {tx}")
             peer_id = tx.get('peer_id')
@@ -148,8 +151,14 @@ class TimeBasedIteration:
                                              sender_account=sender_account.get('address') if sender_account else None,
                                              sender_account_seed=sender_account.get('seed') if sender_account else None,
                                              destination_account=destination_account.get('address') if destination_account else None)
-            if response.status != ResponseStatus.SUCCESS:
-                logger.info(f"Transaction submission failed, response: {response.result.get('engine_result_message')}")
+            if response.result.get('engine_result') == 'tefPAST_SEQ':
+                logger.info(f"Sequence number passed, retrying...")
+                time.sleep(0.5)
+                self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
+                return
+            elif response.result.get('engine_result') != 'tesSUCCESS':
+                logger.error(f"Error while submitting transaction: {response.result.get('engine_result_message')}")
+                self._tx_logger.log_transaction_validation(sender_alias, destination_alias, amount, 'None', False)
                 return
         except Exception as e:
             if "Current ledger is unavailable" in str(e):
@@ -163,7 +172,8 @@ class TimeBasedIteration:
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
             else:
-                logger.error(f"Error while submitting transaction: {e}")
+                logger.warning(f"Error while submitting transaction: {e}")
+                self._tx_logger.log_transaction_validation(sender_alias, destination_alias, amount, 'None', False)
                 return
         tx_hash = response.result.get('tx_json').get('hash')
         logger.info(f"Transaction {tx_hash} submitted successfully. Waiting for validation...")

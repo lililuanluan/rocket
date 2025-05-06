@@ -60,10 +60,10 @@ transactions:
       amount: 1000000000 # Amount in XRP drops, minimum is 1.000.000.000.
       sender_account: "Account1" # Account alias to send the transaction from.
       destination_account: "Account2" # Account alias to send the transaction to.
-      time: 5 # Seconds after which the transaction is performed.
+      time: 4 # Seconds after which the transaction is performed.
     - peer_id: 0  # The node to submit the transaction to
       amount: 1000000000 # Amount in XRP drops, minimum is 1.000.000.000.
       sender_account: "Account1" # Account alias to send the transaction from.
       destination_account: "Account3" # Account alias to send the transaction to.
-      time: 5 # Seconds after which the transaction is performed.
+      time: 4 # Seconds after which the transaction is performed.
 
