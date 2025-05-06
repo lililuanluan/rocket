@@ -35,3 +35,26 @@ network_partition: []
 #
 # Leaving this empty means all nodes in the network will trust each other.
 unl_partition: []
+
+# Transaction configuration
+transactions:
+  # Genesis transactions are performed immediately after network start.
+  # Should be used to set up the accounts.
+  genesis:
+    - peer_id: 1 # The node to submit the transaction to
+      amount: 2000000000 # Amount in XRP drops, minimum is 1000000000
+      sender_account: None # Account alias to send the transaction from. None is genesis account
+      destination_account: "Account1" # Account alias to send the transaction to.
+    - peer_id: 1
+      amount: 2000000000
+      sender_account: None
+      destination_account: "Account2"
+
+  # Regular transactions are performed a set amount of time after the network has started.
+  regular:
+    - peer_id: 1  # The node to submit the transaction to
+      amount: 1000000000 # Amount in XRP drops, minimum is 1.000.000.000.
+      sender_account: "Account1" # Account alias to send the transaction from.
+      destination_account: "Account2" # Account alias to send the transaction to.
+      time: 5 # Seconds after which the transaction is performed.
+
