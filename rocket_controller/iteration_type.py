@@ -11,6 +11,7 @@ from loguru import logger
 from xrpl.models.response import ResponseStatus
 
 from protos import ripple_pb2
+from rocket_controller.csv_logger import TransactionLogger
 from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
 from rocket_controller.network_manager import NetworkManager
@@ -47,6 +48,7 @@ class TimeBasedIteration:
         """
         self.cur_iteration = 0
         self._ledger_results = LedgerResult()
+        self._tx_logger: TransactionLogger | None = None
         self._spec_checker: SpecChecker | None = None
 
         self._max_iterations = max_iterations
@@ -165,11 +167,16 @@ class TimeBasedIteration:
                 return
         tx_hash = response.result.get('tx_json').get('hash')
         logger.info(f"Transaction {tx_hash} submitted successfully. Waiting for validation...")
-        threading.Thread(name=f"validation-{tx_hash}", target=self.validate_transaction, args=(tx_hash,)).start()
+        threading.Thread(name=f"validation-{tx_hash}", target=self.validate_transaction, args=(sender_alias, destination_alias, amount, tx_hash,)).start()
 
 
 
-    def validate_transaction(self, tx_hash: str):
+    def validate_transaction(
+            self,
+            sender_alias: str,
+            receiver_alias:str,
+            amount: int,
+            tx_hash: str):
         attempts = 3
         delay = 3
         for attempt in range(attempts):
@@ -178,7 +185,7 @@ class TimeBasedIteration:
                 validated = self._network.validate_transaction(tx_hash, 0)
                 if validated:
                     logger.info(f"Transaction {tx_hash} validated successfully.")
-                    # TODO Log validation success
+                    self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, tx_hash, validated)
                     return
                 else:
                     logger.info(f"Transaction {tx_hash} not yet validated, waiting {delay} seconds...")
@@ -186,7 +193,7 @@ class TimeBasedIteration:
             except Exception as e:
                 logger.error(f"Error while validating transaction: {e}")
         logger.error(f"Transaction {tx_hash} failed to validate after {attempts} attempts.")
-        # TODO Log validation fail.
+        self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, tx_hash, False)
 
     def set_server(self, server: Server):
         """
@@ -244,6 +251,7 @@ class TimeBasedIteration:
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
+            self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
