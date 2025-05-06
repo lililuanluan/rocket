@@ -1,6 +1,7 @@
 """Module that defines certain Iteration Types."""
 
 import threading
+import time
 from datetime import datetime
 from typing import Dict, List, TypedDict
 
@@ -12,6 +13,7 @@ from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
 from rocket_controller.network_manager import NetworkManager
 from rocket_controller.spec_checker import SpecChecker
+from rocket_controller.transaction_builder import TransactionBuilder
 from rocket_controller.validator_node_info import ValidatorNode
 
 
@@ -50,6 +52,7 @@ class TimeBasedIteration:
         self._network: NetworkManager | None = None
         self._timer: threading.Timer | None = None
         self._transaction_timer: threading.Timer | None = None
+        self._timers: List[threading.Timer] = []
         self._timeout_seconds = timeout_seconds
         self.ledger_timeout = ledger_timeout
 
@@ -94,26 +97,66 @@ class TimeBasedIteration:
         self._transaction_timer.start()
 
     def _perform_transactions(self):
-        logger.info("Performing Transaction.")
+        if not self._validator_nodes:
+            logger.error("No validator nodes available. Cannot perform transaction.")
+            return
+
+        if not self._network:
+            logger.error("Network not initialized. Cannot perform transaction.")
+            return
+
+        # Wait until at least ledger 2 is validated before attempting transactions
+        if self.ledger_validation_map[1]["seq"] < 2:
+            logger.info("Waiting for ledger to be available before submitting transaction...")
+            self._transaction_timer = threading.Timer(2, self._perform_transactions)
+            self._transaction_timer.start()
+            return
+        time.sleep(2)
+        genesis_transactions = self._network.network_config.get('transactions', {}).get('genesis', {})
+        regular_transactions = self._network.network_config.get('transactions', {}).get('regular', {})
+        logger.info(
+            f"Attempting to submit {len(genesis_transactions)} Genesis Transactions and {len(regular_transactions)} Regular Transactions to the network."
+        )
+        for tx in genesis_transactions:
+            logger.info(f"Performing Genesis Transaction: {tx}")
+            peer_id = tx.get('peer_id')
+            amount = tx.get('amount')
+            sender_account = self._network.get_account(tx.get('sender_account'))
+            destination_account = self._network.get_account(tx.get('destination_account'))
+            self.perform_transaction(peer_id, amount, sender_account, destination_account)
+        for tx in regular_transactions:
+            logger.info(f"Performing Regular Transaction: {tx}")
+            peer_id = tx.get('peer_id')
+            amount = tx.get('amount')
+            sender_account = self._network.get_account(tx.get('sender_account'))
+            destination_account = self._network.get_account(tx.get('destination_account'))
+            delay = tx.get('time')
+            timer = threading.Timer(delay, lambda p=peer_id, a=amount, s=sender_account, d=destination_account: self.perform_transaction(p, a, s, d))
+            timer.start()
+            self._timers.append(timer)
+
+    def perform_transaction(self, peer_id: int, amount: int, sender_account: Dict[str, str], destination_account: Dict[str, str] = None):
+        logger.info(f"Sending {amount} from {sender_account} to {destination_account} using peer {peer_id}...")
         try:
-            if not self._validator_nodes:
-                logger.error("No validator nodes available. Cannot perform transaction.")
-                return
-
-            if not self._network:
-                logger.error("Network not initialized. Cannot perform transaction.")
-                return
-
-            # Wait until at least ledger 2 is validated before attempting transactions
-            if self.ledger_validation_map[1]["seq"] < 2:
-                logger.info("Waiting for ledger to be available before submitting transaction...")
-                self._transaction_timer = threading.Timer(2, self._perform_transactions)
-                self._transaction_timer.start()
-                return
-            # TODO Perform genesis transactions immidiatly, then perform configured transactions.
-            self._network.submit_transaction(peer_id=1)
+            self._network.submit_transaction(peer_id=peer_id, amount=amount,
+                                             sender_account=sender_account.get('address') if sender_account else None,
+                                             sender_account_seed=sender_account.get('seed') if sender_account else None,
+                                             destination_account=destination_account.get('address') if destination_account else None)
         except Exception as e:
-            logger.error(f"Error performing transaction: {e}")
+            logger.error(f"Error while sending transaction: {e}")
+            if "Current ledger is unavailable" in str(e):
+                logger.info("Current ledger is unavailable, waiting for it to become available...")
+                time.sleep(1)
+                self.perform_transaction(peer_id, amount, sender_account, destination_account)
+                return
+            elif "Transaction submission failed" in str(e):
+                logger.info("Transaction submission failed, retrying...")
+                time.sleep(1)
+                self.perform_transaction(peer_id, amount, sender_account, destination_account)
+                return
+            else:
+                logger.error("Transaction submission failed")
+                return
 
     def set_server(self, server: Server):
         """
@@ -188,8 +231,15 @@ class TimeBasedIteration:
         self._timer = None
         if self._transaction_timer:
             self._transaction_timer.cancel()
+        for t in self._timers:
+            if t:
+                t.cancel()
+        self._timers = []
         self._transaction_timer = None
         self.ledger_validation_map = {}
+        # TODO Network should not reset here!
+        self._network.accounts = {}
+        self._network.tx_builder = TransactionBuilder()
 
     def on_status_change(
         self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
