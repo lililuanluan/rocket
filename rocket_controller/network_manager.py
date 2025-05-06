@@ -3,6 +3,7 @@
 from typing import Any
 
 import base58
+import xrpl.models.requests
 from loguru import logger
 from xrpl import CryptoAlgorithm
 from xrpl.clients.json_rpc_client import JsonRpcClient
@@ -469,5 +470,16 @@ class NetworkManager:
         logger.info(
             f"Sent a transaction submission to node {peer_id}, url: {rpc_address}"
         )
-        logger.info(f"Response from submission: {response.result}")
         self.tx_builder.add_transaction(complete_tx)
+        return response
+
+    def validate_transaction(self, tx_hash: str, peer_id: int):
+        validator = self.validator_node_list[peer_id]
+        rpc_address = f"http://{validator.rpc.as_url()}/"
+        client = JsonRpcClient(rpc_address)
+        tx_result = client.request(xrpl.models.requests.Tx(transaction=tx_hash))
+        if tx_result.is_successful() and tx_result.result.get('validated', False):
+            return True
+        else:
+            return False
+

@@ -5,8 +5,10 @@ import time
 from datetime import datetime
 from typing import Dict, List, TypedDict
 
+from anyio import sleep
 from grpc import Server
 from loguru import logger
+from xrpl.models.response import ResponseStatus
 
 from protos import ripple_pb2
 from rocket_controller.interceptor_manager import InterceptorManager
@@ -121,42 +123,70 @@ class TimeBasedIteration:
             logger.info(f"Performing Genesis Transaction: {tx}")
             peer_id = tx.get('peer_id')
             amount = tx.get('amount')
-            sender_account = self._network.get_account(tx.get('sender_account'))
-            destination_account = self._network.get_account(tx.get('destination_account'))
-            self.perform_transaction(peer_id, amount, sender_account, destination_account)
+            sender_alias = tx.get('sender_account')
+            destination_alias = tx.get('destination_account')
+            self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
         for tx in regular_transactions:
             logger.info(f"Performing Regular Transaction: {tx}")
             peer_id = tx.get('peer_id')
             amount = tx.get('amount')
-            sender_account = self._network.get_account(tx.get('sender_account'))
-            destination_account = self._network.get_account(tx.get('destination_account'))
+            sender_alias = tx.get('sender_account')
+            destination_alias = tx.get('destination_account')
             delay = tx.get('time')
-            timer = threading.Timer(delay, lambda p=peer_id, a=amount, s=sender_account, d=destination_account: self.perform_transaction(p, a, s, d))
+            timer = threading.Timer(delay, self.perform_transaction, args=(peer_id, amount, sender_alias, destination_alias))
             timer.start()
             self._timers.append(timer)
 
-    def perform_transaction(self, peer_id: int, amount: int, sender_account: Dict[str, str], destination_account: Dict[str, str] = None):
-        logger.info(f"Sending {amount} from {sender_account} to {destination_account} using peer {peer_id}...")
+    def perform_transaction(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None):
+        logger.info(f"Sending {amount} from {sender_alias} to {destination_alias} using peer {peer_id}...")
         try:
-            self._network.submit_transaction(peer_id=peer_id, amount=amount,
+            sender_account = self._network.get_account(sender_alias) if sender_alias else None
+            destination_account = self._network.get_account(destination_alias) if destination_alias else None
+            response = self._network.submit_transaction(peer_id=peer_id, amount=amount,
                                              sender_account=sender_account.get('address') if sender_account else None,
                                              sender_account_seed=sender_account.get('seed') if sender_account else None,
                                              destination_account=destination_account.get('address') if destination_account else None)
+            if response.status != ResponseStatus.SUCCESS:
+                logger.info(f"Transaction submission failed, response: {response.result.get('engine_result_message')}")
+                return
         except Exception as e:
-            logger.error(f"Error while sending transaction: {e}")
             if "Current ledger is unavailable" in str(e):
                 logger.info("Current ledger is unavailable, waiting for it to become available...")
                 time.sleep(1)
-                self.perform_transaction(peer_id, amount, sender_account, destination_account)
+                self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
             elif "Transaction submission failed" in str(e):
                 logger.info("Transaction submission failed, retrying...")
                 time.sleep(1)
-                self.perform_transaction(peer_id, amount, sender_account, destination_account)
+                self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
             else:
-                logger.error("Transaction submission failed")
+                logger.error(f"Error while submitting transaction: {e}")
                 return
+        tx_hash = response.result.get('tx_json').get('hash')
+        logger.info(f"Transaction {tx_hash} submitted successfully. Waiting for validation...")
+        threading.Thread(name=f"validation-{tx_hash}", target=self.validate_transaction, args=(tx_hash,)).start()
+
+
+
+    def validate_transaction(self, tx_hash: str):
+        attempts = 3
+        delay = 3
+        for attempt in range(attempts):
+            try:
+                time.sleep(delay)
+                validated = self._network.validate_transaction(tx_hash, 0)
+                if validated:
+                    logger.info(f"Transaction {tx_hash} validated successfully.")
+                    # TODO Log validation success
+                    return
+                else:
+                    logger.info(f"Transaction {tx_hash} not yet validated, waiting {delay} seconds...")
+                    continue
+            except Exception as e:
+                logger.error(f"Error while validating transaction: {e}")
+        logger.error(f"Transaction {tx_hash} failed to validate after {attempts} attempts.")
+        # TODO Log validation fail.
 
     def set_server(self, server: Server):
         """
@@ -206,7 +236,7 @@ class TimeBasedIteration:
 
         # Wait for the logging threads to finish
         for t in threading.enumerate():
-            if "LogLedgerResult" in t.name:
+            if "LogLedgerResult" in t.name or "validation" in t.name: # TODO Stopping here is dangerous. For instance to wait for validation threads in the same way
                 t.join()
 
         if self.cur_iteration > 1:
