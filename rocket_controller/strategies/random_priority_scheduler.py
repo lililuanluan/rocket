@@ -45,17 +45,18 @@ class RandomPriorityScheduler(Strategy):
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         event = threading.Event()
 
-        def thread_fn():
-            event.wait()
-            print(f"Processing packet from {packet.from_port} to {packet.to_port}")
-
-        thread = threading.Thread(target=thread_fn, daemon=True)
         with self.lock:
             priority = random.randint(0, 100)
             self.counter += 1
             self.queue.put((priority, self.counter, event))
 
-        thread.start()
+        # For the threading test -> numbers should be printed in a nondeterministic order
+        # curr_count = self.counter
+        # print(curr_count)
+        # time.sleep(random.randint(1, 3))  # Wait random amount of time
+        # print(curr_count)
+
+        event.wait()
         return packet.data, 0, 1
 
     def dispatch_loop(self):
