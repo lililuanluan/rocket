@@ -12,20 +12,22 @@ from rocket_controller.strategies.strategy import Strategy
 
 
 class EvoDelayStrategy(Strategy):
-    """Class that implements a random fuzzer."""
+    """Class that implements an evolutionary delay-based strategy."""
 
     def __init__(
         self,
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
+        # auto_partition: bool = True,
         auto_parse_identical: bool = False,
         auto_parse_subsets: bool = False,
+        # keep_action_log: bool = True,
         iteration_type: TimeBasedIteration | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
         """
-        Initializes the random fuzzer.
+        Initializes the EvoDelayStrategy.
 
         Args:
             network_config_path: The path to a network config file to be used.
@@ -35,9 +37,6 @@ class EvoDelayStrategy(Strategy):
             iteration_type: The type of iteration to keep track of.
             network_overrides: A dictionary containing parameter names and values which override the network config.
             strategy_overrides: A dictionary containing parameter names and values which override the strategy config.
-
-        Raises:
-            ValueError: If retrieved probabilities or delays are invalid.
         """
         super().__init__(
             network_config_path=network_config_path,
@@ -49,6 +48,7 @@ class EvoDelayStrategy(Strategy):
             strategy_overrides=strategy_overrides,
         )
 
+        # Relies on correct processing -> encoding should be of correct length
         self.delays: list[int] = self.params['encoding']
 
         # for n nodes
