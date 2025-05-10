@@ -7,6 +7,10 @@ from typing import Tuple
 from protos import packet_pb2
 from rocket_controller.helper import MAX_U32
 from rocket_controller.strategies.strategy import Strategy
+from rocket_controller.encoder_decoder import (
+    DecodingNotSupportedError,
+    PacketEncoderDecoder,
+)
 
 class RandomPriority(Strategy):
     def __init__(
@@ -50,6 +54,8 @@ class RandomPriority(Strategy):
         self.underflow_factor = float(self.params.get("underflow_factor", 0.8))
         self.max_events = int(self.params.get("max_events", 100)) # figure this out
         self.r = self.max_events / 2
+
+        self.priority_list = self.params.get("priority_list", [])
         
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
         self.dispatch_thread.start()
@@ -59,7 +65,8 @@ class RandomPriority(Strategy):
         event = threading.Event()
 
         with self.lock:
-            priority = random.randint(0, 100)
+            message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
+            priority = self.priority_list.get(message_type_no, self.min_priority)
             self.counter += 1
             self.queue.put((priority, self.counter, event))
             # print(f"[handle_packet] Queued packet from {packet.from_port} to {packet.to_port} with priority {priority}")
