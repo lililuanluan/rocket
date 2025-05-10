@@ -36,6 +36,13 @@ spec_check_columns = [
     "same_ledger_indexes",
 ]
 
+transaction_log_columns = [
+    "sender account alias",
+    "receiver account alias",
+    "amount",
+    "tx_hash",
+    "validated"
+]
 
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
@@ -278,3 +285,54 @@ class SpecCheckLogger(CSVLogger):
                     same_ledger_indexes,
                 ]
             )
+
+class TransactionLogger(CSVLogger):
+    """CSVLogger child class dedicated to handling transaction validation logging."""
+
+    def __init__(
+            self,
+            sub_directory: str,
+            iteration: int
+    ):
+        """
+        Initialize TransactionLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the transaction validation results in.
+            iteration: Current iteration number
+        """
+        super().__init__(
+            filename=f"transaction-{iteration}.csv",
+            columns=transaction_log_columns,
+            directory=sub_directory,
+        )
+        self._lock = threading.Lock()
+
+    def log_transaction_validation(
+            self,
+            sender_alias: str,
+            receiver_alias: str,
+            amount: int,
+            tx_hash: str,
+            validated: bool,
+    ):
+        """
+        Log a transaction validation row to the CSV file.
+
+        Args:
+            sender_alias: Sender account alias.
+            receiver_alias: Receiver account alias.
+            amount: Amount of XRP to transfer.
+            tx_hash: Transaction hash.
+            validated: Whether the transaction was validated.
+        """
+        with self._lock:
+            with open(self.filepath, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    sender_alias,
+                    receiver_alias,
+                    amount,
+                    tx_hash,
+                    validated
+                ])
