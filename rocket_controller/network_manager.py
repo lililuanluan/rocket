@@ -478,7 +478,7 @@ class NetworkManager:
         rpc_address = f"http://{validator.rpc.as_url()}/"
         client = JsonRpcClient(rpc_address)
         tx_result = client.request(xrpl.models.requests.Tx(transaction=tx_hash))
-        logger.info(f"Validating transaction {tx_hash} response: {tx_result}")
+        # logger.info(f"Validating transaction {tx_hash} response: {tx_result}")
         if tx_result.is_successful() and tx_result.result.get('validated', False):
             return True
         else:
