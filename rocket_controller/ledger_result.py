@@ -55,6 +55,7 @@ class LedgerResult:
                 logger.error(
                     f"Could not fetch ledger {ledger_seq} from port {ws_port}."
                 )
+                logger.debug(f"Response from {ws_port}:\n{ledger_response}")
                 return None
             return ledger_response.result.get("ledger")
 

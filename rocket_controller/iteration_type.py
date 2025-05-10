@@ -99,11 +99,11 @@ class TimeBasedIteration:
         Args:
             validator_nodes: New list of validator nodes.
         """
-        self._validator_nodes = validator_nodes
         _now = datetime.now()
         self.ledger_validation_map = {
             i: {"seq": 1, "time": _now} for i in range(len(validator_nodes))
         }
+        self._validator_nodes = validator_nodes
 
     def set_log_dir(self, log_dir: str):
         """
@@ -167,6 +167,10 @@ class TimeBasedIteration:
             raise ValueError("Validator nodes not initialized.")
 
         with self._lock:
+            # Edge case: if the lock from a previous iteration gets released during a new iteration (when transitioning)
+            # return to prevent logging anything.
+            if not self._validator_nodes:
+                return
             # Check whether the event contains an accepted ledger which is exactly 1 sequence no. more than the prev ledger.
             if (
                 status.newEvent == 1
@@ -197,9 +201,15 @@ class TimeBasedIteration:
                 )
                 t.start()
 
-            if self._max_ledger_seq != -1 and all(
-                entry["seq"] >= self._max_ledger_seq
-                for entry in self.ledger_validation_map.values()
+            if self._max_ledger_seq == -1:
+                # Return if the IterationType is time-based.
+                return
+
+            cur_ledger_infos = self.ledger_validation_map.values()
+            # Since all(x) returns True if x is empty, we have to check first whether cur_ledger_infos is
+            # not empty to avoid starting a new (faulty) iteration while the network is still initializing.
+            if cur_ledger_infos and all(
+                entry["seq"] >= self._max_ledger_seq for entry in cur_ledger_infos
             ):
                 self._reset_values()
                 self.add_iteration()
