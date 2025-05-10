@@ -38,7 +38,6 @@ class EvoPriorityStrategy(Strategy):
             strategy_overrides,
         )
 
-    def setup(self):
         self.queue = PriorityQueue()
         self.counter = 0
 
@@ -55,9 +54,12 @@ class EvoPriorityStrategy(Strategy):
         self.underflow_factor = float(self.params.get("underflow_factor", 0.8))
         self.max_events = int(self.params.get("max_events", 100)) # figure this out
         self.r = self.max_events / 2
-
+        # TODO refactor to use encoding
         self.priority_list = self.params.get("priority_list", [])
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
+
+
+    def setup(self):
         self.dispatch_thread.start()
 
 

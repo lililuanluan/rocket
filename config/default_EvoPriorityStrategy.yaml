@@ -7,6 +7,7 @@ underflow_factor: 0.8
 sensitivity_ratio: 1.2
 max_events: 100
 
+encoding: []
 # Message type priorities configuration
 # Lower number priority is sent first
 priority_list:

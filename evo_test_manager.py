@@ -1,6 +1,10 @@
 """This file contains a class to run and manage evolutionary based testing approaches."""
 import argparse
 import random
+from pathlib import Path
+
+import yaml
+from typing import Tuple
 
 from rocket_controller.cli_helper import process_args, str_to_strategy
 from rocket_controller.packet_server import serve
@@ -10,22 +14,77 @@ from rocket_controller.strategies import Strategy
 class EvoTestManager:
     """Manager for evolutionary based testing approaches."""
 
-    def __init__(self, evo_type='delay', n=3):
+    def __init__(self, config_path='evo_test_manager.yaml'):
         """
         Initializes an EvoTestManager.
         
         Args:
-            evo_type: type of approach ⋹ {'delay', 'priority'}.
-            n: number of nodes
+            config_path: path to the config file.
         """
-        self.n = n
-        if not evo_type in ['delay', 'priority']:
-            raise ValueError(f"evo_type should be in {{'delay', 'priority'}}, but got {evo_type}")
+        config_path = Path(config_path)
+        if not config_path.exists():
+            raise ValueError(f"config file {config_path} does not exist")
+        with open(config_path, 'r') as f:
+            self._config = yaml.safe_load(f)
 
-        self.evo_type = evo_type
-        self.strategy = "EvoDelayStrategy" if self.evo_type == 'delay' else "EvoPriorityStrategy"
+        # General section of the config file
+        nodes = self._config['general']['nodes']
+        if nodes < 2:
+            raise ValueError(f"nodes should be at least 2, but got {nodes}")
+        self.nodes = nodes
 
-    def run(self, encoding: list[int]):
+
+        strategy = self._config['general']['strategy']
+        if not strategy in ['EvoDelayStrategy', 'EvoPriorityStrategy']:
+            raise ValueError(f"strategy should be in {{'EvoDelayStrategy', 'EvoPriorityStrategy'}}, but got {strategy}")
+        self.strategy = strategy
+
+        seed = self._config['general'].get('seed', None)
+        if seed is None:
+            seed = random.randint(0, 1000000)
+            print(f"seed not specified, using {seed}")
+        random.seed(seed)
+
+        # Evolution section of the config file
+        population_size = self._config['evolution']['population_size']
+        if population_size < 2:
+            raise ValueError(f"population_size should be at least 2, but got {population_size}")
+        self.population_size = population_size
+
+        generations = self._config['evolution']['generations']
+        if generations < 1:
+            raise ValueError(f"generations should be at least 1, but got {generations}")
+        self.generations = generations
+
+        # Encoding section of the config file
+        encoding = self._config['encoding']
+        self.encoding_min = encoding['min_value']
+        self.encoding_max = encoding['max_value']
+        self.encoding_length = (self.nodes * (self.nodes - 1)) * 7
+
+
+    def initial_population(self):
+        return [random.randint(self.encoding_min, self.encoding_max) for _ in range(self.encoding_length)]
+
+    def selection(self, results: list[Tuple[list[int], list[int]]]):
+        # TODO first list[int] is a placeholder, should be the type of results from run_rocket
+        # TODO run fitness function on the results, then determine which ones are fit
+        # Temporarily passthrough all populations
+        populations = []
+        for result, population in results:
+            populations.append(population)
+        return populations
+
+    def reproduction(self, populations: list[list[int]]):
+        # TODO Crossover
+
+        # TODO Mutation
+
+        # Temporarily passthrough all populations
+        return populations
+
+
+    def run_rocket(self, encoding: list[int]):
         """
         Run rocket with set configurations.
 
@@ -33,12 +92,12 @@ class EvoTestManager:
             encoding: encoding of numbers to be used by evolutionary strategy
         """
 
-        if len(encoding) != (required_length := (self.n * (self.n - 1)) * 7):
-            raise ValueError(f"Encoding should be of length {required_length}, but got {len(encoding)}")
+        if len(encoding) != self.encoding_length:
+            raise ValueError(f"Encoding should be of length {self.encoding_length}, but got {len(encoding)}")
 
         params_dict = process_args(
             argparse.Namespace(strategy=self.strategy,   # Not yet implemented!
-                               nodes=self.n,
+                               nodes=self.nodes,
                                partition=None,           # No partition
                                nodes_unl=None,           # Default nodes_unl
                                network_config=None,      # Default network_config
@@ -52,8 +111,26 @@ class EvoTestManager:
         strategy: Strategy = str_to_strategy(self.strategy)(**params_dict)
         server = serve(strategy)
         server.wait_for_termination()
+        return [], encoding # TODO should return some sort of results
+
+    def run_evolution_round(self, populations: list[list[int]]):
+        results = []
+        for population in populations:
+            # TODO This is the part that could be run in parallel, if we figure out how with docker networking and stuff.
+            print(f"Running rocket with population {population}")
+            results.append(self.run_rocket(population))
+        return results
+
+    def main(self):
+        populations = [self.initial_population() for _ in range(self.population_size)]
+        for _ in range(self.generations):
+            print(f"Generation {_+1}")
+            results = self.run_evolution_round(populations)
+            selected = self.selection(results)
+            populations = self.reproduction(selected)
+        return
 
 
 if __name__ == "__main__":
-    manager = EvoTestManager('delay', 3) # TODO config here?
-    manager.run([random.randint(0, 4000) for _ in range(42)])
+    manager = EvoTestManager()
+    manager.main()
