@@ -13,6 +13,10 @@ from rocket_controller.encoder_decoder import (
 from rocket_controller.iteration_type import TimeBasedIteration
 from rocket_controller.strategies.strategy import Strategy
 
+from rocket_controller.helper import MAX_U32
+import random
+
+from loguru import logger
 
 class MutationExample(Strategy):
     """Class that Mutates all TMProposeSet messages."""
@@ -42,6 +46,20 @@ class MutationExample(Strategy):
             strategy_overrides=strategy_overrides,
         )
 
+        if self.params["seed"] is not None:
+            random.seed(self.params["seed"])
+
+        if self.params["drop_probability"] < 0 or self.params["corrupt_probability"] < 0:
+            raise ValueError(
+                f"drop and corrupt probabilities must be non-negative, drop_probability: {self.params['drop_probability']}, corrupt_probability: {self.params['corrupt_probability']}"
+            )
+
+        if (self.params["drop_probability"] + self.params["corrupt_probability"]) > 1.0:
+            raise ValueError(
+                f"drop and corrupt probabilities must sum to less than or equal to 1.0, but was \
+                {self.params['drop_probability'] + self.params['corrupt_probability']}"
+            )
+
     def setup(self):
         """Setup method for MutationExample."""
 
@@ -55,27 +73,38 @@ class MutationExample(Strategy):
         Returns:
             Tuple[bytes, int, int]: A tuple of the possible mutated message as bytes, an action as int and the send amount.
         """
-        # Decode the packet to figure out the type and length
-        try:
-            message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
-        except DecodingNotSupportedError:
-            return packet.data, 0, 1
+        # drop message
+        choice: float = random.random()
+        if choice < self.params["drop_probability"]:
+            return packet.data, MAX_U32, 1
+        # corrupt message
+        elif choice < self.params["drop_probability"] + self.params["corrupt_probability"]:
+            # additional checks: event.from == 3 && self.current_round > 1 ?
 
-        # Check whether message is of type TMProposeSet
-        if not isinstance(message, ripple_pb2.TMProposeSet):
-            return packet.data, 0, 1
-
-        # Mutate the closeTime of each message
-        message.closeTime = datetime_to_ripple_time(datetime.now())
-
-        # Sign the message
-        signed_message = PacketEncoderDecoder.sign_message(
-            message,
-            self.network.public_to_private_key_map[message.nodePubKey.hex()],
-        )
-
-        return (
-            PacketEncoderDecoder.encode_message(signed_message, message_type_no),
-            0,
-            1,
-        )
+            corrupted_message = self.corrupt_message(packet.data)
+            try:
+                PacketEncoderDecoder.decode_packet(corrupted_message) # use this just to check if the message is valid
+            except DecodingNotSupportedError as e:
+                # Log the decoding error and return the original message
+                logger.info("Message mutation resulted in a syntactically incorrect message. Returning original.")
+                return packet.data, 0, 1
+            except Exception as e:
+                # Log the decoding error and return the original message
+                logger.info(f"Message mutation resulted in an unexpected error: {e}. Returning original.")
+                return packet.data, 0, 1
+            logger.info("Message was successfully mutated.")
+            return (
+                corrupted_message,
+                0,
+                1,
+            )
+        # do nothing
+        return packet.data, 0, 1
+    
+    def corrupt_message(self, message: bytes) -> bytes:
+        # flip a random bit in a random byte of the message
+        message_bytes = bytearray(message)
+        index = random.randint(0, len(message_bytes) - 1)
+        bit_to_flip = 1 << random.randint(0, 7)
+        message_bytes[index] ^= bit_to_flip
+        return bytes(message_bytes)
