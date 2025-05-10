@@ -13,7 +13,7 @@ from rocket_controller.encoder_decoder import (
 )
 from rocket_controller.iteration_type import LedgerBasedIteration, TimeBasedIteration
 
-class RandomPriority(Strategy):
+class EvoPriorityStrategy(Strategy):
     def __init__(
         self,
         network_config_path: str | None = None,
@@ -57,7 +57,6 @@ class RandomPriority(Strategy):
         self.r = self.max_events / 2
 
         self.priority_list = self.params.get("priority_list", [])
-        
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
         self.dispatch_thread.start()
 

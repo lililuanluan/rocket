@@ -55,5 +55,5 @@ class EvoTestManager:
 
 
 if __name__ == "__main__":
-    manager = EvoTestManager('delay', 3)
+    manager = EvoTestManager('delay', 3) # TODO config here?
     manager.run([random.randint(0, 4000) for _ in range(42)])
