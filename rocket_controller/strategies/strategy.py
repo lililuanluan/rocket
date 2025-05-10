@@ -32,7 +32,7 @@ class Strategy(ABC):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
-        iteration_type: TimeBasedIteration | None = LedgerBasedIteration(10, 10, 60),
+        iteration_type: TimeBasedIteration | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):

@@ -11,6 +11,7 @@ from rocket_controller.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
 )
+from rocket_controller.iteration_type import LedgerBasedIteration, TimeBasedIteration
 
 class RandomPriority(Strategy):
     def __init__(
@@ -21,7 +22,7 @@ class RandomPriority(Strategy):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
-        iteration_type=None,
+        iteration_type = LedgerBasedIteration(10, 10, 60),
         network_overrides=None,
         strategy_overrides=None,
     ):
@@ -66,7 +67,12 @@ class RandomPriority(Strategy):
 
         with self.lock:
             message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
-            priority = self.priority_list.get(message_type_no, self.min_priority)
+
+            if message_type_no in self.priority_list:
+                priority = self.priority_list[message_type_no]
+            else:
+                return packet.data, 0, 1
+            
             self.counter += 1
             self.queue.put((priority, self.counter, event))
             # print(f"[handle_packet] Queued packet from {packet.from_port} to {packet.to_port} with priority {priority}")

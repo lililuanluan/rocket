@@ -10,10 +10,6 @@ max_events: 100
 # Message type priorities configuration
 # Lower number priority is sent first
 priority_list:
-  2: 42  # ripple_pb2.TMManifests
-  3: 67  # ripple_pb2.TMPing
-  5: 33  # ripple_pb2.TMCluster
-  15: 57 # ripple_pb2.TMEndpoints
   30: 74 # ripple_pb2.TMTransaction
   31: 29 # ripple_pb2.TMGetLedger
   32: 81 # ripple_pb2.TMLedgerData
@@ -21,17 +17,3 @@ priority_list:
   34: 45 # ripple_pb2.TMStatusChange
   35: 66 # ripple_pb2.TMHaveTransactionSet
   41: 51 # ripple_pb2.TMValidation
-  42: 24 # ripple_pb2.TMGetObjectByHash
-  52: 61 # ripple_pb2.TMGetPeerShardInfo
-  53: 32 # ripple_pb2.TMPeerShardInfo
-  54: 78 # ripple_pb2.TMValidatorList
-  55: 49 # ripple_pb2.TMSquelch
-  56: 59 # ripple_pb2.TMValidatorListCollection
-  57: 70 # ripple_pb2.TMProofPathRequest
-  58: 36 # ripple_pb2.TMProofPathResponse
-  59: 26 # ripple_pb2.TMReplayDeltaRequest
-  60: 64 # ripple_pb2.TMReplayDeltaResponse
-  61: 39 # ripple_pb2.TMGetPeerShardInfoV2
-  62: 53 # ripple_pb2.TMPeerShardInfoV2
-  63: 48 # ripple_pb2.TMHaveTransactions
-  64: 84 # ripple_pb2.TMTransactions
