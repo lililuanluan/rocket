@@ -67,6 +67,8 @@ class TimeBasedIteration:
         self._max_ledger_seq = max_ledger_seq
         self.ledger_validation_map: Dict[int, LedgerValidationInfo] = {}
         self._lock = threading.Lock()
+        self.to_be_validated_txs: List[(str, str, int, str)] = [] # sender_alias, receiver_alias, amount, tx_hash
+        self._validation_lock = threading.Lock()
 
     def _stop_all(self):
         """Stop the interceptor along with the docker containers."""
@@ -158,7 +160,7 @@ class TimeBasedIteration:
                 return
             elif response.result.get('engine_result') != 'tesSUCCESS':
                 logger.error(f"Error while submitting transaction: {response.result.get('engine_result_message')}")
-                self._tx_logger.log_transaction_validation(sender_alias, destination_alias, amount, 'None', False)
+                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
                 return
         except Exception as e:
             if "Current ledger is unavailable" in str(e):
@@ -178,12 +180,16 @@ class TimeBasedIteration:
                 return
             else:
                 logger.warning(f"Error while submitting transaction: {e}")
-                self._tx_logger.log_transaction_validation(sender_alias, destination_alias, amount, 'None', False)
+                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
                 return
         tx_hash = response.result.get('tx_json').get('hash')
-        logger.info(f"Transaction {tx_hash} submitted successfully. Waiting for validation...")
-        threading.Thread(name=f"validation-{tx_hash}", target=self.validate_transaction, args=(sender_alias, destination_alias, amount, tx_hash,)).start()
+        logger.info(f"Transaction {tx_hash} submitted successfully")
+        with self._validation_lock:
+            self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
 
+    def validate_transactions(self):
+        for sender_alias, receiver_alias, amount, tx_hash in self.to_be_validated_txs:
+            self.validate_transaction(sender_alias, receiver_alias, amount, tx_hash)
 
 
     def validate_transaction(
@@ -192,23 +198,16 @@ class TimeBasedIteration:
             receiver_alias:str,
             amount: int,
             tx_hash: str):
-        attempts = 3
-        delay = 3
-        for attempt in range(attempts):
+        if tx_hash == 'None':
+            self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, 'None', False)
+            logger.info(f"Transaction {tx_hash} not submitted, skipping validation.")
+        else:
             try:
-                time.sleep(delay)
                 validated = self._network.validate_transaction(tx_hash, 0)
-                if validated:
-                    logger.info(f"Transaction {tx_hash} validated successfully.")
-                    self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, tx_hash, validated)
-                    return
-                else:
-                    logger.info(f"Transaction {tx_hash} not yet validated, waiting {delay} seconds...")
-                    continue
+                logger.info(f"Transaction {tx_hash} validated: {validated}")
+                self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, tx_hash, validated)
             except Exception as e:
                 logger.error(f"Error while validating transaction: {e}")
-        logger.error(f"Transaction {tx_hash} failed to validate after {attempts} attempts.")
-        self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, tx_hash, False)
 
     def set_server(self, server: Server):
         """
@@ -258,7 +257,7 @@ class TimeBasedIteration:
 
         # Wait for the logging threads to finish
         for t in threading.enumerate():
-            if "LogLedgerResult" in t.name or "validation" in t.name: # TODO Stopping here is dangerous. For instance to wait for validation threads in the same way
+            if "LogLedgerResult" in t.name: # TODO Stopping here is dangerous.
                 t.join()
 
         if self.cur_iteration > 1:
@@ -290,6 +289,7 @@ class TimeBasedIteration:
         self._timers = []
         self._transaction_timer = None
         self.ledger_validation_map = {}
+        self.to_be_validated_txs = []
         # TODO Network should not reset here!
         self._network.accounts = {}
         self._network.tx_builder = TransactionBuilder()
@@ -354,6 +354,7 @@ class TimeBasedIteration:
             if cur_ledger_infos and all(
                 entry["seq"] >= self._max_ledger_seq for entry in cur_ledger_infos
             ):
+                self.validate_transactions()
                 self._reset_values()
                 self.add_iteration()
 
