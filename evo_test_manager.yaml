@@ -1,7 +1,7 @@
 # General test configuration
 general:
   nodes: 3                      # Number of nodes in the network
-  strategy: "EvoDelayStrategy"  # Type of evolution strategy: 'EvoDelayStrategy' or 'EvoPriorityStrategy'
+  strategy: "EvoPriorityStrategy"  # Type of evolution strategy: 'EvoDelayStrategy' or 'EvoPriorityStrategy'
 #  seed: 42                     # Seed for reproducibility
 
 # Evolution parameters
@@ -12,8 +12,8 @@ evolution:
 # Encoding constraints
 encoding:
   # Delay
-  min_value: 0         # Minimum delay value in milliseconds
-  max_value: 4000      # Maximum delay value in milliseconds
+#  min_value: 0         # Minimum delay value in milliseconds
+#  max_value: 4000      # Maximum delay value in milliseconds
   # Priority
-#  min_value: 1         # Minimum priority value
-#  max_value: 100       # Maximum priority value
+  min_value: 1         # Minimum priority value
+  max_value: 100       # Maximum priority value

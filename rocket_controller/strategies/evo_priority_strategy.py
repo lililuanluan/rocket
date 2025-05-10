@@ -54,26 +54,38 @@ class EvoPriorityStrategy(Strategy):
         self.underflow_factor = float(self.params.get("underflow_factor", 0.8))
         self.max_events = int(self.params.get("max_events", 100)) # figure this out
         self.r = self.max_events / 2
-        # TODO refactor to use encoding
-        self.priority_list = self.params.get("priority_list", [])
+        self.priorities = self.params.get("encoding")
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
 
 
     def setup(self):
+        assert len(self.priorities) == 7 * self.network.node_amount * (self.network.node_amount - 1)
+        self.queue = PriorityQueue()
+        self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
         self.dispatch_thread.start()
 
 
+
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
+        message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
+
+        if message_type_no not in set(range(30, 36)).union({41}):
+            return packet.data, 0, 1
+        return packet.data, 0, 1
+
+        # To get type index -> subtract 30, for validation, subtract 35
+        type_id = message_type_no - 30 if message_type_no != 41 else 6
+        sender_node_id = self.network.port_to_id(packet.from_port)
+        receiver_node_id = self.network.port_to_id(packet.to_port)
+
+        index = (type_id * (self.network.node_amount * (self.network.node_amount - 1))
+                 + sender_node_id * (self.network.node_amount - 1)
+                 + (receiver_node_id if receiver_node_id < sender_node_id else receiver_node_id - 1))
+
+        priority = self.priorities[index]
+
         event = threading.Event()
-
         with self.lock:
-            message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
-
-            if message_type_no in self.priority_list:
-                priority = self.priority_list[message_type_no]
-            else:
-                return packet.data, 0, 1
-            
             self.counter += 1
             self.queue.put((priority, self.counter, event))
             # print(f"[handle_packet] Queued packet from {packet.from_port} to {packet.to_port} with priority {priority}")

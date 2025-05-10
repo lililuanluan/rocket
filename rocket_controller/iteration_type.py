@@ -122,11 +122,12 @@ class TimeBasedIteration:
         )
         threads = []
         for tx in genesis_transactions:
-            logger.info(f"Performing Genesis Transaction: {tx}")
+            # logger.info(f"Performing Genesis Transaction: {tx}")
             peer_id = tx.get('peer_id')
             amount = tx.get('amount')
             sender_alias = tx.get('sender_account')
             destination_alias = tx.get('destination_account')
+            logger.info(f"Sending {amount} from {sender_alias} to {destination_alias} using peer {peer_id}...")
             thread = threading.Thread(target=self.perform_transaction, args=(peer_id, amount, sender_alias, destination_alias))
             thread.start()
             threads.append(thread)
@@ -134,18 +135,18 @@ class TimeBasedIteration:
             thread.join()
         time.sleep(5) # min delay to make sure a ledger is validated before submitting regular transactions
         for tx in regular_transactions:
-            logger.info(f"Performing Regular Transaction: {tx}")
+            # logger.info(f"Performing Regular Transaction: {tx}")
             peer_id = tx.get('peer_id')
             amount = tx.get('amount')
             sender_alias = tx.get('sender_account')
             destination_alias = tx.get('destination_account')
             delay = tx.get('time')
+            logger.info(f"Sending {amount} from {sender_alias} to {destination_alias} after {delay} seconds using peer {peer_id}...")
             timer = threading.Timer(delay, self.perform_transaction, args=(peer_id, amount, sender_alias, destination_alias))
             timer.start()
             self._timers.append(timer)
 
     def perform_transaction(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None):
-        logger.info(f"Sending {amount} from {sender_alias} to {destination_alias} using peer {peer_id}...")
         try:
             sender_account = self._network.get_account(sender_alias) if sender_alias else None
             destination_account = self._network.get_account(destination_alias) if destination_alias else None
@@ -154,32 +155,36 @@ class TimeBasedIteration:
                                              sender_account_seed=sender_account.get('seed') if sender_account else None,
                                              destination_account=destination_account.get('address') if destination_account else None)
             if response.result.get('engine_result') == 'tefPAST_SEQ':
-                logger.info(f"Sequence number passed, retrying...")
+                # logger.info(f"Sequence number passed, retrying...")
                 time.sleep(0.5)
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
+            elif response.result.get('engine_result') == 'tecUNFUNDED_PAYMENT' :
+                logger.info(f"Transaction not submitted: {response.result.get('engine_result_message')}")
+                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
+                return
             elif response.result.get('engine_result') != 'tesSUCCESS':
-                logger.error(f"Error while submitting transaction: {response.result.get('engine_result_message')}")
+                logger.error(f"Error while submitting transaction: {response.result.get('engine_result')}; Message: {response.result.get('engine_result_message')}")
                 self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
                 return
         except Exception as e:
             if "Current ledger is unavailable" in str(e):
-                logger.info("Current ledger is unavailable, waiting for it to become available...")
+                # logger.info("Current ledger is unavailable, waiting for it to become available...")
                 time.sleep(1)
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
             elif "Transaction submission failed" in str(e):
-                logger.info("Transaction submission failed, retrying...")
+                # logger.info("Transaction submission failed, retrying...")
                 time.sleep(1)
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
             elif "noNetwork" in str(e):
-                logger.info("Not synced to the network, retrying...")
+                # logger.info("Not synced to the network, retrying...")
                 time.sleep(1)
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
             else:
-                logger.warning(f"Error while submitting transaction: {e}")
+                logger.error(f"Error while submitting transaction: {e}")
                 self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
                 return
         tx_hash = response.result.get('tx_json').get('hash')
