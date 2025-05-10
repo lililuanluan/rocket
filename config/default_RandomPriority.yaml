@@ -10,21 +10,30 @@ max_events: 100
 # Message type priorities configuration
 # Lower number priority is sent first
 priority_list:
-  TMManifests: 90
-  TMEndpoints: 85
-  TMProposeSet: 80
-  TMValidation: 75
-  TMStatusChange: 70
-  TMHaveTransactionSet: 65
-  TMTransaction: 60
-  TMGetLedger: 55
-  TMGetObjectByHash: 50
-  TMTransactionSet: 45
-  TMConsensus: 40
-  TMPeerShardInfo: 35
-  TMHaveSet: 30
-  TMLedgerData: 25
-  TMGetPeerShardInfo: 20
-  TMValidatorList: 15
-  TMValidatorListCollection: 10
-  # Add any other message types with their priorities
+  2: 50 # ripple_pb2.TMManifests,
+  3: 50 # ripple_pb2.TMPing,
+  5: 50 # ripple_pb2.TMCluster,
+  15: 50 # ripple_pb2.TMEndpoints,
+  30: 50 # ripple_pb2.TMTransaction,
+  31: 50 # ripple_pb2.TMGetLedger,
+  32: 50 # ripple_pb2.TMLedgerData,
+  33: 50 # ripple_pb2.TMProposeSet,
+  34: 50 # ripple_pb2.TMStatusChange,
+  35: 50 # ripple_pb2.TMHaveTransactionSet,
+  41: 50 # ripple_pb2.TMValidation,
+  42: 50 # ripple_pb2.TMGetObjectByHash,
+  # 50: Is not defined in proto file and has no corresponding class, but appears in enum.
+  # 51: Is not defined in proto file and has no corresponding class, but appears in enum.
+  52: 50 # ripple_pb2.TMGetPeerShardInfo,
+  53: 50 # ripple_pb2.TMPeerShardInfo,
+  54: 50 # ripple_pb2.TMValidatorList,
+  55: 50 # ripple_pb2.TMSquelch,
+  56: 50 # ripple_pb2.TMValidatorListCollection,
+  57: 50 # ripple_pb2.TMProofPathRequest,
+  58: 50 # ripple_pb2.TMProofPathResponse,
+  59: 50 # ripple_pb2.TMReplayDeltaRequest,
+  60: 50 # ripple_pb2.TMReplayDeltaResponse,
+  61: 50 # ripple_pb2.TMGetPeerShardInfoV2,
+  62: 50 # ripple_pb2.TMPeerShardInfoV2,
+  63: 50 # ripple_pb2.TMHaveTransactions,
+  64: 50 # ripple_pb2.TMTransactions
