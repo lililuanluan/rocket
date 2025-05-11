@@ -83,7 +83,7 @@ class MutationExample(Strategy):
 
             corrupted_message = self.corrupt_message(packet.data)
             try:
-                PacketEncoderDecoder.decode_packet(corrupted_message) # use this just to check if the message is valid
+                PacketEncoderDecoder.decode_packet_data(corrupted_message) # use this just to check if the message is valid
             except DecodingNotSupportedError as e:
                 # Log the decoding error and return the original message
                 logger.info("Message mutation resulted in a syntactically incorrect message. Returning original.")

@@ -94,14 +94,14 @@ class PacketEncoderDecoder:
         # Update the message signature to the new signature
         message.signature = signature
         return message
-
+    
     @staticmethod
-    def decode_packet(packet_data: bytes) -> tuple[Message, int]:
+    def decode_packet_data(packet_data: bytes) -> tuple[Message, int]:
         """
         Decodes a given packet data into a tuple containing the message object and type number.
 
         Args:
-            packet_data: Packet data to decode.
+            packet: Packet to decode.
 
         Returns:
             tuple[Message, int]: Tuple of the message, and message type.
@@ -123,8 +123,36 @@ class PacketEncoderDecoder:
             raise DecodingNotSupportedError(
                 f"Decoding of message failed due to parsing error (message is syntactically incorrect)."
             )
-        logger.debug(f"Decoded message: {message}")
-        logger.debug(f"Decoded message type: {message_type}")
+        return message, message_type
+
+    @staticmethod
+    def decode_packet(packet: packet_pb2.Packet) -> tuple[Message, int]:
+        """
+        Decodes a given packet data into a tuple containing the message object and type number.
+
+        Args:
+            packet: Packet to decode.
+
+        Returns:
+            tuple[Message, int]: Tuple of the message, and message type.
+
+        Raises:
+            DecodingNotSupportedError: If the given packet is not supported.
+        """
+        message_type = struct.unpack("!H", packet.data[4:6])[0]
+        if message_type not in PacketEncoderDecoder.message_type_map:
+            raise DecodingNotSupportedError(
+                f"Decoding of message type {message_type} not supported"
+            )
+        try:
+            message_payload = packet.data[6:]
+            message_class = PacketEncoderDecoder.message_type_map[message_type]
+            message = message_class()
+            message.ParseFromString(message_payload) # raises message.DecodeError if parsing fails
+        except message.DecodeError:
+            raise DecodingNotSupportedError(
+                f"Decoding of message failed due to parsing error (message is syntactically incorrect)."
+            )
         return message, message_type
 
     @staticmethod
