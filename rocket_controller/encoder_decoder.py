@@ -9,6 +9,7 @@ from xrpl.core.keypairs.secp256k1 import SECP256K1
 from protos import packet_pb2, ripple_pb2
 from protos.ripple_pb2 import TMProposeSet
 
+from loguru import logger
 
 class DecodingNotSupportedError(Exception):
     """Signals that decoding a certain message is not supported."""
@@ -122,6 +123,8 @@ class PacketEncoderDecoder:
             raise DecodingNotSupportedError(
                 f"Decoding of message failed due to parsing error (message is syntactically incorrect)."
             )
+        logger.debug(f"Decoded message: {message}")
+        logger.debug(f"Decoded message type: {message_type}")
         return message, message_type
 
     @staticmethod

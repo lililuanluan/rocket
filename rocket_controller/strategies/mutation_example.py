@@ -103,8 +103,19 @@ class MutationExample(Strategy):
     
     def corrupt_message(self, message: bytes) -> bytes:
         # flip a random bit in a random byte of the message
+        #message_bytes = bytearray(message)
+        #index = random.randint(0, len(message_bytes) - 1)
+        #bit_to_flip = 1 << random.randint(0, 7)
+        #message_bytes[index] ^= bit_to_flip
+        #return bytes(message_bytes)
+    
+        if len(message) <= 6:  # Ensure the message has enough bytes to mutate
+            logger.error("Message is too short to corrupt beyond the 6th byte.")
+            return message
+
         message_bytes = bytearray(message)
-        index = random.randint(0, len(message_bytes) - 1)
+        # Select a random index starting from the 6th byte
+        index = random.randint(6, len(message_bytes) - 1)
         bit_to_flip = 1 << random.randint(0, 7)
         message_bytes[index] ^= bit_to_flip
         return bytes(message_bytes)
