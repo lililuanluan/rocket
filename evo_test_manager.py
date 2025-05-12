@@ -116,7 +116,7 @@ class EvoTestManager:
     def run_evolution_round(self, populations: list[list[int]]):
         results = []
         for population in populations:
-            # TODO This is the part that could be run in parallel, if we figure out how with docker networking and stuff.
+            # This is the part that could be run in parallel, if we figure out how with docker networking and stuff.
             print(f"Running rocket with population {population}")
             results.append(self.run_rocket(population))
         return results
