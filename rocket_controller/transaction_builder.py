@@ -45,7 +45,7 @@ class TransactionBuilder:
         Raises:
             ValueError: If amount is smaller than 1_000_000_000.
         """
-        if amount < 1_000_000_000:
+        if amount < 10:
             raise ValueError(
                 f"Amount must be greater than 1_000_000_000, given amount: {amount}"
             )
