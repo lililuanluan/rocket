@@ -112,7 +112,7 @@ class TimeBasedIteration:
             return
 
         logger.info("Waiting for ledger to be available before submitting transaction...")
-        while any(self.ledger_validation_map[node_id]["seq"] < 2 for node_id in range(len(self._validator_nodes))):
+        while len(self.ledger_validation_map) < len(self._validator_nodes) or any(self.ledger_validation_map[node_id]["seq"] < 2 for node_id in range(len(self._validator_nodes))):
             time.sleep(1)
         time.sleep(1)
         genesis_transactions = self._network.network_config.get('transactions', {}).get('genesis', {})
