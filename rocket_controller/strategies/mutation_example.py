@@ -80,24 +80,29 @@ class MutationExample(Strategy):
         # corrupt message
         elif choice < self.params["drop_probability"] + self.params["corrupt_probability"]:
             # additional checks: event.from == 3 && self.current_round > 1 ?
-
-            corrupted_message = self.corrupt_message(packet.data)
-            try:
-                PacketEncoderDecoder.decode_packet_data(corrupted_message) # use this just to check if the message is valid
-            except DecodingNotSupportedError as e:
-                # Log the decoding error and return the original message
-                logger.info("Message mutation resulted in a syntactically incorrect message. Returning original.")
-                return packet.data, 0, 1
-            except Exception as e:
-                # Log the decoding error and return the original message
-                logger.info(f"Message mutation resulted in an unexpected error: {e}. Returning original.")
-                return packet.data, 0, 1
-            logger.info("Message was successfully mutated.")
-            return (
-                corrupted_message,
-                0,
-                1,
-            )
+            # if self.current_round > 1 how do i know the current round? from TMstatusChange messages?
+            # but what if there is an integrity violation? then that data could be inaccurate
+            # from websockets?
+            peer_from_id = self.network.port_to_id(packet.from_port)
+            peer_to_id = self.network.port_to_id(packet.to_port)
+            if peer_from_id == 3: # byzantine node
+                corrupted_message = self.corrupt_message(packet.data)
+                try:
+                    PacketEncoderDecoder.decode_packet_data(corrupted_message) # use this just to check if the message is valid
+                except DecodingNotSupportedError as e:
+                    # Log the decoding error and return the original message
+                    logger.info("Message mutation resulted in a syntactically incorrect message. Returning original.")
+                    return packet.data, 0, 1
+                except Exception as e:
+                    # Log the decoding error and return the original message
+                    logger.info(f"Message mutation resulted in an unexpected error: {e}. Returning original.")
+                    return packet.data, 0, 1
+                logger.info(f"Message was successfully mutated: {peer_from_id} -> {peer_to_id}")
+                return (
+                    corrupted_message,
+                    0,
+                    1,
+                )
         # do nothing
         return packet.data, 0, 1
     
