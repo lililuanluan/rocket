@@ -37,6 +37,7 @@ spec_check_columns = [
 ]
 
 transaction_log_columns = [
+    "node_id",
     "sender account alias",
     "receiver account alias",
     "amount",
@@ -310,6 +311,7 @@ class TransactionLogger(CSVLogger):
 
     def log_transaction_validation(
             self,
+            node_id: int,
             sender_alias: str,
             receiver_alias: str,
             amount: int,
@@ -320,6 +322,7 @@ class TransactionLogger(CSVLogger):
         Log a transaction validation row to the CSV file.
 
         Args:
+            node_id: The nodeID of the node that validated the transaction.
             sender_alias: Sender account alias.
             receiver_alias: Receiver account alias.
             amount: Amount of XRP to transfer.
@@ -330,6 +333,7 @@ class TransactionLogger(CSVLogger):
             with open(self.filepath, mode="a", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
+                    node_id,
                     sender_alias,
                     receiver_alias,
                     amount,

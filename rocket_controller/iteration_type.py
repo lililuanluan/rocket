@@ -193,24 +193,29 @@ class TimeBasedIteration:
             self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
 
     def validate_transactions(self):
-        for sender_alias, receiver_alias, amount, tx_hash in self.to_be_validated_txs:
-            self.validate_transaction(sender_alias, receiver_alias, amount, tx_hash)
+        logger.info("Only showing transactions for Node 0. For all nodes see the transaction log.")
+        for node_id in range(len(self._validator_nodes)):
+            for sender_alias, receiver_alias, amount, tx_hash in self.to_be_validated_txs:
+                self.validate_transaction(node_id, sender_alias, receiver_alias, amount, tx_hash)
 
 
     def validate_transaction(
             self,
+            node_id: int,
             sender_alias: str,
             receiver_alias:str,
             amount: int,
             tx_hash: str):
         if tx_hash == 'None':
-            self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, 'None', False)
-            logger.info(f"Transaction {tx_hash} not submitted, skipping validation.")
+            self._tx_logger.log_transaction_validation(node_id, sender_alias, receiver_alias, amount, 'None', False)
+            if node_id == 0:
+                logger.info(f"Transaction {tx_hash} not submitted, skipping validation.")
         else:
             try:
-                validated = self._network.validate_transaction(tx_hash, 0)
-                logger.info(f"Transaction {tx_hash} validated: {validated}")
-                self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, tx_hash, validated)
+                validated = self._network.validate_transaction(tx_hash, node_id)
+                if node_id == 0:
+                    logger.info(f"Transaction {tx_hash} validated: {validated}")
+                self._tx_logger.log_transaction_validation(node_id, sender_alias, receiver_alias, amount, tx_hash, validated)
             except Exception as e:
                 logger.error(f"Error while validating transaction: {e}")
 
