@@ -467,9 +467,7 @@ class NetworkManager:
         client = JsonRpcClient(rpc_address)
         complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
         response = submit(complete_tx, client)
-        logger.info(
-            f"Sent a transaction submission to node {peer_id}, url: {rpc_address}"
-        )
+        # logger.info(f"Sent a transaction submission to node {peer_id}, url: {rpc_address}")
         self.tx_builder.add_transaction(complete_tx)
         return response
 

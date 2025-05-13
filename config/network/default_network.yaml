@@ -15,7 +15,7 @@ base_port_ws_admin: 62000
 base_port_rpc: 63000
 
 # The number of validator nodes to configure and start
-number_of_nodes: 3
+number_of_nodes: 5
 
 # A 2-dimensional array containing the groups of node indices that should be connected
 # to each other. Some examples for 3 nodes:
@@ -42,28 +42,37 @@ transactions:
   # Should be used to set up the accounts.
   genesis:
     - peer_id: 1 # The node to submit the transaction to
-      amount: 2000000000 # Amount in XRP drops, minimum is 1000000000
+      amount: 100000100 # Amount in XRP drops, minimum is 10.000.000
       sender_account: None # Account alias to send the transaction from. None is genesis account
       destination_account: "Account1" # Account alias to send the transaction to.
     - peer_id: 1
-      amount: 2000000000
+      amount: 10000100 # When creating a new account, send at least 10XRP + fee
       sender_account: None
       destination_account: "Account2"
     - peer_id: 1
-      amount: 2000000000
+      amount: 10000100
       sender_account: None
       destination_account: "Account3"
 
   # Regular transactions are performed a set amount of time after the network has started.
   regular:
-    - peer_id: 1  # The node to submit the transaction to
-      amount: 1000000000 # Amount in XRP drops, minimum is 1.000.000.000.
+    - peer_id: 0  # The node to submit the transaction to
+      amount: 80000000 # Amount in XRP drops, minimum is 1.000.000.000.
       sender_account: "Account1" # Account alias to send the transaction from.
       destination_account: "Account2" # Account alias to send the transaction to.
-      time: 4 # Seconds after which the transaction is performed.
-    - peer_id: 0  # The node to submit the transaction to
-      amount: 1000000000 # Amount in XRP drops, minimum is 1.000.000.000.
+      time: 2 # Seconds after which the transaction is performed.
+    - peer_id: 1  # The node to submit the transaction to
+      amount: 80000000 # Amount in XRP drops, minimum is 1.000.000.000.
       sender_account: "Account1" # Account alias to send the transaction from.
       destination_account: "Account3" # Account alias to send the transaction to.
-      time: 4 # Seconds after which the transaction is performed.
-
+      time: 2 # Seconds after which the transaction is performed.
+    - peer_id: 2
+      amount: 80000000
+      sender_account: "Account1"
+      destination_account: "Account3"
+      time: 2
+    - peer_id: 3
+      amount: 80000000
+      sender_account: "Account1"
+      destination_account: "Account2"
+      time: 2
