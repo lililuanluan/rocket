@@ -3,9 +3,13 @@
 from typing import Any
 
 import base58
+import xrpl.models.requests
 from loguru import logger
+from xrpl import CryptoAlgorithm
 from xrpl.clients.json_rpc_client import JsonRpcClient
+from xrpl.core.keypairs import generate_seed
 from xrpl.transaction import autofill_and_sign, submit
+from xrpl.wallet import Wallet
 
 from rocket_controller.helper import (
     flatten,
@@ -47,6 +51,7 @@ class NetworkManager:
         self.auto_parse_identical = auto_parse_identical
         self.auto_parse_subsets = auto_parse_subsets
         self.tx_builder = TransactionBuilder()
+        self.accounts: dict[str, dict[str, str]] = {}
 
     def update_network(self, validator_node_list: list[ValidatorNode]):
         """
@@ -407,6 +412,22 @@ class NetworkManager:
         except KeyError as err:
             raise ValueError(f"peer ID {peer_id} not found in id_to_port_dict") from err
 
+    def get_account(
+            self,
+            account_alias: str
+            ):
+        if account_alias is None or account_alias == "None":
+            return None
+        if account_alias not in self.accounts:
+            seed = generate_seed(algorithm=CryptoAlgorithm.SECP256K1)
+            wallet = Wallet.from_seed(seed=seed, algorithm=CryptoAlgorithm.SECP256K1)
+            self.accounts[account_alias] = {
+                'address': wallet.classic_address,
+                'seed': seed
+            }
+            logger.info(f"Creating account {account_alias} with seed {seed} and address {wallet.classic_address}")
+        return self.accounts[account_alias]
+
     def submit_transaction(
         self,
         peer_id: int,
@@ -437,7 +458,6 @@ class NetworkManager:
         for validator in self.validator_node_list:
             if validator.peer.port == self.id_to_port(peer_id):
                 rpc_address = f"http://{validator.rpc.as_url()}/"
-
         tx = self.tx_builder.build_transaction(
             amount=amount,
             sender_account=sender_account,
@@ -447,8 +467,18 @@ class NetworkManager:
         client = JsonRpcClient(rpc_address)
         complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
         response = submit(complete_tx, client)
-        logger.info(
-            f"Sent a transaction submission to node {peer_id}, url: {rpc_address}"
-        )
-        logger.info(f"Response from submission: {response.result}")
+        # logger.info(f"Sent a transaction submission to node {peer_id}, url: {rpc_address}")
         self.tx_builder.add_transaction(complete_tx)
+        return response
+
+    def validate_transaction(self, tx_hash: str, peer_id: int):
+        validator = self.validator_node_list[peer_id]
+        rpc_address = f"http://{validator.rpc.as_url()}/"
+        client = JsonRpcClient(rpc_address)
+        tx_result = client.request(xrpl.models.requests.Tx(transaction=tx_hash))
+        # logger.info(f"Validating transaction {tx_hash} response: {tx_result}")
+        if tx_result.is_successful() and tx_result.result.get('validated', False):
+            return True
+        else:
+            return False
+
