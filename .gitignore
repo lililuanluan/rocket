@@ -1,8 +1,8 @@
 .temp-interceptor
 .gitlab-ci-local
 
-interceptor/**/*
-!interceptor/README.md
+rocket_interceptor/*
+!rocket_interceptor/README.md
 
 logs
 
