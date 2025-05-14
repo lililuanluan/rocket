@@ -195,7 +195,7 @@ class Strategy(ABC):
                     peer_from_id, peer_to_id, packet.data, final_data, action
                 )
 
-        self.update_status(packet)
+        self.update_status(packet) 
         return final_data, action, send_amount
 
     @abstractmethod

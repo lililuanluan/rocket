@@ -70,6 +70,8 @@ class TimeBasedIteration:
         self.to_be_validated_txs: List[(str, str, int, str)] = [] # sender_alias, receiver_alias, amount, tx_hash
         self._validation_lock = threading.Lock()
 
+        self._byzantine_nodes: List[int] | None = []
+
     def _stop_all(self):
         """Stop the interceptor along with the docker containers."""
         logger.info(
@@ -240,6 +242,9 @@ class TimeBasedIteration:
             i: {"seq": 1, "time": _now} for i in range(len(validator_nodes))
         }
         self._validator_nodes = validator_nodes
+    
+    def set_byzantine_nodes(self, byzantine_nodes: List[int]):
+        self._byzantine_nodes = byzantine_nodes
 
     def set_log_dir(self, log_dir: str):
         """
@@ -299,7 +304,7 @@ class TimeBasedIteration:
         self._network.accounts = {}
         self._network.tx_builder = TransactionBuilder()
 
-    def on_status_change(
+    def on_status_change( 
         self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
     ):
         """
@@ -356,8 +361,13 @@ class TimeBasedIteration:
             cur_ledger_infos = self.ledger_validation_map.values()
             # Since all(x) returns True if x is empty, we have to check first whether cur_ledger_infos is
             # not empty to avoid starting a new (faulty) iteration while the network is still initializing.
+            logger.debug(
+                f"Current ledger infos: {' '.join(str(entry['seq']) for entry in cur_ledger_infos)}, max_ledger_seq: {self._max_ledger_seq}"
+            )
             if cur_ledger_infos and all(
-                entry["seq"] >= self._max_ledger_seq for entry in cur_ledger_infos
+                entry["seq"] >= self._max_ledger_seq
+                for node_id, entry in self.ledger_validation_map.items()
+                if node_id not in self._byzantine_nodes
             ):
                 self.validate_transactions()
                 self._reset_values()

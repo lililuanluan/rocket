@@ -16,15 +16,22 @@ class InterceptorManager:
     def __init__(self):
         """Initialize the InterceptorManager, with None for the process variable."""
         self.process: Popen | None = None
+        self.running = False
+        self.output_thread: Thread | None = None
 
     @staticmethod
-    def __check_output(proc: Popen):
-        """Log the stdout and stderr of the subprocess."""
-        stdout, stderr = proc.communicate()
-        if stdout:
-            logger.debug(f"\n{stdout}")
-        if stderr:
-            logger.debug(f"\n{stderr}")
+    def __check_output(proc: Popen, running_flag):
+        """Continuously log the stdout and stderr of the subprocess."""
+        try:
+            while running_flag() and proc.poll() is None:
+                output = proc.stdout.readline()
+                if output:
+                    logger.debug(f"[Interceptor stdout] {output.strip()}")
+                error = proc.stderr.readline()
+                if error:
+                    logger.error(f"[Interceptor stderr] {error.strip()}")
+        except Exception as e:
+            logger.error(f"Error while reading subprocess output: {e}")
 
     @staticmethod
     def cleanup_docker_containers():
@@ -50,7 +57,9 @@ class InterceptorManager:
                 stdout=PIPE,
                 stderr=PIPE,
                 text=True,
+                bufsize=1
             )
+            self.running = True
         except FileNotFoundError as exc:
             logger.error(
                 "Could not find the rocket-interceptor executable. Did you build the interceptor?"
@@ -58,8 +67,8 @@ class InterceptorManager:
             traceback.print_exception(exc)
             exit(2)
 
-        t = Thread(target=self.__check_output, args=[self.process])
-        t.start()
+        self.output_thread = Thread(target=self.__check_output, args=[self.process, lambda: self.running], daemon=True)
+        self.output_thread.start()
 
     def restart(self):
         """Stops and starts the rocket-interceptor subprocess."""
@@ -68,11 +77,19 @@ class InterceptorManager:
 
     def stop(self):
         """Stops the rocket-interceptor subprocess."""
-        # Check if this is the end of an active run
         if self.process:
             logger.info("Stopping interceptor")
+            self.running = False
             self.process.terminate()
             try:
                 self.process.wait(timeout=5.0)
             except TimeoutExpired:
+                logger.warning(
+                    "Interceptor process did not terminate in time, killing it."
+                )
                 self.process.kill()
+            finally:
+                if self.output_thread:
+                    self.output_thread.join()
+                    self.output_thread = None
+                self.process = None

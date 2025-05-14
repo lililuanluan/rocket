@@ -25,7 +25,7 @@ class MutationExample(Strategy):
         self,
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
-        iteration_type = LedgerBasedIteration(10, 10, 80),
+        iteration_type = LedgerBasedIteration(10, 10, 60),
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -60,6 +60,10 @@ class MutationExample(Strategy):
                 {self.params['drop_probability'] + self.params['corrupt_probability']}"
             )
 
+        self.byzantine_nodes = self.params.get("byzantine_nodes", [])
+
+        self.iteration_type.set_byzantine_nodes(self.byzantine_nodes)
+
     def setup(self):
         """Setup method for MutationExample."""
 
@@ -80,15 +84,12 @@ class MutationExample(Strategy):
         # corrupt message
         elif choice < self.params["drop_probability"] + self.params["corrupt_probability"]:
             # additional checks: event.from == 3 && self.current_round > 1 ?
-            # if self.current_round > 1 how do i know the current round? from TMstatusChange messages?
-            # but what if there is an integrity violation? then that data could be inaccurate
-            # from websockets?
             peer_from_id = self.network.port_to_id(packet.from_port)
             peer_to_id = self.network.port_to_id(packet.to_port)
-            if peer_from_id == 3: # byzantine node
+            if peer_from_id in self.byzantine_nodes and self.check_current_round(): # byzantine node
                 corrupted_message = self.corrupt_message(packet.data)
                 try:
-                    PacketEncoderDecoder.decode_packet_data(corrupted_message) # use this just to check if the message is valid
+                    message, message_type = PacketEncoderDecoder.decode_packet_data(corrupted_message) # use this just to check if the message is valid
                 except DecodingNotSupportedError as e:
                     # Log the decoding error and return the original message
                     logger.info("Message mutation resulted in a syntactically incorrect message. Returning original.")
@@ -97,7 +98,7 @@ class MutationExample(Strategy):
                     # Log the decoding error and return the original message
                     logger.info(f"Message mutation resulted in an unexpected error: {e}. Returning original.")
                     return packet.data, 0, 1
-                logger.info(f"Message was successfully mutated: {peer_from_id} -> {peer_to_id}")
+                logger.info(f"Message was successfully mutated: {peer_from_id} -> {peer_to_id} message type: {message_type}")
                 return (
                     corrupted_message,
                     0,
@@ -124,3 +125,10 @@ class MutationExample(Strategy):
         bit_to_flip = 1 << random.randint(0, 7)
         message_bytes[index] ^= bit_to_flip
         return bytes(message_bytes)
+
+    def check_current_round(self):
+        """Check if the current round is greater than 1 and if so, return True."""
+        cur_ledger_infos = self.iteration_type.ledger_validation_map.values()
+        if cur_ledger_infos and all(entry["seq"] > 1 for entry in cur_ledger_infos):
+            return True
+        return False
