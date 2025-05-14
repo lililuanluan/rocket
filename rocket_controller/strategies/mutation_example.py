@@ -10,7 +10,7 @@ from rocket_controller.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
 )
-from rocket_controller.iteration_type import TimeBasedIteration
+from rocket_controller.iteration_type import TimeBasedIteration, LedgerBasedIteration
 from rocket_controller.strategies.strategy import Strategy
 
 from rocket_controller.helper import MAX_U32
@@ -25,7 +25,7 @@ class MutationExample(Strategy):
         self,
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
-        iteration_type: TimeBasedIteration | None = None,
+        iteration_type = LedgerBasedIteration(10, 10, 80),
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
