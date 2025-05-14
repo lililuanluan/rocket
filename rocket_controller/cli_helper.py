@@ -69,6 +69,14 @@ def parse_args() -> argparse.Namespace:
         metavar="UNL",
     )
     parser.add_argument(
+        "--encoding",
+        type=check_valid_encoding,
+        default=None,
+        help="The encoding of the numbers to be used by the evolutionary strategy. "
+        "If set, overrides the encoding specified in the strategy configuration file.",
+        metavar="ENCODING",
+    )
+    parser.add_argument(
         "--overrides",
         type=check_valid_strategy_overrides,
         default=None,
@@ -129,7 +137,7 @@ def check_valid_strategy_overrides(overrides_str: str) -> Dict[str, str]:
         A dictionary containing the key-value pairs for the network parameter overrides.
     """
     result = {}
-    items = overrides_str.split(",")
+    items = overrides_str.split(", ")
     for item in items:
         separated_items = item.split("=")
         if len(separated_items) != 2:
@@ -137,6 +145,14 @@ def check_valid_strategy_overrides(overrides_str: str) -> Dict[str, str]:
         result[separated_items[0]] = separated_items[1]
     return result
 
+def check_valid_encoding(encoding: str) -> List[int]:
+    try:
+        parsed_array = ast.literal_eval(encoding)
+        if isinstance(parsed_array, list):
+            return parsed_array
+        raise ValueError
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"not a valid encoding: {encoding!r}") from e
 
 def process_args(args: argparse.Namespace) -> Dict[str, Any]:
     """

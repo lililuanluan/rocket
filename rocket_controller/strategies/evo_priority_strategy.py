@@ -68,7 +68,6 @@ class EvoPriorityStrategy(Strategy):
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
-
         if message_type_no not in set(range(30, 36)).union({41}):
             return packet.data, 0, 1
         return packet.data, 0, 1
