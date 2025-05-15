@@ -218,8 +218,8 @@ class TimeBasedIteration:
     def log_transactions_per_ledger(self):
         for ledger_seq in range(1, self._max_ledger_seq+1):
             for peer_id in range(len(self._validator_nodes)):
-                txs = self._network.get_transactions(ledger_seq, peer_id)
-                self._ledger_logger.log_transaction_set(ledger_seq, peer_id, txs)
+                ledger_hash, txs = self._network.get_transactions(ledger_seq, peer_id)
+                self._ledger_logger.log_transaction_set(ledger_seq, peer_id, ledger_hash, txs)
 
     def set_server(self, server: Server):
         """

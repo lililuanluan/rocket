@@ -47,6 +47,7 @@ transaction_log_columns = [
 ledger_log_columns = [
     "ledger_seq",
     "peer_id",
+    "ledger_hash",
     "transactions"
 ]
 
@@ -368,14 +369,16 @@ class LedgerLogger(CSVLogger):
             self,
             ledger_seq: int,
             peer_id: int,
+            ledger_hash: str,
             txs: list[str],
     ):
         """
         Log a transaction validation row to the CSV file.
 
         Args:
-            peer_id: peer id
             ledger_seq: ledger sequence
+            peer_id: peer id
+            ledger_hash: hash of ledger
             txs: set of transaction hashes included in the ledger
         """
         with self._lock:
@@ -384,5 +387,6 @@ class LedgerLogger(CSVLogger):
                 writer.writerow([
                     ledger_seq,
                     peer_id,
+                    ledger_hash,
                     txs
                 ])
