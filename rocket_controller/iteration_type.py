@@ -11,7 +11,7 @@ from loguru import logger
 from xrpl.models.response import ResponseStatus
 
 from protos import ripple_pb2
-from rocket_controller.csv_logger import TransactionLogger, LedgerLogger
+from rocket_controller.csv_logger import TransactionLogger, LedgerLogger, ProposalLogger
 from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
 from rocket_controller.network_manager import NetworkManager
@@ -50,6 +50,7 @@ class TimeBasedIteration:
         self._ledger_results = LedgerResult()
         self._tx_logger: TransactionLogger | None = None
         self._ledger_logger: LedgerLogger | None = None
+        self._proposal_logger: ProposalLogger | None = None
         self._spec_checker: SpecChecker | None = None
 
         self._max_iterations = max_iterations
@@ -279,6 +280,7 @@ class TimeBasedIteration:
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
             self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             self._ledger_logger = LedgerLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self._proposal_logger = ProposalLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
@@ -371,6 +373,15 @@ class TimeBasedIteration:
                 self.log_transactions_per_ledger()
                 self._reset_values()
                 self.add_iteration()
+
+    def on_proposal(self, proposal: ripple_pb2.TMProposeSet, sender_peer_id: int, receiver_peer_id: int):
+        self._proposal_logger.log_proposal(
+            sender_peer_id,
+            receiver_peer_id,
+            proposal.proposeSeq,
+            proposal.currentTxHash.hex(),
+            self.get_ledger_sequence(sender_peer_id)+1
+        )
 
     def get_ledger_sequence(self, node_id: int) -> int:
         """
