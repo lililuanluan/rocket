@@ -502,5 +502,29 @@ class NetworkManager:
         # Handle null-pointers / empty values
         ledger = ledger_result.result.get('ledger', {})
         transactions = ledger.get('transactions', None)
-        return ledger_result.result.get('ledger_hash', None), transactions
+        ledger_hash = ledger_result.result.get('ledger_hash', None)
 
+        return ledger_hash, transactions
+
+    def get_balances(self, peer_id: int, ledger_seq: int):
+        """
+        Get balances of all self-created accounts (self.accounts)
+
+        Returns:
+            Dict of all accounts (alias) with their balances
+        """
+
+        validator = self.validator_node_list[peer_id]
+        rpc_address = f"http://{validator.rpc.as_url()}/"
+        client = JsonRpcClient(rpc_address)
+
+        result = {}
+
+        for alias, account in self.accounts.items():
+            if alias is None or alias == 'None':
+                continue
+            address = account["address"]
+            acc_result = client.request(xrpl.models.requests.AccountInfo(account=address, ledger_index=ledger_seq))
+            result[alias] = {'address': address, 'balance': acc_result.result.get('account_data', {}).get('Balance', None)}
+
+        return result

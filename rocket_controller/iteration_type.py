@@ -11,7 +11,7 @@ from loguru import logger
 from xrpl.models.response import ResponseStatus
 
 from protos import ripple_pb2
-from rocket_controller.csv_logger import TransactionLogger, LedgerLogger, ProposalLogger
+from rocket_controller.csv_logger import TransactionLogger, LedgerLogger, ProposalLogger, AccountLogger
 from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
 from rocket_controller.network_manager import NetworkManager
@@ -51,6 +51,7 @@ class TimeBasedIteration:
         self._tx_logger: TransactionLogger | None = None
         self._ledger_logger: LedgerLogger | None = None
         self._proposal_logger: ProposalLogger | None = None
+        self._account_logger: AccountLogger | None = None
         self._spec_checker: SpecChecker | None = None
 
         self._max_iterations = max_iterations
@@ -222,6 +223,11 @@ class TimeBasedIteration:
                 ledger_hash, txs = self._network.get_transactions(ledger_seq, peer_id)
                 self._ledger_logger.log_transaction_set(ledger_seq, peer_id, ledger_hash, txs)
 
+    def log_accounts(self):
+        # Get account info from node 0 for the last ledger
+        for alias, account in self._network.get_balances(0, self._max_ledger_seq).items():
+            self._account_logger.log_account_info(0, alias, account['address'], account['balance'])
+
     def set_server(self, server: Server):
         """
         Set the server variable to the running instance of the gRPC server.
@@ -281,6 +287,7 @@ class TimeBasedIteration:
             self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             self._ledger_logger = LedgerLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             self._proposal_logger = ProposalLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self._account_logger = AccountLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
@@ -371,6 +378,7 @@ class TimeBasedIteration:
             ):
                 self.validate_transactions()
                 self.log_transactions_per_ledger()
+                self.log_accounts()
                 self._reset_values()
                 self.add_iteration()
 

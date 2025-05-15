@@ -59,6 +59,13 @@ proposals_log_columns = [
     "next_ledger_seq"
 ]
 
+account_log_columns = [
+    "peer_id",
+    "account_alias",
+    "account_address",
+    "balance"
+]
+
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
 
@@ -444,4 +451,48 @@ class ProposalLogger(CSVLogger):
             propose_seq,
             current_tx_hash,
             next_ledger_seq
+        ])
+
+
+class AccountLogger(CSVLogger):
+    def __init__(
+            self,
+            sub_directory: str,
+            iteration: int
+    ):
+        """
+        Initialize ProposalLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the ledger results in.
+            iteration: Current iteration number
+        """
+        super().__init__(
+            filename=f"accounts-{iteration}.csv",
+            columns=account_log_columns,
+            directory=sub_directory,
+        )
+        self._lock = threading.Lock()
+
+    def log_account_info(
+            self,
+            peer_id: int,
+            account_alias: str,
+            account_address,
+            balance: int
+    ):
+        """
+        Log a transaction validation row to the CSV file.
+
+        Args:
+            peer_id: id of the peer we received this info from
+            account_alias: alias for the account
+            account_address: address of the account
+            balance: the balance
+        """
+        self.log_row([
+            peer_id,
+            account_alias,
+            account_address,
+            balance
         ])
