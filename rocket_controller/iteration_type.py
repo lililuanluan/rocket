@@ -155,18 +155,19 @@ class TimeBasedIteration:
                                              sender_account=sender_account.get('address') if sender_account else None,
                                              sender_account_seed=sender_account.get('seed') if sender_account else None,
                                              destination_account=destination_account.get('address') if destination_account else None)
+            tx_hash = response.result.get('tx_json').get('hash')
             if response.result.get('engine_result') == 'tefPAST_SEQ':
                 # logger.info(f"Sequence number passed, retrying...")
                 time.sleep(0.5)
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
             elif response.result.get('engine_result') == 'tecUNFUNDED_PAYMENT' :
-                logger.info(f"Transaction not submitted: {response.result.get('engine_result_message')}")
-                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
+                logger.info(f"Transaction {tx_hash} not submitted: {response.result.get('engine_result_message')}")
+                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
                 return
             elif response.result.get('engine_result') != 'tesSUCCESS':
-                logger.error(f"Error while submitting transaction: {response.result.get('engine_result')}; Message: {response.result.get('engine_result_message')}")
-                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
+                logger.error(f"Error while submitting transaction {tx_hash}: {response.result.get('engine_result')}; Message: {response.result.get('engine_result_message')}")
+                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
                 return
         except Exception as e:
             if "Current ledger is unavailable" in str(e):
@@ -188,7 +189,6 @@ class TimeBasedIteration:
                 logger.error(f"Error while submitting transaction: {e}")
                 self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
                 return
-        tx_hash = response.result.get('tx_json').get('hash')
         logger.info(f"Transaction {tx_hash} submitted successfully")
         with self._validation_lock:
             self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
