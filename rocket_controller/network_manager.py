@@ -482,3 +482,25 @@ class NetworkManager:
         else:
             return False
 
+    def get_transactions(self, ledger_seq: int, peer_id: int) -> list[str] | None:
+        """
+        Get set of validated transactions for a certain peer and ledger sequence
+
+        Args:
+            ledger_seq: ledger sequence/index
+            peer_id: peer id
+
+        Returns:
+            list of transactions or None when an error occurred
+        """
+
+        validator = self.validator_node_list[peer_id]
+        rpc_address = f"http://{validator.rpc.as_url()}/"
+        client = JsonRpcClient(rpc_address)
+        ledger_result = client.request(xrpl.models.requests.Ledger(ledger_index=ledger_seq, transactions=True))
+
+        # Split into these lines to handle null-pointers
+        ledger = ledger_result.result.get('ledger', {})
+        transactions = ledger.get('transactions', None)
+        return transactions
+

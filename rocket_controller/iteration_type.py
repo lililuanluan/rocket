@@ -11,7 +11,7 @@ from loguru import logger
 from xrpl.models.response import ResponseStatus
 
 from protos import ripple_pb2
-from rocket_controller.csv_logger import TransactionLogger
+from rocket_controller.csv_logger import TransactionLogger, LedgerLogger
 from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
 from rocket_controller.network_manager import NetworkManager
@@ -49,6 +49,7 @@ class TimeBasedIteration:
         self.cur_iteration = 0
         self._ledger_results = LedgerResult()
         self._tx_logger: TransactionLogger | None = None
+        self._ledger_logger: LedgerLogger | None = None
         self._spec_checker: SpecChecker | None = None
 
         self._max_iterations = max_iterations
@@ -214,6 +215,12 @@ class TimeBasedIteration:
             except Exception as e:
                 logger.error(f"Error while validating transaction: {e}")
 
+    def log_transactions_per_ledger(self):
+        for ledger_seq in range(1, self._max_ledger_seq+1):
+            for peer_id in range(len(self._validator_nodes)):
+                txs = self._network.get_transactions(ledger_seq, peer_id)
+                self._ledger_logger.log_transaction_set(ledger_seq, peer_id, txs)
+
     def set_server(self, server: Server):
         """
         Set the server variable to the running instance of the gRPC server.
@@ -271,6 +278,7 @@ class TimeBasedIteration:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
             self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self._ledger_logger = LedgerLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
@@ -360,6 +368,7 @@ class TimeBasedIteration:
                 entry["seq"] >= self._max_ledger_seq for entry in cur_ledger_infos
             ):
                 self.validate_transactions()
+                self.log_transactions_per_ledger()
                 self._reset_values()
                 self.add_iteration()
 

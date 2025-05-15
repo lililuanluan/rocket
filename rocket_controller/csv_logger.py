@@ -44,6 +44,12 @@ transaction_log_columns = [
     "validated"
 ]
 
+ledger_log_columns = [
+    "ledger_seq",
+    "peer_id",
+    "transactions"
+]
+
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
 
@@ -335,4 +341,48 @@ class TransactionLogger(CSVLogger):
                     amount,
                     tx_hash,
                     validated
+                ])
+
+
+class LedgerLogger(CSVLogger):
+    def __init__(
+            self,
+            sub_directory: str,
+            iteration: int
+    ):
+        """
+        Initialize LedgerLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the ledger results in.
+            iteration: Current iteration number
+        """
+        super().__init__(
+            filename=f"ledger-{iteration}.csv",
+            columns=ledger_log_columns,
+            directory=sub_directory,
+        )
+        self._lock = threading.Lock()
+
+    def log_transaction_set(
+            self,
+            ledger_seq: int,
+            peer_id: int,
+            txs: list[str],
+    ):
+        """
+        Log a transaction validation row to the CSV file.
+
+        Args:
+            peer_id: peer id
+            ledger_seq: ledger sequence
+            txs: set of transaction hashes included in the ledger
+        """
+        with self._lock:
+            with open(self.filepath, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    ledger_seq,
+                    peer_id,
+                    txs
                 ])
