@@ -1,13 +1,13 @@
 # General test configuration
 general:
-  nodes: 5                      # Number of nodes in the network
+  nodes: 7                      # Number of nodes in the network
   strategy: "EvoPriorityStrategy"  # Type of evolution strategy: 'EvoDelayStrategy' or 'EvoPriorityStrategy'
 #  seed: 42                     # Seed for reproducibility
 
 # Evolution parameters
 evolution:
-  population_size: 10     # Size of the population in each generation
-  generations: 50        # Number of generations to run
+  population_size: 15     # Size of the population in each generation
+  generations: 1        # Number of generations to run
 
 # Encoding constraints
 encoding:
