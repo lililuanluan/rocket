@@ -1,17 +1,15 @@
 """Module that defines certain Iteration Types."""
-import random
+import hashlib
 import threading
 import time
 from datetime import datetime
 from typing import Dict, List, TypedDict
 
-from anyio import sleep
 from grpc import Server
 from loguru import logger
-from xrpl.models.response import ResponseStatus
 
 from protos import ripple_pb2
-from rocket_controller.csv_logger import TransactionLogger, LedgerLogger, ProposalLogger, AccountLogger
+from rocket_controller.csv_logger import TransactionLogger, LedgerLogger, TXProposalLogger, AccountLogger
 from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
 from rocket_controller.network_manager import NetworkManager
@@ -50,7 +48,7 @@ class TimeBasedIteration:
         self._ledger_results = LedgerResult()
         self._tx_logger: TransactionLogger | None = None
         self._ledger_logger: LedgerLogger | None = None
-        self._proposal_logger: ProposalLogger | None = None
+        self._tx_proposal_logger: TXProposalLogger | None = None
         self._account_logger: AccountLogger | None = None
         self._spec_checker: SpecChecker | None = None
 
@@ -286,7 +284,7 @@ class TimeBasedIteration:
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
             self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             self._ledger_logger = LedgerLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
-            self._proposal_logger = ProposalLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self._tx_proposal_logger = TXProposalLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             self._account_logger = AccountLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
@@ -382,12 +380,15 @@ class TimeBasedIteration:
                 self._reset_values()
                 self.add_iteration()
 
-    def on_proposal(self, proposal: ripple_pb2.TMProposeSet, sender_peer_id: int, receiver_peer_id: int):
-        self._proposal_logger.log_proposal(
+    def compute_tx_hash(self, raw_tx_bytes: bytes) -> str:
+        """TX hash with TX_PREFIX bytes, verified to work with practical example."""
+        return hashlib.sha512(b'\x54\x58\x4E\x00' + raw_tx_bytes).digest()[:32].hex().upper()
+
+    def on_transaction(self, tx: ripple_pb2.TMTransaction, sender_peer_id: int, receiver_peer_id: int):
+        self._tx_proposal_logger.log_proposal(
             sender_peer_id,
             receiver_peer_id,
-            proposal.proposeSeq,
-            proposal.currentTxHash.hex(),
+            self.compute_tx_hash(tx.rawTransaction),
             self.get_ledger_sequence(sender_peer_id)+1
         )
 

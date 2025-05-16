@@ -137,8 +137,8 @@ class Strategy(ABC):
                     self.network.port_to_id(packet.from_port),
                     self.network.port_to_id(packet.to_port),
                 )
-            elif isinstance(message, ripple_pb2.TMProposeSet):
-                self.iteration_type.on_proposal(
+            elif isinstance(message, ripple_pb2.TMTransaction):
+                self.iteration_type.on_transaction(
                     message,
                     self.network.port_to_id(packet.from_port),
                     self.network.port_to_id(packet.to_port),

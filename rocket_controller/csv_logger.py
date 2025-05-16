@@ -51,11 +51,10 @@ ledger_log_columns = [
     "transactions"
 ]
 
-proposals_log_columns = [
+tx_proposals_log_columns = [
     "sender_peer_id",
     "receiver_peer_id",
-    "propose_seq",
-    "current_tx_hash",
+    "tx_hash",
     "next_ledger_seq"
 ]
 
@@ -407,22 +406,22 @@ class LedgerLogger(CSVLogger):
                 ])
 
 
-class ProposalLogger(CSVLogger):
+class TXProposalLogger(CSVLogger):
     def __init__(
             self,
             sub_directory: str,
             iteration: int
     ):
         """
-        Initialize ProposalLogger class.
+        Initialize TXProposalLogger class.
 
         Args:
             sub_directory: The subdirectory to store the ledger results in.
             iteration: Current iteration number
         """
         super().__init__(
-            filename=f"proposals-{iteration}.csv",
-            columns=proposals_log_columns,
+            filename=f"tx_proposals-{iteration}.csv",
+            columns=tx_proposals_log_columns,
             directory=sub_directory,
         )
         self._lock = threading.Lock()
@@ -431,8 +430,7 @@ class ProposalLogger(CSVLogger):
             self,
             sender_peer_id: int,
             receiver_peer_id: int,
-            propose_seq: int,
-            current_tx_hash: str,
+            tx_hash: str,
             next_ledger_seq: int
     ):
         """
@@ -441,15 +439,13 @@ class ProposalLogger(CSVLogger):
         Args:
             sender_peer_id: id of sender
             receiver_peer_id: id of receiver
-            propose_seq: propose sequence
-            current_tx_hash: current transactions hash
+            tx_hash: hash of transaction
             next_ledger_seq: next up ledger sequence
         """
         self.log_row([
             sender_peer_id,
             receiver_peer_id,
-            propose_seq,
-            current_tx_hash,
+            tx_hash,
             next_ledger_seq
         ])
 
