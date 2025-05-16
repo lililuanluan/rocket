@@ -103,13 +103,14 @@ class TimeBasedIteration:
         self._transaction_timer.start()
 
     def _perform_transactions(self):
-        if not self._validator_nodes:
-            logger.error("No validator nodes available. Cannot perform transaction.")
-            return
 
-        if not self._network:
-            logger.error("Network not initialized. Cannot perform transaction.")
-            return
+        logger.info("Waiting for validator nodes to be initialized...")
+        while not self._validator_nodes:
+            time.sleep(5)
+
+        logger.info("Waiting for network to be initialized...")
+        while not self._network:
+            time.sleep(5)
 
         logger.info("Waiting for ledger to be available before submitting transaction...")
         while len(self.ledger_validation_map) < len(self._validator_nodes) or any(self.ledger_validation_map[node_id]["seq"] < 2 for node_id in range(len(self._validator_nodes))):

@@ -64,10 +64,11 @@ class EvoTestManager:
         encoding = self._config['encoding']
         self.encoding_min = encoding['min_value']
         self.encoding_max = encoding['max_value']
-        self.encoding_length = (self.nodes * (self.nodes - 1)) * 7
+        self.encoding_length = 7 * self.nodes * (self.nodes - 1)
 
 
     def initial_population(self):
+        print(f"Creating population of length {self.encoding_length}")
         return [random.randint(self.encoding_min, self.encoding_max) for _ in range(self.encoding_length)]
 
     def selection(self, results: list[Tuple[list[int], list[int]]]):
