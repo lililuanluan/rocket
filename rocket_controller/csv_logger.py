@@ -65,6 +65,7 @@ account_log_columns = [
     "balance"
 ]
 
+
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
 
