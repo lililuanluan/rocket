@@ -166,6 +166,7 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
     """
     params_dict = {}
     network_overrides = {}
+    strategy_overrides = {}
 
     if args.nodes:
         network_overrides["number_of_nodes"] = args.nodes
@@ -174,13 +175,18 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
     if args.nodes_unl:
         network_overrides["unl_partition"] = args.nodes_unl
 
+    if args.encoding:
+        strategy_overrides["encoding"] = args.encoding
+    if args.overrides and len(args.overrides.keys()) > 0:
+        strategy_overrides += args.overrides
+
     if args.network_config:
         params_dict["network_config_path"] = args.network_config
     if args.config:
         params_dict["strategy_config_path"] = args.config
     if len(network_overrides.keys()) > 0:
         params_dict["network_overrides"] = network_overrides
-    if args.overrides and len(args.overrides.keys()) > 0:
-        params_dict["strategy_overrides"] = args.overrides
+    if len(strategy_overrides.keys()) > 0:
+        params_dict["strategy_overrides"] = strategy_overrides
 
     return params_dict
