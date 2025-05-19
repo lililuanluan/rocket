@@ -121,14 +121,11 @@ class EvoTestManager:
         try:
             process = subprocess.Popen(
                 command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
                 text=True
             )
-            stdout, stderr = process.communicate()
             return_code = process.wait()
             if return_code != 0:
-                print(f"Rocket failed: {stderr}")
+                print(f"Rocket failed")
                 return [], encoding
             return [], encoding
         except Exception as e:
