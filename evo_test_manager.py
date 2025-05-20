@@ -1,5 +1,4 @@
 """This file contains a class to run and manage evolutionary based testing approaches."""
-import argparse
 import random
 import subprocess
 import sys
@@ -14,6 +13,7 @@ from rocket_controller.cli_helper import process_args, str_to_strategy
 from rocket_controller.packet_server import serve
 from rocket_controller.strategies import Strategy
 
+from deap import tools
 
 class EvoTestManager:
     """Manager for evolutionary based testing approaches."""
@@ -81,14 +81,44 @@ class EvoTestManager:
         return populations
 
     def reproduction(self, populations: list[list[int]]):
-        # TODO Crossover
-
-        # TODO Mutation
-
-        # Temporarily passthrough all populations
-        for i in range(len(populations)):
-            populations[i] = self.initial_population()
-        return populations
+        """
+        Perform reproduction using Simulated Binary Crossover and Gaussian Mutation.
+        
+        Args:
+            populations: List of populations to perform reproduction on
+        
+        Returns:
+            List of new populations after crossover and mutation
+        """
+        new_populations = []
+        
+        # SBX crossover parameters
+        eta = 20.0  # Distribution index for crossover
+        
+        # Gaussian mutation parameters
+        mu = 0.0  # Mean for gaussian mutation
+        sigma = 0.2  # Standard deviation for gaussian mutation
+        mutation_prob = 0.1  # Probability of mutation for each gene
+        
+        for i in range(0, len(populations), 2):
+            # Get two parents
+            parent1 = populations[i]
+            parent2 = populations[i + 1] if i + 1 < len(populations) else populations[0]
+            
+            # Perform Simulated Binary Crossover
+            child1, child2 = tools.cxSimulatedBinary(parent1[:], parent2[:], eta)
+            
+            # Perform Gaussian Mutation on both children
+            for child in [child1, child2]:
+                for j in range(len(child)):
+                    if random.random() < mutation_prob:
+                        child[j] += random.gauss(mu, sigma)
+                        # Ensure values stay within bounds
+                        child[j] = max(self.encoding_min, min(self.encoding_max, child[j]))
+        
+            new_populations.extend([child1, child2])
+    
+        return new_populations
 
 
     def run_rocket(self, encoding: list[int]):

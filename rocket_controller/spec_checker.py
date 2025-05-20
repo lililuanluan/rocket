@@ -4,7 +4,6 @@ import csv
 import json
 from collections import defaultdict
 from typing import Any, List
-
 from loguru import logger
 
 from rocket_controller.csv_logger import SpecCheckLogger
