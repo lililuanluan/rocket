@@ -101,7 +101,7 @@ class SpecChecker:
         )
         for _, records in ledgers_data.items():
             ledger_hashes_same = all(
-                (logger.info(f"ledger_hash {x} Returns: {x["ledger_hash"] == records[0]["ledger_hash"]} ") or True) and (x["ledger_hash"] == records[0]["ledger_hash"]) for x in records if x["ledger_hash"] != "NOT FOUND"
+                x["ledger_hash"] == records[0]["ledger_hash"] for x in records if x["ledger_hash"] != "NOT FOUND"
             )
 
             ledger_indexes_same = all(
