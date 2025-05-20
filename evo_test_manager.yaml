@@ -7,7 +7,7 @@ general:
 # Evolution parameters
 evolution:
   population_size: 10     # Size of the population in each generation
-  generations: 50        # Number of generations to run
+  generations: 1        # Number of generations to run
 
 # Encoding constraints
 encoding:

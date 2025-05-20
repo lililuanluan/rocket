@@ -141,12 +141,19 @@ class EvoTestManager:
         return results
 
     def main(self):
-        populations = [self.initial_population() for _ in range(self.population_size)]
+        population = [self.initial_population() for _ in range(self.population_size)]
         for _ in range(self.generations):
             print(f"Generation {_+1}")
-            results = self.run_evolution_round(populations)
-            selected = self.selection(results)
-            populations = self.reproduction(selected)
+            results = self.run_evolution_round(population)
+
+            new_population = [] #elitism, add x best individuals
+
+            while len(new_population) < len(population):
+                selected = self.selection(results) # 2 paremts
+                children = self.reproduction(selected)
+                new_population.append(children)
+
+            population = new_population
         return
 
 

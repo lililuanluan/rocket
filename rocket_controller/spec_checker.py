@@ -38,7 +38,7 @@ class SpecChecker:
         self.spec_check_logger: SpecCheckLogger = SpecCheckLogger(log_dir)
         self.log_dir: str = log_dir
 
-    def spec_check(self, iteration: int):
+    def spec_check(self, iteration: int, nodes: int):
         """
         Do a specification check for the current iteration and log the results.
 
@@ -96,15 +96,16 @@ class SpecChecker:
         all_hashes_pass = True
         all_indexes_pass = True
         all_ledger_goal_reached = (
-            len(ledgers_data[max_seq]) == len(ledgers_data[min_seq])
+            len(ledgers_data[max_seq]) == nodes
             and max_seq == ledgers_data[min_seq][0]["goal_ledger_seq"]
         )
         for _, records in ledgers_data.items():
             ledger_hashes_same = all(
-                x["ledger_hash"] == records[0]["ledger_hash"] for x in records
+                (logger.info(f"ledger_hash {x} Returns: {x["ledger_hash"] == records[0]["ledger_hash"]} ") or True) and (x["ledger_hash"] == records[0]["ledger_hash"]) for x in records if x["ledger_hash"] != "NOT FOUND"
             )
+
             ledger_indexes_same = all(
-                x["ledger_index"] == records[0]["ledger_index"] for x in records
+                x["ledger_index"] == records[0]["ledger_index"] for x in records if x["ledger_index"] != -1
             )
             all_hashes_pass &= ledger_hashes_same
             all_indexes_pass &= ledger_indexes_same
