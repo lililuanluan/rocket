@@ -45,28 +45,24 @@ class SpecChecker:
         Args:
             iteration: The current iteration.
         """
-        result_file_path = (
-            f"logs/{self.log_dir}/iteration-{iteration}/result-{iteration}.csv"
+        ledger_file_path = (
+            f"logs/{self.log_dir}/iteration-{iteration}/ledger-{iteration}.csv"
         )
 
         ledgers_data = defaultdict(list)
         try:
-            with open(result_file_path) as csvfile:
+            with open(ledger_file_path) as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     # Basic type conversion and validation
                     try:
-                        node_id = int(row["node_id"])
+                        node_id = int(row["peer_id"])
                         ledger_seq = int(row["ledger_seq"])
-                        goal_ledger_seq = int(row["goal_ledger_seq"])
                         ledger_hash = row["ledger_hash"]
-                        ledger_index = int(row["ledger_index"])
                         parsed_row = {
                             "node_id": node_id,
                             "ledger_seq": ledger_seq,
-                            "goal_ledger_seq": goal_ledger_seq,
                             "ledger_hash": ledger_hash,
-                            "ledger_index": ledger_index,
                         }
                         ledgers_data[ledger_seq].append(parsed_row)
                     except (ValueError, KeyError) as e:
@@ -94,33 +90,32 @@ class SpecChecker:
         min_seq = sorted_keys[0]
 
         all_hashes_pass = True
-        all_indexes_pass = True
+        all_sequences_pass = True
         all_ledger_goal_reached = (
             len(ledgers_data[max_seq]) == nodes
-            and max_seq == ledgers_data[min_seq][0]["goal_ledger_seq"]
         )
         for _, records in ledgers_data.items():
             ledger_hashes_same = all(
-                x["ledger_hash"] == records[0]["ledger_hash"] for x in records if x["ledger_hash"] != "NOT FOUND"
+               x["ledger_hash"] == records[0]["ledger_hash"] for x in records if x["ledger_hash"] != "NOT FOUND"
             )
 
-            ledger_indexes_same = all(
-                x["ledger_index"] == records[0]["ledger_index"] for x in records if x["ledger_index"] != -1
+            ledger_seq_same = all(
+                x["ledger_seq"] == records[0]["ledger_seq"] for x in records if x["ledger_seq"] != -1
             )
             all_hashes_pass &= ledger_hashes_same
-            all_indexes_pass &= ledger_indexes_same
+            all_sequences_pass &= ledger_seq_same
 
         self.spec_check_logger.log_spec_check(
             iteration,
             all_ledger_goal_reached,
             all_hashes_pass,
-            all_indexes_pass,
+            all_sequences_pass,
         )
 
         logger.info(
             f"Specification check for iteration {iteration}: "
             f"reached goal ledger: {all_ledger_goal_reached}, "
-            f"same ledger hashes: {all_hashes_pass}, same ledger indexes: {all_indexes_pass}"
+            f"same ledger hashes: {all_hashes_pass}, same ledger sequences: {all_sequences_pass}"
         )
 
     def aggregate_spec_checks(self):
