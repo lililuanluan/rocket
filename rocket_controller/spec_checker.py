@@ -37,11 +37,13 @@ class SpecChecker:
         self.spec_check_logger: SpecCheckLogger = SpecCheckLogger(log_dir)
         self.log_dir: str = log_dir
 
-    def spec_check(self, iteration: int, nodes: int):
+    def spec_check(self, iteration: int, nodes: int, goal_ledger_seq: int):
         """
         Do a specification check for the current iteration and log the results.
 
         Args:
+            goal_ledger_seq: The goal ledger sequence number.
+            nodes: Amount of nodes in the network.
             iteration: The current iteration.
         """
         ledger_file_path = (
@@ -91,7 +93,8 @@ class SpecChecker:
         all_hashes_pass = True
         all_sequences_pass = True
         all_ledger_goal_reached = (
-            len(ledgers_data[max_seq]) == nodes
+                len(ledgers_data[max_seq]) == nodes
+                and max_seq >= goal_ledger_seq
         )
         for _, records in ledgers_data.items():
             ledger_hashes_same = all(

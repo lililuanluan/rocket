@@ -15,6 +15,7 @@ from rocket_controller.strategies import Strategy
 
 from deap import tools
 
+
 class EvoTestManager:
     """Manager for evolutionary based testing approaches."""
 

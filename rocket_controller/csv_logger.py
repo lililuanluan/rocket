@@ -10,6 +10,7 @@ from rocket_controller.validator_node_info import ValidatorNode
 
 action_log_columns = [
     "timestamp",
+    "timestamp_sent",
     "action",
     "send_amount",
     "from_node_id",
@@ -172,6 +173,7 @@ class ActionLogger(CSVLogger):
         original_data: str,
         possibly_mutated_data: str,
         custom_timestamp: int | None = None,
+        sent_timestamp: int | None = None,
     ):
         """
         Log an action according to a specific column format.
@@ -192,6 +194,9 @@ class ActionLogger(CSVLogger):
                 int(datetime.now().timestamp() * 1000)
                 if custom_timestamp is None
                 else custom_timestamp,
+                int(datetime.now().timestamp() * 1000)
+                if sent_timestamp is None
+                else sent_timestamp,
                 action,
                 send_amount,
                 from_node_id,
