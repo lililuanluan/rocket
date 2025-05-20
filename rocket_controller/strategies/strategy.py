@@ -124,7 +124,7 @@ class Strategy(ABC):
 
     def update_status(self, packet: packet_pb2.Packet):
         """
-        Update the iteration's state variables, when a new TMStatusChange is received.
+        Update the iteration's state variables, when a new TMStatusChange or TMProposeSet is received.
 
         Args:
             packet: The packet to check for a possible status update.
@@ -133,6 +133,12 @@ class Strategy(ABC):
             message, _ = PacketEncoderDecoder.decode_packet(packet)
             if isinstance(message, ripple_pb2.TMStatusChange):
                 self.iteration_type.on_status_change(
+                    message,
+                    self.network.port_to_id(packet.from_port),
+                    self.network.port_to_id(packet.to_port),
+                )
+            elif isinstance(message, ripple_pb2.TMTransaction):
+                self.iteration_type.on_transaction(
                     message,
                     self.network.port_to_id(packet.from_port),
                     self.network.port_to_id(packet.to_port),
