@@ -9,6 +9,7 @@ from typing import Tuple
 
 from mypy.stubinfo import stub_distribution_name
 
+from operators import SBX, GaussianMutation
 from rocket_controller.cli_helper import process_args, str_to_strategy
 from rocket_controller.packet_server import serve
 from rocket_controller.strategies import Strategy
@@ -81,45 +82,25 @@ class EvoTestManager:
             populations.append(population)
         return populations
 
-    def reproduction(self, populations: list[list[int]]):
+    def reproduction(self, population: list[list[int]]):
         """
         Perform reproduction using Simulated Binary Crossover and Gaussian Mutation.
         
         Args:
-            populations: List of populations to perform reproduction on
+            population: List of populations to perform reproduction on
         
         Returns:
             List of new populations after crossover and mutation
         """
-        new_populations = []
-        
-        # SBX crossover parameters
-        eta = 20.0  # Distribution index for crossover
-        
-        # Gaussian mutation parameters
-        mu = 0.0  # Mean for gaussian mutation
-        sigma = 0.2  # Standard deviation for gaussian mutation
-        mutation_prob = 0.1  # Probability of mutation for each gene
-        
-        for i in range(0, len(populations), 2):
-            # Get two parents
-            parent1 = populations[i]
-            parent2 = populations[i + 1] if i + 1 < len(populations) else populations[0]
-            
-            # Perform Simulated Binary Crossover
-            child1, child2 = tools.cxSimulatedBinary(parent1[:], parent2[:], eta)
-            
-            # Perform Gaussian Mutation on both children
-            for child in [child1, child2]:
-                for j in range(len(child)):
-                    if random.random() < mutation_prob:
-                        child[j] += random.gauss(mu, sigma)
-                        # Ensure values stay within bounds
-                        child[j] = max(self.encoding_min, min(self.encoding_max, child[j]))
-        
-            new_populations.extend([child1, child2])
+        crossover = SBX()
+        mutate = GaussianMutation(self.encoding_min, self.encoding_max)
+
+        elite = population[0:5]
+
+        crossover_population = crossover.crossover(population[:-5])
+        mutated_population = mutate.mutate(crossover_population)
     
-        return new_populations
+        return elite + mutated_population
 
 
     def run_rocket(self, encoding: list[int]):
