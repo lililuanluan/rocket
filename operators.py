@@ -6,9 +6,6 @@ from deap import tools
 
 class CrossoverOperator(ABC):
 
-    def __init__(self, size: int):
-        self._size = size
-
     @abstractmethod
     def crossover(self, population: list[list[int]]):
         return population

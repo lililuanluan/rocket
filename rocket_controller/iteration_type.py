@@ -274,6 +274,9 @@ class TimeBasedIteration:
         self._log_dir = log_dir
         self._spec_checker = SpecChecker(log_dir)
 
+    def get_log_dir(self):
+        return self._log_dir
+
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
         if not self._spec_checker:

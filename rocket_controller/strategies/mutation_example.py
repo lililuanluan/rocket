@@ -22,6 +22,7 @@ class MutationExample(Strategy):
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
         iteration_type: TimeBasedIteration | None = None,
+        log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -38,6 +39,7 @@ class MutationExample(Strategy):
             network_config_path=network_config_path,
             strategy_config_path=strategy_config_path,
             iteration_type=iteration_type,
+            log_dir=log_dir,
             network_overrides=network_overrides,
             strategy_overrides=strategy_overrides,
         )

@@ -33,6 +33,7 @@ class Strategy(ABC):
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
         iteration_type: TimeBasedIteration | None = None,
+        log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -90,7 +91,10 @@ class Strategy(ABC):
             if iteration_type is None
             else iteration_type
         )
-        self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
+        if log_dir is not None:
+            self.iteration_type.set_log_dir(log_dir)
+        else:
+            self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
 
     @staticmethod
     def init_configs(

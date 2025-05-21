@@ -1,4 +1,5 @@
 """This file contains a class to run and manage evolutionary based testing approaches."""
+from datetime import datetime
 import random
 import subprocess
 import sys
@@ -11,6 +12,7 @@ from mypy.stubinfo import stub_distribution_name
 
 from operators import SBX, GaussianMutation
 from rocket_controller.cli_helper import process_args, str_to_strategy
+from rocket_controller.helper import format_datetime
 from rocket_controller.packet_server import serve
 from rocket_controller.strategies import Strategy
 
@@ -103,32 +105,20 @@ class EvoTestManager:
         return elite + mutated_population
 
 
-    def run_rocket(self, encoding: list[int]):
+    def run_rocket(self, encoding: list[int], log_dir: str):
         """
         Run rocket with set configurations.
 
         Args:
+            log_dir: Directory where logs should be stored.
             encoding: encoding of numbers to be used by evolutionary strategy
         """
 
         if len(encoding) != self.encoding_length:
             raise ValueError(f"Encoding should be of length {self.encoding_length}, but got {len(encoding)}")
-        #
-        # params_dict = process_args(
-        #     argparse.Namespace(strategy=self.strategy,   # Not yet implemented!
-        #                        nodes=self.nodes,
-        #                        partition=None,           # No partition
-        #                        nodes_unl=None,           # Default nodes_unl
-        #                        network_config=None,      # Default network_config
-        #                        config=None,              # Default config
-        #                        overrides={'encoding': encoding})
-        # )
-        # Do note: for more granular configurations, modify params_dict directly
-        # See the constructor of Strategy for all possible parameters
-        # The above Namespace may even be removed entirely as its functionalities are limited
         print(f"Running rocket with encoding {encoding}")
 
-        command = [sys.executable, "-m", "rocket_controller", "--nodes", str(self.nodes), "--encoding", str(encoding), self.strategy]
+        command = [sys.executable, "-m", "rocket_controller", "--nodes", str(self.nodes), "--encoding", str(encoding), "--log_dir", log_dir, self.strategy]
 
         try:
             process = subprocess.Popen(
@@ -144,19 +134,20 @@ class EvoTestManager:
             print(f"Rocket failed: {e}")
             return [], encoding
 
-    def run_evolution_round(self, populations: list[list[int]]):
+    def run_evolution_round(self, population: list[list[int]], log_dir: str):
         results = []
-        print(f"Running evolution with {len(populations)} populations.")
-        for population in populations:
+        print(f"Running evolution with {len(population)} populations.")
+        for idx, test_case in enumerate(population):
             # This is the part that could be run in parallel, if we figure out how with docker networking and stuff.
-            results.append(self.run_rocket(population))
+            results.append(self.run_rocket(test_case, f"{log_dir}/population-{idx+1}"))
         return results
 
     def main(self):
+        start_time = datetime.now()
         population = [self.initial_population() for _ in range(self.population_size)]
         for _ in range(self.generations):
             print(f"Generation {_+1}")
-            results = self.run_evolution_round(population)
+            results = self.run_evolution_round(population, f"{format_datetime(start_time)}/generation-{_+1}")
 
             new_population = [] #elitism, add x best individuals
 

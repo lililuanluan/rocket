@@ -138,7 +138,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         if self.strategy.keep_action_log:
             self.logger = ActionLogger(
-                f"{format_datetime(self.strategy.start_datetime)}/iteration-{self.strategy.iteration_type.cur_iteration}",
+                f"{self.strategy.iteration_type.get_log_dir()}/iteration-{self.strategy.iteration_type.cur_iteration}",
                 validator_node_list,
                 f"action-{self.strategy.iteration_type.cur_iteration}",
                 f"node_info-{self.strategy.iteration_type.cur_iteration}",
