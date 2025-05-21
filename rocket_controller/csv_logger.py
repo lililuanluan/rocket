@@ -49,6 +49,7 @@ transaction_log_columns = [
 ledger_log_columns = [
     "ledger_seq",
     "peer_id",
+    "validated",
     "ledger_hash",
     "transactions"
 ]
@@ -393,6 +394,7 @@ class LedgerLogger(CSVLogger):
             self,
             ledger_seq: int,
             peer_id: int,
+            validated: bool,
             ledger_hash: str,
             txs: list[str],
     ):
@@ -411,6 +413,7 @@ class LedgerLogger(CSVLogger):
                 writer.writerow([
                     ledger_seq,
                     peer_id,
+                    validated,
                     ledger_hash,
                     txs
                 ])
