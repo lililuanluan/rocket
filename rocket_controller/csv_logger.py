@@ -392,7 +392,7 @@ class LedgerLogger(CSVLogger):
 
     def log_transaction_set(
             self,
-            ledger_seq: int,
+            ledger_seq: int | str,
             peer_id: int,
             validated: bool,
             ledger_hash: str,
@@ -404,6 +404,7 @@ class LedgerLogger(CSVLogger):
         Args:
             ledger_seq: ledger sequence
             peer_id: peer id
+            validated: Whether the ledger was validated.
             ledger_hash: hash of ledger
             txs: set of transaction hashes included in the ledger
         """

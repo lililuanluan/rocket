@@ -482,7 +482,7 @@ class NetworkManager:
         else:
             return False
 
-    def get_transactions(self, ledger_seq: int, peer_id: int) -> (str | None, list[str] | None):
+    def get_transactions(self, ledger_seq: int | str, peer_id: int) -> (str | None, list[str] | None):
         """
         Get set of validated transactions for a certain peer and ledger sequence
 
