@@ -1,11 +1,13 @@
 """This file contains a class to run and manage evolutionary based testing approaches."""
 import csv
 import glob
+import shutil
 from datetime import datetime
 import random
 import subprocess
 import sys
 from pathlib import Path
+from time import sleep
 
 import yaml
 from typing import Tuple
@@ -115,11 +117,12 @@ class EvoTestManager:
         return elite + mutated_population
 
 
-    def run_rocket(self, encoding: list[int], log_dir: str):
+    def run_rocket(self, encoding: list[int], log_dir: str, retry: int = 0):
         """
         Run rocket with set configurations.
 
         Args:
+            retry: Number of retries left.
             log_dir: Directory where logs should be stored.
             encoding: encoding of numbers to be used by evolutionary strategy
         """
@@ -135,18 +138,21 @@ class EvoTestManager:
 
         command = [sys.executable, "-m", "rocket_controller", "--nodes", str(self.nodes), "--encoding", str(encoding), "--log_dir", log_dir, self.strategy]
 
-        try:
-            process = subprocess.Popen(
-                command,
-                text=True
-            )
-            return_code = process.wait()
-            if return_code != 0:
-                print(f"Rocket failed")
-                return [], encoding
-        except Exception as e:
-            print(f"Rocket failed: {e}")
-            return [], encoding
+        # TODO Python process -> Docker container start depending on flag. For dev still sequential
+        process = subprocess.Popen(
+            command,
+            text=True
+        )
+        return_code = process.wait()
+        if return_code != 0: # TODO return_code does probably not work, but will be different anyway when DinD is used.
+            if retry < 3:
+                retry += 1
+                print(f"Rocket failed on attempt {retry}. Retrying...")
+                shutil.copytree(f"logs/{log_dir}", f"logs/failed/{log_dir}/retry-{retry}")
+                shutil.rmtree(f"logs/{log_dir}")
+                sleep(5)
+                return self.run_rocket(encoding, log_dir, retry)
+            raise Exception(f"Rocket failed after {retry} retries. THIS IS NOT GOOD!")
 
         average_validation_time = process_results(log_dir)
         with open(f"logs/{log_dir}/run_info.txt", mode="a") as f:
