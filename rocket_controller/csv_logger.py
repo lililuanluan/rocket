@@ -14,6 +14,7 @@ action_log_columns = [
     "send_amount",
     "from_node_id",
     "to_node_id",
+    "is_mutated",
     "message_type",
     "original_data",
     "possibly_mutated_data",
@@ -163,6 +164,8 @@ class ActionLogger(CSVLogger):
             possibly_mutated_data: The message's possibly mutated data.
             custom_timestamp: A custom timestamp to log if desired.
         """
+        is_mutated = original_data != possibly_mutated_data
+
         # Note: timestamp is milliseconds since epoch (January 1, 1970)
         self.log_row(
             [
@@ -173,6 +176,7 @@ class ActionLogger(CSVLogger):
                 send_amount,
                 from_node_id,
                 to_node_id,
+                is_mutated,
                 message_type,
                 original_data,
                 possibly_mutated_data,

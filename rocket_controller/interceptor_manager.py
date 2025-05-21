@@ -29,7 +29,7 @@ class InterceptorManager:
                     logger.debug(f"[Interceptor stdout] {output.strip()}")
                 error = proc.stderr.readline()
                 if error:
-                    logger.error(f"[Interceptor stderr] {error.strip()}")
+                    logger.info(f"[Interceptor stderr] {error.strip()}")
         except Exception as e:
             logger.error(f"Error while reading subprocess output: {e}")
 

@@ -70,7 +70,14 @@ class TimeBasedIteration:
         self.to_be_validated_txs: List[(str, str, int, str)] = [] # sender_alias, receiver_alias, amount, tx_hash
         self._validation_lock = threading.Lock()
 
-        self._byzantine_nodes: List[int] | None = []
+        self._on_new_iteration_callbacks = []
+    
+    def register_callback(self, callback):
+        self._on_new_iteration_callbacks.append(callback)
+
+    def add_iteration_callbacks(self):
+        for callback in self._on_new_iteration_callbacks:
+            callback()
 
     def _stop_all(self):
         """Stop the interceptor along with the docker containers."""
@@ -243,8 +250,11 @@ class TimeBasedIteration:
         }
         self._validator_nodes = validator_nodes
     
-    def set_byzantine_nodes(self, byzantine_nodes: List[int]):
-        self._byzantine_nodes = byzantine_nodes
+    def setup_byzantine_nodes(self):
+        self._byzantine_nodes = random.sample(
+            range(0, self._network.network_config["number_of_nodes"]), self._network.network_config["number_of_byzantine_nodes"]
+        )
+        logger.info(f"Byzantine nodes: {self._byzantine_nodes}")
 
     def set_log_dir(self, log_dir: str):
         """
@@ -276,6 +286,9 @@ class TimeBasedIteration:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
             self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self.setup_byzantine_nodes()
+            self.add_iteration_callbacks()
+            #time.sleep(10) # Wait for the interceptor to stop
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
@@ -361,9 +374,9 @@ class TimeBasedIteration:
             cur_ledger_infos = self.ledger_validation_map.values()
             # Since all(x) returns True if x is empty, we have to check first whether cur_ledger_infos is
             # not empty to avoid starting a new (faulty) iteration while the network is still initializing.
-            logger.debug(
-                f"Current ledger infos: {' '.join(str(entry['seq']) for entry in cur_ledger_infos)}, max_ledger_seq: {self._max_ledger_seq}"
-            )
+            #logger.debug(
+            #    f"Current ledger infos: {' '.join(str(entry['seq']) for entry in cur_ledger_infos)}, max_ledger_seq: {self._max_ledger_seq}"
+            #)
             if cur_ledger_infos and all(
                 entry["seq"] >= self._max_ledger_seq
                 for node_id, entry in self.ledger_validation_map.items()
