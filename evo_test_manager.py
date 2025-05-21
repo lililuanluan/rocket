@@ -1,4 +1,6 @@
 """This file contains a class to run and manage evolutionary based testing approaches."""
+import csv
+import os.path
 from datetime import datetime
 import random
 import subprocess
@@ -47,11 +49,11 @@ class EvoTestManager:
             raise ValueError(f"strategy should be in {{'EvoDelayStrategy', 'EvoPriorityStrategy'}}, but got {strategy}")
         self.strategy = strategy
 
-        seed = self._config['general'].get('seed', None)
-        if seed is None:
-            seed = random.randint(0, 1000000)
-            print(f"seed not specified, using {seed}")
-        random.seed(seed)
+        self.seed = self._config['general'].get('seed', None)
+        if self.seed is None:
+            self.seed = random.randint(0, 1000000)
+            print(f"seed not specified, using {self.seed}")
+        random.seed(self.seed)
 
         # Evolution section of the config file
         population_size = self._config['evolution']['population_size']
@@ -72,7 +74,6 @@ class EvoTestManager:
 
 
     def initial_population(self):
-        print(f"Creating population of length {self.encoding_length}")
         return [random.randint(self.encoding_min, self.encoding_max) for _ in range(self.encoding_length)]
 
     def selection(self, results: list[Tuple[list[int], list[int]]]):
@@ -118,6 +119,11 @@ class EvoTestManager:
             raise ValueError(f"Encoding should be of length {self.encoding_length}, but got {len(encoding)}")
         print(f"Running rocket with encoding {encoding}")
 
+        Path.mkdir(Path(f"logs/{log_dir}"), parents=True, exist_ok=True)
+        with open(f"logs/{log_dir}/run_info.txt", mode="w") as f:
+            f.write(f"Seed: {self.seed}")
+            f.write(f"\nEncoding: {encoding}")
+
         command = [sys.executable, "-m", "rocket_controller", "--nodes", str(self.nodes), "--encoding", str(encoding), "--log_dir", log_dir, self.strategy]
 
         try:
@@ -136,10 +142,10 @@ class EvoTestManager:
 
     def run_evolution_round(self, population: list[list[int]], log_dir: str):
         results = []
-        print(f"Running evolution with {len(population)} populations.")
+        print(f"Running evolution with {len(population)} test cases.")
         for idx, test_case in enumerate(population):
             # This is the part that could be run in parallel, if we figure out how with docker networking and stuff.
-            results.append(self.run_rocket(test_case, f"{log_dir}/population-{idx+1}"))
+            results.append(self.run_rocket(test_case, f"{log_dir}/test_case-{idx+1}"))
         return results
 
     def main(self):
