@@ -1,6 +1,6 @@
 """This file contains a class to run and manage evolutionary based testing approaches."""
 import csv
-import os.path
+import glob
 from datetime import datetime
 import random
 import subprocess
@@ -10,15 +10,24 @@ from pathlib import Path
 import yaml
 from typing import Tuple
 
-from mypy.stubinfo import stub_distribution_name
-
 from operators import SBX, GaussianMutation
-from rocket_controller.cli_helper import process_args, str_to_strategy
 from rocket_controller.helper import format_datetime
-from rocket_controller.packet_server import serve
-from rocket_controller.strategies import Strategy
 
-from deap import tools
+
+
+def process_results(log_dir):
+    result_files = glob.glob(f"logs/{log_dir}/**/result-*.csv")
+    validation_times = []
+
+    for result_file in result_files:
+        with open(result_file, 'r') as f:
+            csv_reader = csv.DictReader(f)
+            for row in csv_reader:
+                if row['ledger_seq'] != '2':
+                    validation_times.append(float(row['time_to_validation']))
+    return sum(validation_times) / len(validation_times) if validation_times else 0
+
+
 
 
 class EvoTestManager:
@@ -120,7 +129,7 @@ class EvoTestManager:
         print(f"Running rocket with encoding {encoding}")
 
         Path.mkdir(Path(f"logs/{log_dir}"), parents=True, exist_ok=True)
-        with open(f"logs/{log_dir}/run_info.txt", mode="w") as f:
+        with open(f"logs/{log_dir}/run_info.txt", mode="a") as f:
             f.write(f"Seed: {self.seed}")
             f.write(f"\nEncoding: {encoding}")
 
@@ -135,10 +144,15 @@ class EvoTestManager:
             if return_code != 0:
                 print(f"Rocket failed")
                 return [], encoding
-            return [], encoding
         except Exception as e:
             print(f"Rocket failed: {e}")
             return [], encoding
+
+        average_validation_time = process_results(log_dir)
+        with open(f"logs/{log_dir}/run_info.txt", mode="a") as f:
+            f.write(f"\nAverage validation time: {average_validation_time} seconds")
+        print(f"Average validation time: {average_validation_time} seconds")
+        return average_validation_time, encoding
 
     def run_evolution_round(self, population: list[list[int]], log_dir: str):
         results = []
