@@ -504,8 +504,9 @@ class NetworkManager:
         transactions = ledger.get('transactions', None)
         ledger_hash = ledger_result.result.get('ledger_hash', None)
         validated = ledger_result.result.get('validated', False)
+        ledger_index = ledger_result.result.get('ledger_index', None)
 
-        return ledger_hash, transactions, validated
+        return ledger_hash, transactions, validated, ledger_index
 
     def get_balances(self, peer_id: int, ledger_seq: int):
         """

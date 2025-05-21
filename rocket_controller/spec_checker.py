@@ -56,7 +56,7 @@ class SpecChecker:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     # Basic type conversion and validation
-                    if row["ledger_seq"] == "validated":
+                    if "validated" in row["ledger_seq"] :
                         continue
                     try:
                         node_id = int(row["peer_id"])

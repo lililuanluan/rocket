@@ -225,12 +225,12 @@ class TimeBasedIteration:
     def log_transactions_per_ledger(self):
         for ledger_seq in range(1, self._max_ledger_seq+1):
             for peer_id in range(len(self._validator_nodes)):
-                ledger_hash, txs, validated = self._network.get_transactions(ledger_seq, peer_id)
+                ledger_hash, txs, validated, ledger_index = self._network.get_transactions(ledger_seq, peer_id)
                 self._ledger_logger.log_transaction_set(ledger_seq, peer_id, validated, ledger_hash, txs)
 
         for peer_id in range(len(self._validator_nodes)):
-            ledger_hash, txs, validated = self._network.get_transactions("validated", peer_id)
-            self._ledger_logger.log_transaction_set("validated", peer_id, validated, ledger_hash, txs)
+            ledger_hash, txs, validated, ledger_index = self._network.get_transactions("validated", peer_id)
+            self._ledger_logger.log_transaction_set(f"validated-{ledger_index}", peer_id, validated, ledger_hash, txs)
 
     def log_accounts(self):
         # Get account info from node 0 for the last ledger
