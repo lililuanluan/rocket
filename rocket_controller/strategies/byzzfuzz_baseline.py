@@ -25,7 +25,7 @@ class ByzzFuzzBaseline(Strategy):
         self,
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
-        iteration_type = LedgerBasedIteration(10, 8, 300),
+        iteration_type = LedgerBasedIteration(10, 10, 300),
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -82,7 +82,7 @@ class ByzzFuzzBaseline(Strategy):
             peer_from_id = self.network.port_to_id(packet.from_port)
             peer_to_id = self.network.port_to_id(packet.to_port)
             
-            if peer_from_id in self.iteration_type._byzantine_nodes and self.check_current_round(): # byzantine node
+            if peer_from_id in self.iteration_type._byzantine_nodes and self.get_current_round_of_node(peer_from_id)>1: # byzantine node
                 corrupted_message, byte_flipped, bit_flipped = self.corrupt_message(packet.data)
                 try:
                     message, message_type = PacketEncoderDecoder.decode_packet_data(corrupted_message) # use this just to check if the message is valid
@@ -121,3 +121,10 @@ class ByzzFuzzBaseline(Strategy):
         if cur_ledger_infos and all(entry["seq"] > 1 for entry in cur_ledger_infos):
             return True
         return False
+
+    def get_current_round_of_node(self, node_id: int) -> int:
+        """Check if the current round is greater than 1 and if so, return True."""
+        for _node_id, entry in self.iteration_type.ledger_validation_map.items():
+            if node_id == _node_id:
+                return entry["seq"]
+        return -1

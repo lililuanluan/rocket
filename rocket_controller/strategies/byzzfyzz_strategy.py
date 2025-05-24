@@ -24,7 +24,7 @@ class ByzzFuzzStrategy(Strategy):
         self,
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
-        iteration_type = LedgerBasedIteration(10, 7, 300),
+        iteration_type = LedgerBasedIteration(10, 10, 300),
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -98,33 +98,22 @@ class ByzzFuzzStrategy(Strategy):
         peer_from_id = self.network.port_to_id(packet.from_port)
         peer_to_id = self.network.port_to_id(packet.to_port)
 
-        """  
-        if any(round_num == self.check_current_round() and 
+        # check if the sender is a byzantine node?
+        if any(round_num == self.get_current_round_of_node(peer_from_id) and 
                any(peer_from_id in subset1 and peer_to_id in subset2 for subset1 in partition for subset2 in partition if subset1 != subset2)
                for round_num, partition in self.network_faults_list):
             # drop message
-            logger.debug(f"Dropping message from {peer_from_id} to {peer_to_id}")
+            logger.debug(f"Dropping message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
             return packet.data, MAX_U32, 1
-        """
 
-        if peer_from_id in self.iteration_type._byzantine_nodes and any(round_num == self.check_current_round() and peer_to_id in receiver_nodes for round_num, receiver_nodes in self.process_faults_list):
+        if peer_from_id in self.iteration_type._byzantine_nodes and any(round_num == self.get_current_round_of_node(peer_from_id) and peer_to_id in receiver_nodes for round_num, receiver_nodes in self.process_faults_list):
             # mutation logic
-            logger.debug(f"Mutating message from {peer_from_id} to {peer_to_id}, round: {self.check_current_round()}")
-            try:
-                message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
-            except DecodingNotSupportedError:
-                logger.error(
-                    f"Decoding of message type {message_type_no} not supported"	)
-                return packet.data, 0, 1
-
-            # Check whether message is of type TMProposeSet
-            if isinstance(message, ripple_pb2.TMProposeSet):
-                logger.debug(f"Mutating TMProposeSet message, round: {self.check_current_round()}")
+            logger.debug(f"Mutating message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
+            return self.corrupt_message(packet)
 
         return packet.data, 0, 1
     
     def corrupt_message(self, packet: packet_pb2.Packet) -> tuple[bytes, int, int]:
-        # do something to corrupt the message
         try:
             message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
         except DecodingNotSupportedError:
@@ -132,21 +121,17 @@ class ByzzFuzzStrategy(Strategy):
                 f"Decoding of message type {message_type_no} not supported"	)
             return packet.data, 0, 1
 
-        # Check whether message is of type TMProposeSet
         if isinstance(message, ripple_pb2.TMProposeSet):
-            logger.debug(f"Corrupting TMProposeSet message, round: {self.check_current_round()}")
-            return packet.data, 0, 1
-            #return self.corrupt_TMProposeSet(message)
+            logger.debug(f"Corrupting TMProposeSet message")
+            return self.corrupt_TMProposeSet(message)
         elif isinstance(message, ripple_pb2.TMValidation):
-            logger.debug(f"Corrupting TMValidation message, round: {self.check_current_round()}")
-            return packet.data, 0, 1
+            logger.debug(f"Corrupting TMValidation message")
+            return self.corrupt_TMValidation(message)
         elif isinstance(message, ripple_pb2.TMTransaction):
-            logger.debug(f"Corrupting TMTTransaction message, round: {self.check_current_round()}")
-            return packet.data, 0, 1
+            logger.debug(f"Corrupting TMTTransaction message")
+            return corrupt_TMTransaction(message)
         
         return packet.data, 0, 1
-
-
     
     def corrupt_TMProposeSet(self, message: bytes) -> tuple[bytes, int, int]:
         # Mutate the closeTime of each message
@@ -166,7 +151,19 @@ class ByzzFuzzStrategy(Strategy):
             0,
             1,
         )
+    
+    def corrupt_TMValidation(self, message: bytes) -> tuple[bytes, int, int]:
+        return packet.data, 0, 1
 
+    def corrupt_TMTransaction(self, message: bytes) -> tuple[bytes, int, int]:
+        return packet.data, 0, 1
+
+    def get_current_round_of_node(self, node_id: int) -> int:
+        """Check if the current round is greater than 1 and if so, return True."""
+        for _node_id, entry in self.iteration_type.ledger_validation_map.items():
+            if node_id == _node_id:
+                return entry["seq"]
+        return -1
 
     def check_current_round(self):
         """Check if the current round is greater than 1 and if so, return True."""
