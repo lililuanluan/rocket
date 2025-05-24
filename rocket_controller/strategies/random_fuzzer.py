@@ -19,6 +19,7 @@ class RandomFuzzer(Strategy):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         iteration_type: TimeBasedIteration | None = LedgerBasedIteration(10, 10, 60),
+        log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -43,6 +44,7 @@ class RandomFuzzer(Strategy):
             auto_parse_identical=auto_parse_identical,
             auto_parse_subsets=auto_parse_subsets,
             iteration_type=iteration_type,
+            log_dir=log_dir,
             network_overrides=network_overrides,
             strategy_overrides=strategy_overrides,
         )

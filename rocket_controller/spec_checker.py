@@ -4,7 +4,6 @@ import csv
 import json
 from collections import defaultdict
 from typing import Any, List
-
 from loguru import logger
 
 from rocket_controller.csv_logger import SpecCheckLogger
@@ -38,35 +37,35 @@ class SpecChecker:
         self.spec_check_logger: SpecCheckLogger = SpecCheckLogger(log_dir)
         self.log_dir: str = log_dir
 
-    def spec_check(self, iteration: int):
+    def spec_check(self, iteration: int, nodes: int, goal_ledger_seq: int):
         """
         Do a specification check for the current iteration and log the results.
 
         Args:
+            goal_ledger_seq: The goal ledger sequence number.
+            nodes: Amount of nodes in the network.
             iteration: The current iteration.
         """
-        result_file_path = (
-            f"logs/{self.log_dir}/iteration-{iteration}/result-{iteration}.csv"
+        ledger_file_path = (
+            f"logs/{self.log_dir}/iteration-{iteration}/ledger-{iteration}.csv"
         )
 
         ledgers_data = defaultdict(list)
         try:
-            with open(result_file_path) as csvfile:
+            with open(ledger_file_path) as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     # Basic type conversion and validation
+                    if "validated" in row["ledger_seq"] :
+                        continue
                     try:
-                        node_id = int(row["node_id"])
+                        node_id = int(row["peer_id"])
                         ledger_seq = int(row["ledger_seq"])
-                        goal_ledger_seq = int(row["goal_ledger_seq"])
                         ledger_hash = row["ledger_hash"]
-                        ledger_index = int(row["ledger_index"])
                         parsed_row = {
                             "node_id": node_id,
                             "ledger_seq": ledger_seq,
-                            "goal_ledger_seq": goal_ledger_seq,
                             "ledger_hash": ledger_hash,
-                            "ledger_index": ledger_index,
                         }
                         ledgers_data[ledger_seq].append(parsed_row)
                     except (ValueError, KeyError) as e:
@@ -94,32 +93,33 @@ class SpecChecker:
         min_seq = sorted_keys[0]
 
         all_hashes_pass = True
-        all_indexes_pass = True
+        all_sequences_pass = True
         all_ledger_goal_reached = (
-            len(ledgers_data[max_seq]) == len(ledgers_data[min_seq])
-            and max_seq == ledgers_data[min_seq][0]["goal_ledger_seq"]
+                len(ledgers_data[max_seq]) == nodes
+                and max_seq >= goal_ledger_seq
         )
         for _, records in ledgers_data.items():
             ledger_hashes_same = all(
-                x["ledger_hash"] == records[0]["ledger_hash"] for x in records
+               x["ledger_hash"] == records[0]["ledger_hash"] for x in records if x["ledger_hash"] != "NOT FOUND"
             )
-            ledger_indexes_same = all(
-                x["ledger_index"] == records[0]["ledger_index"] for x in records
+
+            ledger_seq_same = all(
+                x["ledger_seq"] == records[0]["ledger_seq"] for x in records if x["ledger_seq"] != -1
             )
             all_hashes_pass &= ledger_hashes_same
-            all_indexes_pass &= ledger_indexes_same
+            all_sequences_pass &= ledger_seq_same
 
         self.spec_check_logger.log_spec_check(
             iteration,
             all_ledger_goal_reached,
             all_hashes_pass,
-            all_indexes_pass,
+            all_sequences_pass,
         )
 
         logger.info(
             f"Specification check for iteration {iteration}: "
             f"reached goal ledger: {all_ledger_goal_reached}, "
-            f"same ledger hashes: {all_hashes_pass}, same ledger indexes: {all_indexes_pass}"
+            f"same ledger hashes: {all_hashes_pass}, same ledger sequences: {all_sequences_pass}"
         )
 
     def aggregate_spec_checks(self):

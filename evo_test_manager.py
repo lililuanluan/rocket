@@ -1,14 +1,35 @@
 """This file contains a class to run and manage evolutionary based testing approaches."""
-import argparse
+import csv
+import glob
+import shutil
+from datetime import datetime
 import random
+import subprocess
+import sys
 from pathlib import Path
+from time import sleep
 
 import yaml
 from typing import Tuple
 
-from rocket_controller.cli_helper import process_args, str_to_strategy
-from rocket_controller.packet_server import serve
-from rocket_controller.strategies import Strategy
+from operators import SBX, GaussianMutation
+from rocket_controller.helper import format_datetime
+
+
+
+def process_results(log_dir):
+    result_files = glob.glob(f"logs/{log_dir}/**/result-*.csv")
+    validation_times = []
+
+    for result_file in result_files:
+        with open(result_file, 'r') as f:
+            csv_reader = csv.DictReader(f)
+            for row in csv_reader:
+                if row['ledger_seq'] != '2':
+                    validation_times.append(float(row['time_to_validation']))
+    return sum(validation_times) / len(validation_times) if validation_times else 0
+
+
 
 
 class EvoTestManager:
@@ -39,11 +60,11 @@ class EvoTestManager:
             raise ValueError(f"strategy should be in {{'EvoDelayStrategy', 'EvoPriorityStrategy'}}, but got {strategy}")
         self.strategy = strategy
 
-        seed = self._config['general'].get('seed', None)
-        if seed is None:
-            seed = random.randint(0, 1000000)
-            print(f"seed not specified, using {seed}")
-        random.seed(seed)
+        self.seed = self._config['general'].get('seed', None)
+        if self.seed is None:
+            self.seed = random.randint(0, 1000000)
+            print(f"seed not specified, using {self.seed}")
+        random.seed(self.seed)
 
         # Evolution section of the config file
         population_size = self._config['evolution']['population_size']
@@ -60,7 +81,7 @@ class EvoTestManager:
         encoding = self._config['encoding']
         self.encoding_min = encoding['min_value']
         self.encoding_max = encoding['max_value']
-        self.encoding_length = (self.nodes * (self.nodes - 1)) * 7
+        self.encoding_length = 7 * self.nodes * (self.nodes - 1)
 
 
     def initial_population(self):
@@ -75,59 +96,93 @@ class EvoTestManager:
             populations.append(population)
         return populations
 
-    def reproduction(self, populations: list[list[int]]):
-        # TODO Crossover
+    def reproduction(self, population: list[list[int]]):
+        """
+        Perform reproduction using Simulated Binary Crossover and Gaussian Mutation.
+        
+        Args:
+            population: List of populations to perform reproduction on
+        
+        Returns:
+            List of new populations after crossover and mutation
+        """
+        crossover = SBX()
+        mutate = GaussianMutation(self.encoding_min, self.encoding_max)
 
-        # TODO Mutation
+        elite = population[0:5]
 
-        # Temporarily passthrough all populations
-        return populations
+        crossover_population = crossover.crossover(population[:-5])
+        mutated_population = mutate.mutate(crossover_population)
+    
+        return elite + mutated_population
 
 
-    def run_rocket(self, encoding: list[int]):
+    def run_rocket(self, encoding: list[int], log_dir: str, retry: int = 0):
         """
         Run rocket with set configurations.
 
         Args:
+            retry: Number of retries left.
+            log_dir: Directory where logs should be stored.
             encoding: encoding of numbers to be used by evolutionary strategy
         """
 
         if len(encoding) != self.encoding_length:
             raise ValueError(f"Encoding should be of length {self.encoding_length}, but got {len(encoding)}")
+        print(f"Running rocket with encoding {encoding}")
 
-        params_dict = process_args(
-            argparse.Namespace(strategy=self.strategy,   # Not yet implemented!
-                               nodes=self.nodes,
-                               partition=None,           # No partition
-                               nodes_unl=None,           # Default nodes_unl
-                               network_config=None,      # Default network_config
-                               config=None,              # Default config
-                               overrides={'encoding': encoding})
+        Path.mkdir(Path(f"logs/{log_dir}"), parents=True, exist_ok=True)
+        with open(f"logs/{log_dir}/run_info.txt", mode="a") as f:
+            f.write(f"Seed: {self.seed}")
+            f.write(f"\nEncoding: {encoding}")
+
+        command = [sys.executable, "-m", "rocket_controller", "--nodes", str(self.nodes), "--encoding", str(encoding), "--log_dir", log_dir, self.strategy]
+
+        # TODO Python process -> Docker container start depending on flag. For dev still sequential
+        process = subprocess.Popen(
+            command,
+            text=True
         )
+        return_code = process.wait()
+        if return_code != 0: # TODO return_code does probably not work, but will be different anyway when DinD is used.
+            if retry < 3:
+                retry += 1
+                print(f"Rocket failed on attempt {retry}. Retrying...")
+                shutil.copytree(f"logs/{log_dir}", f"logs/failed/{log_dir}/retry-{retry}")
+                shutil.rmtree(f"logs/{log_dir}")
+                sleep(5)
+                return self.run_rocket(encoding, log_dir, retry)
+            raise Exception(f"Rocket failed after {retry} retries. THIS IS NOT GOOD!")
 
-        # Do note: for more granular configurations, modify params_dict directly
-        # See the constructor of Strategy for all possible parameters
-        # The above Namespace may even be removed entirely as its functionalities are limited
-        strategy: Strategy = str_to_strategy(self.strategy)(**params_dict)
-        server = serve(strategy)
-        server.wait_for_termination()
-        return [], encoding # TODO should return some sort of results
+        average_validation_time = process_results(log_dir)
+        with open(f"logs/{log_dir}/run_info.txt", mode="a") as f:
+            f.write(f"\nAverage validation time: {average_validation_time} seconds")
+        print(f"Average validation time: {average_validation_time} seconds")
+        return average_validation_time, encoding
 
-    def run_evolution_round(self, populations: list[list[int]]):
+    def run_evolution_round(self, population: list[list[int]], log_dir: str):
         results = []
-        for population in populations:
+        print(f"Running evolution with {len(population)} test cases.")
+        for idx, test_case in enumerate(population):
             # This is the part that could be run in parallel, if we figure out how with docker networking and stuff.
-            print(f"Running rocket with population {population}")
-            results.append(self.run_rocket(population))
+            results.append(self.run_rocket(test_case, f"{log_dir}/test_case-{idx+1}"))
         return results
 
     def main(self):
-        populations = [self.initial_population() for _ in range(self.population_size)]
+        start_time = datetime.now()
+        population = [self.initial_population() for _ in range(self.population_size)]
         for _ in range(self.generations):
             print(f"Generation {_+1}")
-            results = self.run_evolution_round(populations)
-            selected = self.selection(results)
-            populations = self.reproduction(selected)
+            results = self.run_evolution_round(population, f"{format_datetime(start_time)}/generation-{_+1}")
+
+            new_population = [] #elitism, add x best individuals
+
+            while len(new_population) < len(population):
+                selected = self.selection(results) # 2 paremts
+                children = self.reproduction(selected)
+                new_population.append(children)
+
+            population = new_population
         return
 
 

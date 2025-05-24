@@ -10,6 +10,7 @@ from rocket_controller.validator_node_info import ValidatorNode
 
 action_log_columns = [
     "timestamp",
+    "timestamp_sent",
     "action",
     "send_amount",
     "from_node_id",
@@ -38,12 +39,36 @@ spec_check_columns = [
 ]
 
 transaction_log_columns = [
+    "node_id",
     "sender account alias",
     "receiver account alias",
     "amount",
     "tx_hash",
     "validated"
 ]
+
+ledger_log_columns = [
+    "ledger_seq",
+    "peer_id",
+    "validated",
+    "ledger_hash",
+    "transactions"
+]
+
+tx_proposals_log_columns = [
+    "sender_peer_id",
+    "receiver_peer_id",
+    "tx_hash",
+    "next_ledger_seq"
+]
+
+account_log_columns = [
+    "peer_id",
+    "account_alias",
+    "account_address",
+    "balance"
+]
+
 
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
@@ -150,6 +175,7 @@ class ActionLogger(CSVLogger):
         original_data: str,
         possibly_mutated_data: str,
         custom_timestamp: int | None = None,
+        sent_timestamp: int | None = None,
     ):
         """
         Log an action according to a specific column format.
@@ -172,6 +198,9 @@ class ActionLogger(CSVLogger):
                 int(datetime.now().timestamp() * 1000)
                 if custom_timestamp is None
                 else custom_timestamp,
+                int(datetime.now().timestamp() * 1000)
+                if sent_timestamp is None
+                else sent_timestamp,
                 action,
                 send_amount,
                 from_node_id,
@@ -314,6 +343,7 @@ class TransactionLogger(CSVLogger):
 
     def log_transaction_validation(
             self,
+            node_id: int,
             sender_alias: str,
             receiver_alias: str,
             amount: int,
@@ -324,6 +354,7 @@ class TransactionLogger(CSVLogger):
         Log a transaction validation row to the CSV file.
 
         Args:
+            node_id: The nodeID of the node that validated the transaction.
             sender_alias: Sender account alias.
             receiver_alias: Receiver account alias.
             amount: Amount of XRP to transfer.
@@ -334,9 +365,148 @@ class TransactionLogger(CSVLogger):
             with open(self.filepath, mode="a", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
+                    node_id,
                     sender_alias,
                     receiver_alias,
                     amount,
                     tx_hash,
                     validated
                 ])
+
+
+class LedgerLogger(CSVLogger):
+    def __init__(
+            self,
+            sub_directory: str,
+            iteration: int
+    ):
+        """
+        Initialize LedgerLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the ledger results in.
+            iteration: Current iteration number
+        """
+        super().__init__(
+            filename=f"ledger-{iteration}.csv",
+            columns=ledger_log_columns,
+            directory=sub_directory,
+        )
+        self._lock = threading.Lock()
+
+    def log_transaction_set(
+            self,
+            ledger_seq: int | str,
+            peer_id: int,
+            validated: bool,
+            ledger_hash: str,
+            txs: list[str],
+    ):
+        """
+        Log a transaction validation row to the CSV file.
+
+        Args:
+            ledger_seq: ledger sequence
+            peer_id: peer id
+            validated: Whether the ledger was validated.
+            ledger_hash: hash of ledger
+            txs: set of transaction hashes included in the ledger
+        """
+        with self._lock:
+            with open(self.filepath, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    ledger_seq,
+                    peer_id,
+                    validated,
+                    ledger_hash,
+                    txs
+                ])
+
+
+class TXProposalLogger(CSVLogger):
+    def __init__(
+            self,
+            sub_directory: str,
+            iteration: int
+    ):
+        """
+        Initialize TXProposalLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the ledger results in.
+            iteration: Current iteration number
+        """
+        super().__init__(
+            filename=f"tx_proposals-{iteration}.csv",
+            columns=tx_proposals_log_columns,
+            directory=sub_directory,
+        )
+        self._lock = threading.Lock()
+
+    def log_proposal(
+            self,
+            sender_peer_id: int,
+            receiver_peer_id: int,
+            tx_hash: str,
+            next_ledger_seq: int
+    ):
+        """
+        Log a transaction validation row to the CSV file.
+
+        Args:
+            sender_peer_id: id of sender
+            receiver_peer_id: id of receiver
+            tx_hash: hash of transaction
+            next_ledger_seq: next up ledger sequence
+        """
+        self.log_row([
+            sender_peer_id,
+            receiver_peer_id,
+            tx_hash,
+            next_ledger_seq
+        ])
+
+
+class AccountLogger(CSVLogger):
+    def __init__(
+            self,
+            sub_directory: str,
+            iteration: int
+    ):
+        """
+        Initialize ProposalLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the ledger results in.
+            iteration: Current iteration number
+        """
+        super().__init__(
+            filename=f"accounts-{iteration}.csv",
+            columns=account_log_columns,
+            directory=sub_directory,
+        )
+        self._lock = threading.Lock()
+
+    def log_account_info(
+            self,
+            peer_id: int,
+            account_alias: str,
+            account_address,
+            balance: int
+    ):
+        """
+        Log a transaction validation row to the CSV file.
+
+        Args:
+            peer_id: id of the peer we received this info from
+            account_alias: alias for the account
+            account_address: address of the account
+            balance: the balance
+        """
+        self.log_row([
+            peer_id,
+            account_alias,
+            account_address,
+            balance
+        ])

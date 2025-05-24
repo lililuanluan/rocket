@@ -69,12 +69,27 @@ def parse_args() -> argparse.Namespace:
         metavar="UNL",
     )
     parser.add_argument(
+        "--encoding",
+        type=check_valid_encoding,
+        default=None,
+        help="The encoding of the numbers to be used by the evolutionary strategy. "
+        "If set, overrides the encoding specified in the strategy configuration file.",
+        metavar="ENCODING",
+    )
+    parser.add_argument(
         "--overrides",
         type=check_valid_strategy_overrides,
         default=None,
         help="A way to override certain values found in the strategy configuration file. "
         "Format: PARAM1=VALUE1,PARAM2=VALUE2...",
         metavar="VALUES",
+    )
+    parser.add_argument(
+        "--log_dir",
+        type=str,
+        default=None,
+        help="The directory where the logs should be stored. Defaults to ./logs/timestamp",
+        metavar="PATH",
     )
 
     return parser.parse_args()
@@ -129,7 +144,7 @@ def check_valid_strategy_overrides(overrides_str: str) -> Dict[str, str]:
         A dictionary containing the key-value pairs for the network parameter overrides.
     """
     result = {}
-    items = overrides_str.split(",")
+    items = overrides_str.split(", ")
     for item in items:
         separated_items = item.split("=")
         if len(separated_items) != 2:
@@ -137,6 +152,14 @@ def check_valid_strategy_overrides(overrides_str: str) -> Dict[str, str]:
         result[separated_items[0]] = separated_items[1]
     return result
 
+def check_valid_encoding(encoding: str) -> List[int]:
+    try:
+        parsed_array = ast.literal_eval(encoding)
+        if isinstance(parsed_array, list):
+            return parsed_array
+        raise ValueError
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"not a valid encoding: {encoding!r}") from e
 
 def process_args(args: argparse.Namespace) -> Dict[str, Any]:
     """
@@ -150,6 +173,7 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
     """
     params_dict = {}
     network_overrides = {}
+    strategy_overrides = {}
 
     if args.nodes:
         network_overrides["number_of_nodes"] = args.nodes
@@ -158,13 +182,21 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
     if args.nodes_unl:
         network_overrides["unl_partition"] = args.nodes_unl
 
+    if args.encoding:
+        strategy_overrides["encoding"] = args.encoding
+    if args.overrides and len(args.overrides.keys()) > 0:
+        strategy_overrides += args.overrides
+
+
     if args.network_config:
         params_dict["network_config_path"] = args.network_config
     if args.config:
         params_dict["strategy_config_path"] = args.config
+    if args.log_dir:
+        params_dict["log_dir"] = args.log_dir
     if len(network_overrides.keys()) > 0:
         params_dict["network_overrides"] = network_overrides
-    if args.overrides and len(args.overrides.keys()) > 0:
-        params_dict["strategy_overrides"] = args.overrides
+    if len(strategy_overrides.keys()) > 0:
+        params_dict["strategy_overrides"] = strategy_overrides
 
     return params_dict

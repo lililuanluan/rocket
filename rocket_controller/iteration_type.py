@@ -1,17 +1,15 @@
 """Module that defines certain Iteration Types."""
-import random
+import hashlib
 import threading
 import time
 from datetime import datetime
 from typing import Dict, List, TypedDict
 
-from anyio import sleep
 from grpc import Server
 from loguru import logger
-from xrpl.models.response import ResponseStatus
 
 from protos import ripple_pb2
-from rocket_controller.csv_logger import TransactionLogger
+from rocket_controller.csv_logger import TransactionLogger, LedgerLogger, TXProposalLogger, AccountLogger
 from rocket_controller.interceptor_manager import InterceptorManager
 from rocket_controller.ledger_result import LedgerResult
 from rocket_controller.network_manager import NetworkManager
@@ -49,6 +47,9 @@ class TimeBasedIteration:
         self.cur_iteration = 0
         self._ledger_results = LedgerResult()
         self._tx_logger: TransactionLogger | None = None
+        self._ledger_logger: LedgerLogger | None = None
+        self._tx_proposal_logger: TXProposalLogger | None = None
+        self._account_logger: AccountLogger | None = None
         self._spec_checker: SpecChecker | None = None
 
         self._max_iterations = max_iterations
@@ -102,6 +103,7 @@ class TimeBasedIteration:
     def _timeout_reached(self):
         """Function that is called when the timeout is reached."""
         logger.info("Timeout reached.")
+        self._reset_values()
         self.add_iteration()
 
     def _start_transactions(self):
@@ -112,13 +114,14 @@ class TimeBasedIteration:
         self._transaction_timer.start()
 
     def _perform_transactions(self):
-        if not self._validator_nodes:
-            logger.error("No validator nodes available. Cannot perform transaction.")
-            return
 
-        if not self._network:
-            logger.error("Network not initialized. Cannot perform transaction.")
-            return
+        logger.info("Waiting for validator nodes to be initialized...")
+        while not self._validator_nodes:
+            time.sleep(5)
+
+        logger.info("Waiting for network to be initialized...")
+        while not self._network:
+            time.sleep(5)
 
         logger.info("Waiting for ledger to be available before submitting transaction...")
         while len(self.ledger_validation_map) < len(self._validator_nodes) or any(self.ledger_validation_map[node_id]["seq"] < 2 for node_id in range(len(self._validator_nodes))):
@@ -163,18 +166,19 @@ class TimeBasedIteration:
                                              sender_account=sender_account.get('address') if sender_account else None,
                                              sender_account_seed=sender_account.get('seed') if sender_account else None,
                                              destination_account=destination_account.get('address') if destination_account else None)
+            tx_hash = response.result.get('tx_json').get('hash')
             if response.result.get('engine_result') == 'tefPAST_SEQ':
                 # logger.info(f"Sequence number passed, retrying...")
                 time.sleep(0.5)
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
             elif response.result.get('engine_result') == 'tecUNFUNDED_PAYMENT' :
-                logger.info(f"Transaction not submitted: {response.result.get('engine_result_message')}")
-                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
+                logger.info(f"Transaction {tx_hash} not submitted: {response.result.get('engine_result_message')}")
+                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
                 return
             elif response.result.get('engine_result') != 'tesSUCCESS':
-                logger.error(f"Error while submitting transaction: {response.result.get('engine_result')}; Message: {response.result.get('engine_result_message')}")
-                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
+                logger.error(f"Error while submitting transaction {tx_hash}: {response.result.get('engine_result')}; Message: {response.result.get('engine_result_message')}")
+                self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
                 return
         except Exception as e:
             if "Current ledger is unavailable" in str(e):
@@ -196,32 +200,51 @@ class TimeBasedIteration:
                 logger.error(f"Error while submitting transaction: {e}")
                 self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
                 return
-        tx_hash = response.result.get('tx_json').get('hash')
         logger.info(f"Transaction {tx_hash} submitted successfully")
         with self._validation_lock:
             self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
 
     def validate_transactions(self):
-        for sender_alias, receiver_alias, amount, tx_hash in self.to_be_validated_txs:
-            self.validate_transaction(sender_alias, receiver_alias, amount, tx_hash)
+        logger.info("Only showing transactions for Node 0. For all nodes see the transaction log.")
+        for node_id in range(len(self._validator_nodes)):
+            for sender_alias, receiver_alias, amount, tx_hash in self.to_be_validated_txs:
+                self.validate_transaction(node_id, sender_alias, receiver_alias, amount, tx_hash)
 
 
     def validate_transaction(
             self,
+            node_id: int,
             sender_alias: str,
             receiver_alias:str,
             amount: int,
             tx_hash: str):
         if tx_hash == 'None':
-            self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, 'None', False)
-            logger.info(f"Transaction {tx_hash} not submitted, skipping validation.")
+            self._tx_logger.log_transaction_validation(node_id, sender_alias, receiver_alias, amount, 'None', False)
+            if node_id == 0:
+                logger.info(f"Transaction {tx_hash} not submitted, skipping validation.")
         else:
             try:
-                validated = self._network.validate_transaction(tx_hash, 0)
-                logger.info(f"Transaction {tx_hash} validated: {validated}")
-                self._tx_logger.log_transaction_validation(sender_alias, receiver_alias, amount, tx_hash, validated)
+                validated = self._network.validate_transaction(tx_hash, node_id)
+                if node_id == 0:
+                    logger.info(f"Transaction {tx_hash} validated: {validated}")
+                self._tx_logger.log_transaction_validation(node_id, sender_alias, receiver_alias, amount, tx_hash, validated)
             except Exception as e:
                 logger.error(f"Error while validating transaction: {e}")
+
+    def log_transactions_per_ledger(self):
+        for ledger_seq in range(1, self._max_ledger_seq+1):
+            for peer_id in range(len(self._validator_nodes)):
+                ledger_hash, txs, validated, ledger_index = self._network.get_transactions(ledger_seq, peer_id)
+                self._ledger_logger.log_transaction_set(ledger_seq, peer_id, validated, ledger_hash, txs)
+
+        for peer_id in range(len(self._validator_nodes)):
+            ledger_hash, txs, validated, ledger_index = self._network.get_transactions("validated", peer_id)
+            self._ledger_logger.log_transaction_set(f"validated-{ledger_index}", peer_id, validated, ledger_hash, txs)
+
+    def log_accounts(self):
+        # Get account info from node 0 for the last ledger
+        for alias, account in self._network.get_balances(0, self._max_ledger_seq).items():
+            self._account_logger.log_account_info(0, alias, account['address'], account['balance'])
 
     def set_server(self, server: Server):
         """
@@ -266,6 +289,9 @@ class TimeBasedIteration:
         self._log_dir = log_dir
         self._spec_checker = SpecChecker(log_dir)
 
+    def get_log_dir(self):
+        return self._log_dir
+
     def add_iteration(self):
         """Add an iteration to the iteration mechanism, stops all processes when max_iterations is reached."""
         if not self._spec_checker:
@@ -281,14 +307,16 @@ class TimeBasedIteration:
                 t.join()
 
         if self.cur_iteration > 1:
-            self._spec_checker.spec_check(self.cur_iteration - 1)
+            self._spec_checker.spec_check(self.cur_iteration - 1, len(self._validator_nodes), self._max_ledger_seq)
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
             self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self._ledger_logger = LedgerLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self._tx_proposal_logger = TXProposalLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self._account_logger = AccountLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             self.setup_byzantine_nodes()
             self.add_iteration_callbacks()
-            #time.sleep(10) # Wait for the interceptor to stop
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
@@ -383,8 +411,22 @@ class TimeBasedIteration:
                 if node_id not in self._byzantine_nodes
             ):
                 self.validate_transactions()
+                self.log_transactions_per_ledger()
+                self.log_accounts()
                 self._reset_values()
                 self.add_iteration()
+
+    def compute_tx_hash(self, raw_tx_bytes: bytes) -> str:
+        """TX hash with TX_PREFIX bytes, verified to work with practical example."""
+        return hashlib.sha512(b'\x54\x58\x4E\x00' + raw_tx_bytes).digest()[:32].hex().upper()
+
+    def on_transaction(self, tx: ripple_pb2.TMTransaction, sender_peer_id: int, receiver_peer_id: int):
+        self._tx_proposal_logger.log_proposal(
+            sender_peer_id,
+            receiver_peer_id,
+            self.compute_tx_hash(tx.rawTransaction),
+            self.get_ledger_sequence(sender_peer_id)+1
+        )
 
     def get_ledger_sequence(self, node_id: int) -> int:
         """
