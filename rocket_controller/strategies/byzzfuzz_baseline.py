@@ -25,7 +25,7 @@ class ByzzFuzzBaseline(Strategy):
         self,
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
-        iteration_type = LedgerBasedIteration(10, 10, 300),
+        iteration_type = LedgerBasedIteration(10, 10, 200),
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
