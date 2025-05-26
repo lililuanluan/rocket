@@ -36,6 +36,7 @@ spec_check_columns = [
     "reached_goal_ledger",
     "same_ledger_hashes",
     "same_ledger_indexes",
+    "sequence_increments",
 ]
 
 transaction_log_columns = [
@@ -298,6 +299,7 @@ class SpecCheckLogger(CSVLogger):
         reached_goal_ledger: bool | str,
         same_ledger_hashes: bool | str,
         same_ledger_indexes: bool | str,
+        sequence_increments: bool | str,
     ):
         """
         Log a spec check row to the CSV file.
@@ -307,6 +309,7 @@ class SpecCheckLogger(CSVLogger):
             reached_goal_ledger: Whether the goal ledger was reached.
             same_ledger_hashes: Whether the ledger hashes were the same.
             same_ledger_indexes: Whether the ledger indexes were the same.
+            sequence_increments: Whether all sequence increments passed.
         """
         with open(self.filepath, mode="a", newline="") as file:
             writer = csv.writer(file)
@@ -316,6 +319,7 @@ class SpecCheckLogger(CSVLogger):
                     reached_goal_ledger,
                     same_ledger_hashes,
                     same_ledger_indexes,
+                    sequence_increments,
                 ]
             )
 

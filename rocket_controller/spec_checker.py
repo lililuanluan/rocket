@@ -37,7 +37,7 @@ class SpecChecker:
         self.spec_check_logger: SpecCheckLogger = SpecCheckLogger(log_dir)
         self.log_dir: str = log_dir
 
-    def spec_check(self, iteration: int, nodes: int, goal_ledger_seq: int):
+    def spec_check(self, iteration: int, nodes: int, goal_ledger_seq: int, byzantine_nodes: List[int] = []) -> None:
         """
         Do a specification check for the current iteration and log the results.
 
@@ -76,14 +76,14 @@ class SpecChecker:
         except csv.Error as e:
             logger.critical(f"CSV Error: {e}")
             self.spec_check_logger.log_spec_check(
-                iteration, f"CSV Error: {e}", "-", "-"
+                iteration, f"CSV Error: {e}", "-", "-", "-"
             )
             return
 
         if not ledgers_data:
             logger.critical("No valid ledger data found.")
             self.spec_check_logger.log_spec_check(
-                iteration, "No valid ledger data found.", "-", "-"
+                iteration, "No valid ledger data found.", "-", "-", "-"
             )
             return
 
@@ -94,32 +94,49 @@ class SpecChecker:
 
         all_hashes_pass = True
         all_sequences_pass = True
+        honest_nodes = [node for node in range(nodes) if node not in byzantine_nodes]
+
         all_ledger_goal_reached = (
-                len(ledgers_data[max_seq]) == nodes
-                and max_seq >= goal_ledger_seq
+            len([record for record in ledgers_data[max_seq] if record['node_id'] in honest_nodes]) == len(honest_nodes)
+            and max_seq >= goal_ledger_seq
         )
         for _, records in ledgers_data.items():
+            honest_records = [record for record in records if record['node_id'] in honest_nodes]
+
             ledger_hashes_same = all(
-               x["ledger_hash"] == records[0]["ledger_hash"] for x in records if x["ledger_hash"] != "NOT FOUND"
+                x["ledger_hash"] == honest_records[0]["ledger_hash"] for x in honest_records if x["ledger_hash"] != "NOT FOUND"
             )
 
             ledger_seq_same = all(
-                x["ledger_seq"] == records[0]["ledger_seq"] for x in records if x["ledger_seq"] != -1
+                x["ledger_seq"] == honest_records[0]["ledger_seq"] for x in honest_records if x["ledger_seq"] != -1
             )
+
             all_hashes_pass &= ledger_hashes_same
             all_sequences_pass &= ledger_seq_same
+
+        # Check if sequence numbers increase by 1 for each node ID in honest nodes
+        all_sequence_increments_pass = True
+        for node_id in honest_nodes:
+            node_sequences = sorted(
+                [ledger_seq for ledger_seq, records in ledgers_data.items() if any(record['node_id'] == node_id for record in records)]
+            )
+            if not all(node_sequences[i] + 1 == node_sequences[i + 1] for i in range(len(node_sequences) - 1)):
+                all_sequence_increments_pass = False
+                break
 
         self.spec_check_logger.log_spec_check(
             iteration,
             all_ledger_goal_reached,
             all_hashes_pass,
             all_sequences_pass,
+            all_sequence_increments_pass,
         )
 
         logger.info(
             f"Specification check for iteration {iteration}: "
             f"reached goal ledger: {all_ledger_goal_reached}, "
-            f"same ledger hashes: {all_hashes_pass}, same ledger sequences: {all_sequences_pass}"
+            f"same ledger hashes: {all_hashes_pass}, same ledger sequences: {all_sequences_pass}, "
+            f"sequence increments: {all_sequence_increments_pass}"
         )
 
     def aggregate_spec_checks(self):
@@ -139,6 +156,7 @@ class SpecChecker:
                 if row["reached_goal_ledger"] == "True"
                 and row["same_ledger_hashes"] == "True"
                 and row["same_ledger_indexes"] == "True"
+                and row["sequence_increments"] == "True"
             )
             timeout_before_startup = sum(
                 1
@@ -155,6 +173,10 @@ class SpecChecker:
                 if row["same_ledger_hashes"] == "False"
                 or row["same_ledger_indexes"] == "False"
             )
+            failed_integrity = sum(
+                1 for row in rows
+                if row["sequence_increments"] == "False"
+            )
             failed_termination_iterations = [
                 row["iteration"]
                 for row in rows
@@ -166,6 +188,11 @@ class SpecChecker:
                 if row["same_ledger_hashes"] == "False"
                 or row["same_ledger_indexes"] == "False"
             ]
+            failed_integrity_iterations = [
+                row["iteration"]
+                for row in rows
+                if row["sequence_increments"] == "False"
+            ]
 
             aggregated_data = {
                 "total_iterations": total_iterations,
@@ -174,8 +201,10 @@ class SpecChecker:
                 "errors": errors,
                 "failed_termination": failed_termination,
                 "failed_agreement": failed_agreement,
+                "failed_integrity": failed_integrity,
                 "failed_termination_iterations": failed_termination_iterations,
                 "failed_agreement_iterations": failed_agreement_iterations,
+                "failed_integrity_iterations": failed_integrity_iterations,
             }
 
             logger.info(f"Aggregated spec check results: {aggregated_data}")

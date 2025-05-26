@@ -309,7 +309,7 @@ class TimeBasedIteration:
                 t.join()
 
         if self.cur_iteration > 1:
-            self._spec_checker.spec_check(self.cur_iteration - 1, len(self._validator_nodes), self._max_ledger_seq)
+            self._spec_checker.spec_check(self.cur_iteration - 1, len(self._validator_nodes), self._max_ledger_seq, self._byzantine_nodes)
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
