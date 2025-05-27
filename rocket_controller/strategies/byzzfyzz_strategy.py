@@ -47,6 +47,7 @@ class ByzzFuzzStrategy(Strategy):
 
         if self.params["seed"] is not None:
             random.seed(self.params["seed"])
+        self.seed = self.params["seed"]
 
         logger.debug(f"{self.network.network_config["number_of_nodes"]} nodes in the network.") # 0 nodes, take it from iteration type
 
@@ -123,24 +124,51 @@ class ByzzFuzzStrategy(Strategy):
 
         if isinstance(message, ripple_pb2.TMProposeSet):
             logger.debug(f"Corrupting TMProposeSet message")
-            return self.corrupt_TMProposeSet(message)
+            peer_to_id = self.network.port_to_id(packet.to_port)
+            current_receiver_round = self.get_current_round_of_node(peer_to_id)
+            return self.corrupt_TMProposeSet(message, message_type_no, current_receiver_round)
         elif isinstance(message, ripple_pb2.TMValidation):
             logger.debug(f"Corrupting TMValidation message")
-            return self.corrupt_TMValidation(message)
+            return self.corrupt_TMValidation(message, message_type_no)
         elif isinstance(message, ripple_pb2.TMTransaction):
             logger.debug(f"Corrupting TMTTransaction message")
-            return corrupt_TMTransaction(message)
+            return corrupt_TMTransaction(message, message_type_no)
         
         return packet.data, 0, 1
     
-    def corrupt_TMProposeSet(self, message: bytes) -> tuple[bytes, int, int]:
-        # Mutate the closeTime of each message
-        message.closeTime = datetime_to_ripple_time(datetime.now())
+    def corrupt_TMProposeSet(self, message: bytes, message_type_no: int, current_receiver_round: int) -> tuple[bytes, int, int]:
+        # small scope
+        if self.small_scope:
+            # all previous transactions that we have tried to submit and (did not) succeed
+            # propose messages usually include multiple transactions in the currentTxHash field, but here im modifying it to include just one transaction
+            # i hope thats fine
+            # or i could use old transaction set hashes from proposals
+            transaction_hash_set = [tx[3] for tx in self.iteration_type.to_be_validated_txs]
 
-        # message.proposeSeq
-        # message.currentTxHash
+            # 50/50 probability for either mutating proposeSeq or currentTxHash
+            if random.choice([True, False]):  
+                # choose a random sequence number from 1 to current_receiver_round+1
+                logger.debug(f"Corrupting proposeSeq in TMProposeSet message which was {message.proposeSeq}")
+                message.proposeSeq = random.randint(1, current_receiver_round + 1)
+                logger.debug(f"New proposeSeq in TMProposeSet message is {message.proposeSeq}")
+            else:
+                # choose a random transaction hash from the to_be_validated_txs
+                # and convert it to bytes
+                logger.debug(f"Corrupting currentTxHash in TMProposeSet message which was {message.currentTxHash.hex()}")
+                message.currentTxHash = self.iteration_type.reverse_compute_tx_hash(random.choice(transaction_hash_set))
+                logger.debug(f"New currentTxHash in TMProposeSet message is {message.currentTxHash.hex()}")
+        # any scope
+        else:
+            if random.choice([True, False]):  
+                logger.debug(f"Corrupting proposeSeq in TMProposeSet message which was {message.proposeSeq}")
+                message.proposeSeq = self.seed/2
+                logger.debug(f"New proposeSeq in TMProposeSet message is {message.proposeSeq}")
+            else:
+                # Generate random transaction bytes
+                logger.debug(f"Corrupting currentTxHash in TMProposeSet message which was {message.currentTxHash.hex()}")
+                message.currentTxHash = random.randbytes(32)
+                logger.debug(f"New currentTxHash in TMProposeSet message is {message.currentTxHash.hex()}")
 
-        # Sign the message
         signed_message = PacketEncoderDecoder.sign_message(
             message,
             self.network.public_to_private_key_map[message.nodePubKey.hex()],
@@ -152,11 +180,32 @@ class ByzzFuzzStrategy(Strategy):
             1,
         )
     
-    def corrupt_TMValidation(self, message: bytes) -> tuple[bytes, int, int]:
-        return packet.data, 0, 1
+    def corrupt_TMValidation(self, message: bytes, message_type_no: int) -> tuple[bytes, int, int]:
+        if self.small:
+            message.validation = message.validation
+        else:
+            message.validation = random.randbytes(32)
+        return (
+            PacketEncoderDecoder.encode_message(message, message_type_no),
+            0,
+            1,
+        )
 
-    def corrupt_TMTransaction(self, message: bytes) -> tuple[bytes, int, int]:
-        return packet.data, 0, 1
+    def corrupt_TMTransaction(self, message: bytes, message_type_no: int) -> tuple[bytes, int, int]:
+        if self.small_scope:
+            logger.debug(f"Corrupting TMTTransaction message which was {message.rawTransaction.hex()}")
+            transaction_hash_set = self.iteration_type.to_be_validated_txs 
+            message.rawTransaction = self.iteration_type.reverse_compute_tx_hash(random.choice(transaction_hash_set))
+            logger.debug(f"New TMTTransaction message is {message.rawTransaction.hex()}")
+        else:
+            logger.debug(f"Corrupting TMTTransaction message which was {message.currentTxHash.hex()}")
+            message.currentTxHash = random.randbytes(32)
+            logger.debug(f"New TMTTransaction message is {message.currentTxHash.hex()}")
+        return (
+            PacketEncoderDecoder.encode_message(message, message_type_no),
+            0,
+            1,
+        )
 
     def get_current_round_of_node(self, node_id: int) -> int:
         """Check if the current round is greater than 1 and if so, return True."""

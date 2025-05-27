@@ -304,3 +304,17 @@ def test_set_log_dir(mock_spec_checker):
     iteration.set_log_dir("test")
     assert iteration._log_dir == "test"
     mock_spec_checker.assert_called_once_with("test")
+
+
+def test_reverse_compute_tx_hash():
+    """Test the reverse_compute_tx_hash function."""
+    iteration = TimeBasedIteration(max_iterations=1, timeout_seconds=15)
+
+    raw_tx_bytes = b"Test transaction data"
+
+    tx_hash_hex = iteration.compute_tx_hash(raw_tx_bytes)
+
+    reversed_bytes = iteration.reverse_compute_tx_hash(tx_hash_hex)
+
+    expected_bytes = bytes.fromhex(tx_hash_hex)
+    assert reversed_bytes == expected_bytes, "Reversed bytes do not match the original hash bytes."

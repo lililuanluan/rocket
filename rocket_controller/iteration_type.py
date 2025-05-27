@@ -73,6 +73,7 @@ class TimeBasedIteration:
         self.to_be_validated_txs: List[(str, str, int, str)] = [] # sender_alias, receiver_alias, amount, tx_hash
         self._validation_lock = threading.Lock()
 
+        self._byzantine_nodes = []
         self._on_new_iteration_callbacks = []
     
     def register_callback(self, callback):
@@ -421,6 +422,10 @@ class TimeBasedIteration:
     def compute_tx_hash(self, raw_tx_bytes: bytes) -> str:
         """TX hash with TX_PREFIX bytes, verified to work with practical example."""
         return hashlib.sha512(b'\x54\x58\x4E\x00' + raw_tx_bytes).digest()[:32].hex().upper()
+
+    def reverse_compute_tx_hash(self, tx_hash_hex: str) -> bytes:
+        """Convert a hexadecimal string representation of a transaction hash back to bytes."""
+        return bytes.fromhex(tx_hash_hex)
 
     def on_transaction(self, tx: ripple_pb2.TMTransaction, sender_peer_id: int, receiver_peer_id: int):
         self._tx_proposal_logger.log_proposal(
