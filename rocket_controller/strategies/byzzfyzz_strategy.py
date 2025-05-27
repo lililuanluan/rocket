@@ -24,7 +24,7 @@ class ByzzFuzzStrategy(Strategy):
         self,
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
-        iteration_type = LedgerBasedIteration(10, 10, 200),
+        iteration_type = LedgerBasedIteration(20, 10, 200),
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -45,9 +45,12 @@ class ByzzFuzzStrategy(Strategy):
             strategy_overrides=strategy_overrides,
         )
 
-        if self.params["seed"] is not None:
-            random.seed(self.params["seed"])
-        self.seed = self.params["seed"]
+        if self.params["seed"] is None:
+            self.seed = random.randint(0, 1000000)
+            logger.debug(f"Seed not specified, using {self.seed}")
+        else:
+            self.seed = self.params["seed"]
+        random.seed(self.seed)
 
         logger.debug(f"{self.network.network_config["number_of_nodes"]} nodes in the network.") # 0 nodes, take it from iteration type
 
@@ -164,7 +167,6 @@ class ByzzFuzzStrategy(Strategy):
                 message.proposeSeq = self.seed/2
                 logger.debug(f"New proposeSeq in TMProposeSet message is {message.proposeSeq}")
             else:
-                # Generate random transaction bytes
                 logger.debug(f"Corrupting currentTxHash in TMProposeSet message which was {message.currentTxHash.hex()}")
                 message.currentTxHash = random.randbytes(32)
                 logger.debug(f"New currentTxHash in TMProposeSet message is {message.currentTxHash.hex()}")
