@@ -103,8 +103,10 @@ class SpecChecker:
         for _, records in ledgers_data.items():
             honest_records = [record for record in records if record['node_id'] in honest_nodes]
 
+            validated_records = [x for x in honest_records if x.get("validated") == "True"]
+
             ledger_hashes_same = all(
-                x["ledger_hash"] == honest_records[0]["ledger_hash"] for x in honest_records if x["ledger_hash"] != "NOT FOUND"
+                x["ledger_hash"] == validated_records[0]["ledger_hash"] for x in validated_records if x["ledger_hash"] != "NOT FOUND"
             )
 
             ledger_seq_same = all(
