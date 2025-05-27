@@ -37,6 +37,7 @@ spec_check_columns = [
     "same_ledger_hashes",
     "same_ledger_indexes",
     "sequence_increments",
+    "transactions_validated",
 ]
 
 transaction_log_columns = [
@@ -300,6 +301,7 @@ class SpecCheckLogger(CSVLogger):
         same_ledger_hashes: bool | str,
         same_ledger_indexes: bool | str,
         sequence_increments: bool | str,
+        transactions_validated: bool | str,
     ):
         """
         Log a spec check row to the CSV file.
@@ -310,6 +312,7 @@ class SpecCheckLogger(CSVLogger):
             same_ledger_hashes: Whether the ledger hashes were the same.
             same_ledger_indexes: Whether the ledger indexes were the same.
             sequence_increments: Whether all sequence increments passed.
+            transactions_validated: Whether all transactions were validated.
         """
         with open(self.filepath, mode="a", newline="") as file:
             writer = csv.writer(file)
@@ -320,6 +323,7 @@ class SpecCheckLogger(CSVLogger):
                     same_ledger_hashes,
                     same_ledger_indexes,
                     sequence_increments,
+                    transactions_validated,
                 ]
             )
 
