@@ -24,7 +24,7 @@ class ByzzFuzzStrategy(Strategy):
         self,
         network_config_path: str = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
-        iteration_type = LedgerBasedIteration(20, 10, 200),
+        iteration_type = LedgerBasedIteration(10, 10, 200),
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -134,8 +134,8 @@ class ByzzFuzzStrategy(Strategy):
             logger.debug(f"Corrupting TMValidation message")
             return self.corrupt_TMValidation(message, message_type_no)
         elif isinstance(message, ripple_pb2.TMTransaction):
-            logger.debug(f"Corrupting TMTTransaction message")
-            return corrupt_TMTransaction(message, message_type_no)
+            logger.debug(f"Corrupting TMTransaction message")
+            return self.corrupt_TMTransaction(message, message_type_no)
         
         return packet.data, 0, 1
     
@@ -164,7 +164,7 @@ class ByzzFuzzStrategy(Strategy):
         else:
             if random.choice([True, False]):  
                 logger.debug(f"Corrupting proposeSeq in TMProposeSet message which was {message.proposeSeq}")
-                message.proposeSeq = self.seed/2
+                message.proposeSeq = random.randint(1, 100) # is 100 ok?
                 logger.debug(f"New proposeSeq in TMProposeSet message is {message.proposeSeq}")
             else:
                 logger.debug(f"Corrupting currentTxHash in TMProposeSet message which was {message.currentTxHash.hex()}")
@@ -183,10 +183,12 @@ class ByzzFuzzStrategy(Strategy):
         )
     
     def corrupt_TMValidation(self, message: bytes, message_type_no: int) -> tuple[bytes, int, int]:
-        if self.small:
+        if self.small_scope:
             message.validation = message.validation
         else:
+            logger.debug(f"Corrupting TMValidation message which was {message.validation.hex()}")
             message.validation = random.randbytes(32)
+            logger.debug(f"New TMValidation message is {message.validation.hex()}")
         return (
             PacketEncoderDecoder.encode_message(message, message_type_no),
             0,
@@ -195,14 +197,14 @@ class ByzzFuzzStrategy(Strategy):
 
     def corrupt_TMTransaction(self, message: bytes, message_type_no: int) -> tuple[bytes, int, int]:
         if self.small_scope:
-            logger.debug(f"Corrupting TMTTransaction message which was {message.rawTransaction.hex()}")
-            transaction_hash_set = self.iteration_type.to_be_validated_txs 
+            logger.debug(f"Corrupting TMTransaction message which was {message.rawTransaction.hex()}")
+            transaction_hash_set = [tx[3] for tx in self.iteration_type.to_be_validated_txs] 
             message.rawTransaction = self.iteration_type.reverse_compute_tx_hash(random.choice(transaction_hash_set))
-            logger.debug(f"New TMTTransaction message is {message.rawTransaction.hex()}")
+            logger.debug(f"New TMTransaction message is {message.rawTransaction.hex()}")
         else:
-            logger.debug(f"Corrupting TMTTransaction message which was {message.currentTxHash.hex()}")
-            message.currentTxHash = random.randbytes(32)
-            logger.debug(f"New TMTTransaction message is {message.currentTxHash.hex()}")
+            logger.debug(f"Corrupting TMTransaction message which was {message.rawTransaction.hex()}")
+            message.rawTransaction = random.randbytes(32)
+            logger.debug(f"New TMTransaction message is {message.rawTransaction.hex()}")
         return (
             PacketEncoderDecoder.encode_message(message, message_type_no),
             0,
