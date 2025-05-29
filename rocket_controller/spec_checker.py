@@ -157,7 +157,7 @@ class SpecChecker:
             all_hashes_pass &= ledger_hashes_same
             all_sequences_pass &= ledger_seq_same
 
-            for record in honest_records: # do we only check the validity of honest nodes? so if a node is byzantine it might include some invalid transactions in its history but thats fine?
+            for record in honest_records:
                 ledger_seq = record["ledger_seq"]
                 transactions = record["transactions"]
                 # Check if each transaction is in the tx_proposals_data for sequences from 1 to ledger_seq - 1

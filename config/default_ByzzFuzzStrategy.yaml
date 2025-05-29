@@ -2,4 +2,4 @@ rounds: 5
 network_faults: 1
 process_faults: 1
 seed: null
-small_scope: False
+small_scope: True

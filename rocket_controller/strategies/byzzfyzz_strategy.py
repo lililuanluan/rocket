@@ -61,6 +61,9 @@ class ByzzFuzzStrategy(Strategy):
         self.small_scope = self.params["small_scope"]
 
         self.iteration_type.register_callback(self.init_faults)
+
+        self.old_proposals = []
+        self.old_validations = []
     
     def init_faults(self) -> None:
         self.network_faults_list = []
@@ -99,6 +102,8 @@ class ByzzFuzzStrategy(Strategy):
         Returns:
             Tuple[bytes, int, int]: A tuple of the possible mutated message as bytes, an action as int and the send amount.
         """
+        self.save_packet_for_mutation(packet)
+
         peer_from_id = self.network.port_to_id(packet.from_port)
         peer_to_id = self.network.port_to_id(packet.to_port)
 
@@ -116,7 +121,20 @@ class ByzzFuzzStrategy(Strategy):
             return self.corrupt_message(packet)
 
         return packet.data, 0, 1
-    
+
+    def save_packet_for_mutation(self, packet: packet_pb2.Packet) -> None:
+        try:
+            message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
+        except DecodingNotSupportedError:
+            logger.error(
+                f"Decoding of message type {message_type_no} not supported"	)
+            return packet.data, 0, 1
+
+        if isinstance(message, ripple_pb2.TMProposeSet):
+            self.old_proposals.append(message.currentTxHash)
+        elif isinstance(message, ripple_pb2.TMValidation):
+            self.old_validations.append(message.validation)
+
     def corrupt_message(self, packet: packet_pb2.Packet) -> tuple[bytes, int, int]:
         try:
             message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
@@ -144,31 +162,31 @@ class ByzzFuzzStrategy(Strategy):
         if self.small_scope:
             # all previous transactions that we have tried to submit and (did not) succeed
             # propose messages usually include multiple transactions in the currentTxHash field, but here im modifying it to include just one transaction
-            # i hope thats fine
-            # or i could use old transaction set hashes from proposals
-            transaction_hash_set = [tx[3] for tx in self.iteration_type.to_be_validated_txs]
 
             # 50/50 probability for either mutating proposeSeq or currentTxHash
             if random.choice([True, False]):  
                 # choose a random sequence number from 1 to current_receiver_round+1
                 logger.debug(f"Corrupting proposeSeq in TMProposeSet message which was {message.proposeSeq}")
-                message.proposeSeq = random.randint(1, current_receiver_round + 1)
+                if random.choice([True, False]):
+                    message.proposeSeq += 1
+                else:
+                    message.proposeSeq -= 1
                 logger.debug(f"New proposeSeq in TMProposeSet message is {message.proposeSeq}")
             else:
                 # choose a random transaction hash from the to_be_validated_txs
                 # and convert it to bytes
                 logger.debug(f"Corrupting currentTxHash in TMProposeSet message which was {message.currentTxHash.hex()}")
-                message.currentTxHash = self.iteration_type.reverse_compute_tx_hash(random.choice(transaction_hash_set))
+                message.currentTxHash = random.choice(self.old_proposals)
                 logger.debug(f"New currentTxHash in TMProposeSet message is {message.currentTxHash.hex()}")
         # any scope
         else:
             if random.choice([True, False]):  
                 logger.debug(f"Corrupting proposeSeq in TMProposeSet message which was {message.proposeSeq}")
-                message.proposeSeq = random.randint(1, 100) # is 100 ok?
+                message.proposeSeq = random.randint(1, 100)
                 logger.debug(f"New proposeSeq in TMProposeSet message is {message.proposeSeq}")
             else:
                 logger.debug(f"Corrupting currentTxHash in TMProposeSet message which was {message.currentTxHash.hex()}")
-                message.currentTxHash = random.randbytes(32)
+                message.currentTxHash = b"\x00" * 32
                 logger.debug(f"New currentTxHash in TMProposeSet message is {message.currentTxHash.hex()}")
 
         signed_message = PacketEncoderDecoder.sign_message(
@@ -184,10 +202,12 @@ class ByzzFuzzStrategy(Strategy):
     
     def corrupt_TMValidation(self, message: bytes, message_type_no: int) -> tuple[bytes, int, int]:
         if self.small_scope:
-            message.validation = message.validation
+            logger.debug(f"Corrupting TMValidation message which was {message.validation.hex()}")
+            message.validation = random.choice(self.old_validations)
+            logger.debug(f"New TMValidation message is {message.validation.hex()}")
         else:
             logger.debug(f"Corrupting TMValidation message which was {message.validation.hex()}")
-            message.validation = random.randbytes(32)
+            message.validation = b"\x00" * 32
             logger.debug(f"New TMValidation message is {message.validation.hex()}")
         return (
             PacketEncoderDecoder.encode_message(message, message_type_no),
@@ -203,7 +223,7 @@ class ByzzFuzzStrategy(Strategy):
             logger.debug(f"New TMTransaction message is {message.rawTransaction.hex()}")
         else:
             logger.debug(f"Corrupting TMTransaction message which was {message.rawTransaction.hex()}")
-            message.rawTransaction = random.randbytes(32)
+            message.rawTransaction = b"\x00" * 32
             logger.debug(f"New TMTransaction message is {message.rawTransaction.hex()}")
         return (
             PacketEncoderDecoder.encode_message(message, message_type_no),
