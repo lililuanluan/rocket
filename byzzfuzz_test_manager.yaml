@@ -1,0 +1,15 @@
+general:
+  strategy: ByzzFuzzBaseline
+  seed: null
+
+byzzfuzz:
+  rounds: 8
+  min_network_faults: 0
+  max_network_faults: 2
+  min_process_faults: 0
+  max_process_faults: 2
+  small_scope: true
+
+baseline:
+  drop_probability: 0.2
+  corrupt_probability: 0.2

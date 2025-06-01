@@ -22,9 +22,14 @@ from loguru import logger
 class ByzzFuzzStrategy(Strategy):
     def __init__(
         self,
-        network_config_path: str = "./config/network/default_network.yaml",
+        network_config_path: str | None = "./config/network/default_network.yaml",
         strategy_config_path: str | None = None,
-        iteration_type = LedgerBasedIteration(10, 10, 200),
+        auto_partition: bool = True,
+        auto_parse_identical: bool = True,
+        auto_parse_subsets: bool = True,
+        keep_action_log: bool = True,
+        iteration_type = LedgerBasedIteration(5, 10, 200),
+        log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -38,19 +43,17 @@ class ByzzFuzzStrategy(Strategy):
             strategy_overrides: A dictionary containing parameter names and values which override the strategy config.
         """
         super().__init__(
-            network_config_path=network_config_path,
-            strategy_config_path=strategy_config_path,
-            iteration_type=iteration_type,
-            network_overrides=network_overrides,
-            strategy_overrides=strategy_overrides,
+            network_config_path,
+            strategy_config_path,
+            auto_partition,
+            auto_parse_identical,
+            auto_parse_subsets,
+            keep_action_log,
+            iteration_type,
+            log_dir,
+            network_overrides,
+            strategy_overrides,
         )
-
-        if self.params["seed"] is None:
-            self.seed = random.randint(0, 1000000)
-            logger.debug(f"Seed not specified, using {self.seed}")
-        else:
-            self.seed = self.params["seed"]
-        random.seed(self.seed)
 
         logger.debug(f"{self.network.network_config["number_of_nodes"]} nodes in the network.") # 0 nodes, take it from iteration type
 

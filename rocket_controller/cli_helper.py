@@ -76,7 +76,7 @@ def parse_args() -> argparse.Namespace:
         "If set, overrides the encoding specified in the strategy configuration file.",
         metavar="ENCODING",
     )
-    parser.add_argument(
+    parser.add_argument( 
         "--overrides",
         type=check_valid_strategy_overrides,
         default=None,
@@ -90,6 +90,48 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="The directory where the logs should be stored. Defaults to ./logs/timestamp",
         metavar="PATH",
+    )
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=None,
+        help="The number of rounds to run in the strategy. Overrides the configuration file.",
+        metavar="ROUNDS",
+    )
+    parser.add_argument(
+        "--network_faults",
+        type=int,
+        default=None,
+        help="The number of network faults to simulate. Overrides the configuration file.",
+        metavar="NETWORK_FAULTS",
+    )
+    parser.add_argument(
+        "--process_faults",
+        type=int,
+        default=None,
+        help="The number of process faults to simulate. Overrides the configuration file.",
+        metavar="PROCESS_FAULTS",
+    )
+    parser.add_argument(
+        "--small_scope",
+        type=bool,
+        default=None,
+        help="Whether to use a small scope for the strategy. Overrides the configuration file.",
+        metavar="SMALL_SCOPE",
+    )
+    parser.add_argument(
+        "--drop_probability",
+        type=float,
+        default=None,
+        help="The probability of dropping a message. Overrides the configuration file.",
+        metavar="DROP_PROBABILITY",
+    )
+    parser.add_argument(
+        "--corrupt_probability",
+        type=float,
+        default=None,
+        help="The probability of corrupting a message. Overrides the configuration file.",
+        metavar="CORRUPT_PROBABILITY",
     )
 
     return parser.parse_args()
@@ -184,6 +226,18 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
 
     if args.encoding:
         strategy_overrides["encoding"] = args.encoding
+    if args.rounds:
+        strategy_overrides["rounds"] = args.rounds
+    if args.network_faults:
+        strategy_overrides["network_faults"] = args.network_faults
+    if args.process_faults:
+        strategy_overrides["process_faults"] = args.process_faults
+    if args.small_scope is not None:
+        strategy_overrides["small_scope"] = args.small_scope
+    if args.drop_probability:
+        strategy_overrides["drop_probability"] = args.drop_probability
+    if args.corrupt_probability:
+        strategy_overrides["corrupt_probability"] = args.corrupt_probability
     if args.overrides and len(args.overrides.keys()) > 0:
         strategy_overrides += args.overrides
 

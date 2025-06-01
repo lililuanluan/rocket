@@ -1,7 +1,7 @@
 import random
 from abc import ABC, abstractmethod
 
-from deap import tools
+#from deap import tools
 
 
 class CrossoverOperator(ABC):
