@@ -28,7 +28,7 @@ class ByzzFuzzBaseline(Strategy):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
-        iteration_type = LedgerBasedIteration(300, 8, 200),
+        iteration_type = LedgerBasedIteration(300, 10, 200),
         log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
