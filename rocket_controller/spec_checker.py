@@ -75,7 +75,7 @@ class SpecChecker:
                         continue
         except csv.Error as e:
             logger.critical(f"CSV Error: {e}")
-            return
+            raise IOError(f"Error reading ledger file: {ledger_file_path}") from e
 
         if not tx_honest_proposals_data:
             logger.critical("No valid tx_proposals data found.")
