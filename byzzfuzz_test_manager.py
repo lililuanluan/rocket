@@ -95,7 +95,7 @@ class ByzzFuzzTestManager:
                 shutil.copytree(f"logs/{log_dir}", f"logs/failed/{log_dir}/retry-{retry}")
                 shutil.rmtree(f"logs/{log_dir}")
                 sleep(5)
-                return self.run_rocket(encoding, log_dir, retry)
+                return self.run_rocket(log_dir, network_faults, process_faults, retry)
             raise Exception(f"Rocket failed after {retry} retries. THIS IS NOT GOOD!")
 
         average_validation_time = process_results(log_dir)

@@ -197,12 +197,12 @@ class ActionLogger(CSVLogger):
         # Note: timestamp is milliseconds since epoch (January 1, 1970)
         self.log_row(
             [
-                int(datetime.now().timestamp() * 1000)
+                datetime.fromtimestamp(datetime.now().timestamp()).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
                 if custom_timestamp is None
-                else custom_timestamp,
-                int(datetime.now().timestamp() * 1000)
+                else datetime.fromtimestamp(custom_timestamp/1000).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                datetime.fromtimestamp(datetime.now().timestamp()).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
                 if sent_timestamp is None
-                else sent_timestamp,
+                else datetime.fromtimestamp(sent_timestamp/1000).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
                 action,
                 send_amount,
                 from_node_id,
