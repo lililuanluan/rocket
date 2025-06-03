@@ -28,7 +28,7 @@ class ByzzFuzzBaseline(Strategy):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
-        iteration_type = LedgerBasedIteration(300, 10, 200),
+        iteration_type = LedgerBasedIteration(100, 20, 200),
         log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
@@ -79,6 +79,10 @@ class ByzzFuzzBaseline(Strategy):
         Returns:
             Tuple[bytes, int, int]: A tuple of the possible mutated message as bytes, an action as int and the send amount.
         """
+        #cur_ledger_infos = self.iteration_type.ledger_validation_map.values()
+        #if cur_ledger_infos:
+        #    logger.debug("Current ledger seq status: " + ", ".join(str(entry['seq']) for entry in cur_ledger_infos))
+
         # drop message
         peer_from_id = self.network.port_to_id(packet.from_port)
         peer_to_id = self.network.port_to_id(packet.to_port)

@@ -105,6 +105,10 @@ class ByzzFuzzStrategy(Strategy):
         Returns:
             Tuple[bytes, int, int]: A tuple of the possible mutated message as bytes, an action as int and the send amount.
         """
+        #cur_ledger_infos = self.iteration_type.ledger_validation_map.values()
+        #if cur_ledger_infos:
+        #    logger.debug("Current ledger seq status: " + ", ".join(str(entry['seq']) for entry in cur_ledger_infos))
+
         self.save_packet_for_mutation(packet)
 
         peer_from_id = self.network.port_to_id(packet.from_port)
