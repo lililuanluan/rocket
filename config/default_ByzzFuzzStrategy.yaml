@@ -1,4 +1,4 @@
 rounds: 8
-network_faults: 2
-process_faults: 2
-small_scope: True
+network_faults: 5
+process_faults: 5
+small_scope: False

@@ -205,7 +205,7 @@ def check_valid_encoding(encoding: str) -> List[int]:
 
 def process_args(args: argparse.Namespace) -> Dict[str, Any]:
     """
-    Parses the command line arguments.
+    Parses the command line arguments. 
 
     Args:
         args: The command line arguments.
