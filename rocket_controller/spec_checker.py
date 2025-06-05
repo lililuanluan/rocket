@@ -92,7 +92,7 @@ class SpecChecker:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     # Basic type conversion and validation
-                    if "validated" in row["ledger_seq"] :
+                    if ("validated" in row["ledger_seq"]) or (row["validated"] != "True"):
                         continue
                     try:
                         node_id = int(row["peer_id"])
@@ -136,8 +136,8 @@ class SpecChecker:
         honest_nodes = [node for node in range(nodes) if node not in byzantine_nodes]
 
         all_ledger_goal_reached = (
-            len([record for record in ledgers_data[max_seq] if record['node_id'] in honest_nodes]) == len(honest_nodes)
-            and max_seq >= goal_ledger_seq
+            max_seq >= goal_ledger_seq and
+            len([record for record in ledgers_data[goal_ledger_seq] if record['node_id'] in honest_nodes]) == len(honest_nodes)
         )
         for _, records in ledgers_data.items():
             honest_records = [record for record in records if record['node_id'] in honest_nodes]
