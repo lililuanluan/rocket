@@ -1,13 +1,13 @@
 general:
-  strategy: ByzzFuzzBaseline
+  strategy: ByzzFuzzStrategy
   seed: null
 
 byzzfuzz:
   rounds: 8
-  min_network_faults: 4
-  max_network_faults: 4
-  min_process_faults: 4
-  max_process_faults: 4
+  min_network_faults: 1
+  max_network_faults: 5
+  min_process_faults: 1
+  max_process_faults: 5
   small_scope: false
 
 baseline:

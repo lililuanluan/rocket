@@ -107,10 +107,11 @@ class ByzzFuzzTestManager:
         if self.strategy == "ByzzFuzzStrategy":
             for network_faults in range(self.min_network_faults, self.max_network_faults + 1):
                 for process_faults in range(self.min_process_faults, self.max_process_faults + 1):
-                    print(f"Testing combination: network_faults={network_faults}, process_faults={process_faults}")
-                    start_time = datetime.now()
-                    log_dir = f"{format_datetime(start_time)}/network_faults-{network_faults}_process_faults-{process_faults}"
-                    self.run_rocket(log_dir, network_faults, process_faults)
+                    if (network_faults == 2 and process_faults == 5) or network_faults > 2:
+                        print(f"Testing combination: network_faults={network_faults}, process_faults={process_faults}")
+                        start_time = datetime.now()
+                        log_dir = f"{format_datetime(start_time)}/xrpld-2.4.0-100UNL-small_scope-network_faults-{network_faults}_process_faults-{process_faults}"
+                        self.run_rocket(log_dir, network_faults, process_faults)
         elif self.strategy == "ByzzFuzzBaseline":
             start_time = datetime.now()
             log_dir = f"{format_datetime(start_time)}/drop-{self.drop_probability}_corrupt-{self.corrupt_probability}"
