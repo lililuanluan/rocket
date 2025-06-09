@@ -28,7 +28,7 @@ class ByzzFuzzBaseline(Strategy):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
-        iteration_type = LedgerBasedIteration(100, 20, 200),
+        iteration_type = LedgerBasedIteration(100, 15, 130),
         log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
@@ -86,6 +86,10 @@ class ByzzFuzzBaseline(Strategy):
         # drop message
         peer_from_id = self.network.port_to_id(packet.from_port)
         peer_to_id = self.network.port_to_id(packet.to_port)
+
+        if self.get_current_round_of_node(peer_from_id)>8:
+            # do nothing, let network heal
+            return packet.data, 0, 1
         choice: float = random.random()
         if choice < self.params["drop_probability"]:
             logger.debug(f"Dropping message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")

@@ -114,7 +114,7 @@ class ByzzFuzzTestManager:
                         self.run_rocket(log_dir, network_faults, process_faults)
         elif self.strategy == "ByzzFuzzBaseline":
             start_time = datetime.now()
-            log_dir = f"{format_datetime(start_time)}/drop-{self.drop_probability}_corrupt-{self.corrupt_probability}"
+            log_dir = f"{format_datetime(start_time)}/xrpld-2.4.0-100UNL-drop-{self.drop_probability}_corrupt-{self.corrupt_probability}"
             self.run_rocket(log_dir)
         return
 
