@@ -28,7 +28,7 @@ class ByzzFuzzBaseline(Strategy):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
-        iteration_type = LedgerBasedIteration(100, 15, 130),
+        iteration_type = LedgerBasedIteration(50, 14, 90),
         log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
@@ -87,27 +87,27 @@ class ByzzFuzzBaseline(Strategy):
         peer_from_id = self.network.port_to_id(packet.from_port)
         peer_to_id = self.network.port_to_id(packet.to_port)
 
-        if self.get_current_round_of_node(peer_from_id)>8:
+        if self.get_current_round_of_node(peer_from_id)>=10:
             # do nothing, let network heal
             return packet.data, 0, 1
         choice: float = random.random()
         if choice < self.params["drop_probability"]:
-            logger.debug(f"Dropping message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
+            #logger.debug(f"Dropping message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
             return packet.data, MAX_U32, 1
         # corrupt message
         elif choice < self.params["drop_probability"] + self.params["corrupt_probability"]:
-            if peer_from_id in self.iteration_type._byzantine_nodes and self.get_current_round_of_node(peer_from_id)>1: # byzantine node
-                logger.debug(f"Mutating message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
+            if peer_from_id in self.iteration_type._byzantine_nodes and self.get_current_round_of_node(peer_from_id)>3: # byzantine node
+                #logger.debug(f"Mutating message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
                 corrupted_message, byte_flipped, bit_flipped = self.corrupt_message(packet.data)
                 try:
                     message, message_type = PacketEncoderDecoder.decode_packet_data(corrupted_message) # use this just to check if the message is valid
                 except DecodingNotSupportedError as e:
-                    logger.info("Message mutation resulted in a syntactically incorrect message. Returning original.")
+                    #logger.info("Message mutation resulted in a syntactically incorrect message. Returning original.")
                     return packet.data, 0, 1
                 except Exception as e:
-                    logger.info(f"Message mutation resulted in an unexpected error: {e}. Returning original.")
+                    #logger.info(f"Message mutation resulted in an unexpected error: {e}. Returning original.")
                     return packet.data, 0, 1
-                logger.debug(f"Corrupting message which was {message} and now is {corrupted_message}, byte flipped: {byte_flipped}, bit flipped: {bit_flipped}")
+                #logger.debug(f"Corrupting message which was {message} and now is {corrupted_message}, byte flipped: {byte_flipped}, bit flipped: {bit_flipped}")
                 return (
                     corrupted_message,
                     0,
@@ -120,7 +120,7 @@ class ByzzFuzzBaseline(Strategy):
         # flip a random bit in a random byte of the message
     
         if len(message) <= 6:  # ensure the message has enough bytes to mutate
-            logger.error("Message is too short to corrupt beyond the 6th byte.")
+            #logger.error("Message is too short to corrupt beyond the 6th byte.")
             return message, -1, -1
 
         message_bytes = bytearray(message)

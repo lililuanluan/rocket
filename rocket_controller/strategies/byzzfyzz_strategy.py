@@ -28,7 +28,7 @@ class ByzzFuzzStrategy(Strategy):
         auto_parse_identical: bool = True,
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
-        iteration_type = LedgerBasedIteration(100, 15, 130),
+        iteration_type = LedgerBasedIteration(50, 14, 90),
         log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
@@ -82,15 +82,16 @@ class ByzzFuzzStrategy(Strategy):
             random_round = random.randint(1, self.rounds)
             # choose a random subset of receivers uniformly from all possible subsets
             random_receiver_nodes = generate_random_subset(self.node_amount)
-            self.process_faults_list.append((random_round, random_receiver_nodes))
+            seed = random.randint(0, 1000000)
+            self.process_faults_list.append((random_round, random_receiver_nodes, seed))
 
         logger.debug("Network faults (rounds and partitions):")
         for round_num, partition in self.network_faults_list:
             logger.debug(f"Round {round_num}: {partition}")
 
         logger.debug("Process faults (rounds and subsets):")
-        for round_num, subset in self.process_faults_list:
-            logger.debug(f"Round {round_num}: {subset}")
+        for round_num, subset, seed in self.process_faults_list:
+            logger.debug(f"Round {round_num}: {subset}, {seed}")
 
     def setup(self):
         """Setup method for ByzzFuzzBaseline."""
@@ -122,10 +123,12 @@ class ByzzFuzzStrategy(Strategy):
             logger.debug(f"Dropping message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
             return packet.data, MAX_U32, 1
 
-        if peer_from_id in self.iteration_type._byzantine_nodes and any(round_num == self.get_current_round_of_node(peer_from_id) and peer_to_id in receiver_nodes for round_num, receiver_nodes in self.process_faults_list):
+        if peer_from_id in self.iteration_type._byzantine_nodes:
             # mutation logic
-            logger.debug(f"Mutating message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
-            return self.corrupt_message(packet)
+            for round_num, receiver_nodes, seed in self.process_faults_list:
+                if round_num == self.get_current_round_of_node(peer_from_id) and peer_to_id in receiver_nodes:
+                    logger.debug(f"Mutating message from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}...")
+                    return self.corrupt_message(packet, seed)
 
         return packet.data, 0, 1
 
@@ -142,7 +145,7 @@ class ByzzFuzzStrategy(Strategy):
         elif isinstance(message, ripple_pb2.TMValidation):
             self.old_validations.append(message.validation)
 
-    def corrupt_message(self, packet: packet_pb2.Packet) -> tuple[bytes, int, int]:
+    def corrupt_message(self, packet: packet_pb2.Packet, seed: int) -> tuple[bytes, int, int]:
         try:
             message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
         except DecodingNotSupportedError:
@@ -154,27 +157,27 @@ class ByzzFuzzStrategy(Strategy):
             logger.debug(f"Corrupting TMProposeSet message")
             peer_to_id = self.network.port_to_id(packet.to_port)
             current_receiver_round = self.get_current_round_of_node(peer_to_id)
-            return self.corrupt_TMProposeSet(message, message_type_no, current_receiver_round)
+            return self.corrupt_TMProposeSet(message, message_type_no, current_receiver_round, seed)
         elif isinstance(message, ripple_pb2.TMValidation):
             logger.debug(f"Corrupting TMValidation message")
-            return self.corrupt_TMValidation(message, message_type_no)
+            return self.corrupt_TMValidation(message, message_type_no, seed)
         elif isinstance(message, ripple_pb2.TMTransaction):
             logger.debug(f"Corrupting TMTransaction message")
-            return self.corrupt_TMTransaction(message, message_type_no)
+            return self.corrupt_TMTransaction(message, message_type_no, seed)
         
         return packet.data, 0, 1
     
-    def corrupt_TMProposeSet(self, message: bytes, message_type_no: int, current_receiver_round: int) -> tuple[bytes, int, int]:
+    def corrupt_TMProposeSet(self, message: bytes, message_type_no: int, current_receiver_round: int, seed: int) -> tuple[bytes, int, int]:
         # small scope
         if self.small_scope:
             # all previous transactions that we have tried to submit and (did not) succeed
             # propose messages usually include multiple transactions in the currentTxHash field, but here im modifying it to include just one transaction
-
+            rng = random.Random(seed)
             # 50/50 probability for either mutating proposeSeq or currentTxHash
-            if random.choice([True, False]):  
+            if rng.choice([True, False]):  
                 # choose a random sequence number from 1 to current_receiver_round+1
                 logger.debug(f"Corrupting proposeSeq in TMProposeSet message which was {message.proposeSeq}")
-                if random.choice([True, False]):
+                if rng.choice([True, False]):
                     message.proposeSeq += 1
                 else:
                     message.proposeSeq -= 1
@@ -183,13 +186,14 @@ class ByzzFuzzStrategy(Strategy):
                 # choose a random transaction hash from the to_be_validated_txs
                 # and convert it to bytes
                 logger.debug(f"Corrupting currentTxHash in TMProposeSet message which was {message.currentTxHash.hex()}")
-                message.currentTxHash = random.choice(self.old_proposals)
+                message.currentTxHash = rng.choice(self.old_proposals)
                 logger.debug(f"New currentTxHash in TMProposeSet message is {message.currentTxHash.hex()}")
         # any scope
         else:
-            if random.choice([True, False]):  
+            rng = random.Random(seed)
+            if rng.choice([True, False]):  
                 logger.debug(f"Corrupting proposeSeq in TMProposeSet message which was {message.proposeSeq}")
-                message.proposeSeq = random.randint(1, 100)
+                message.proposeSeq = rng.randint(1, 100)
                 logger.debug(f"New proposeSeq in TMProposeSet message is {message.proposeSeq}")
             else:
                 logger.debug(f"Corrupting currentTxHash in TMProposeSet message which was {message.currentTxHash.hex()}")
@@ -207,10 +211,11 @@ class ByzzFuzzStrategy(Strategy):
             1,
         )
     
-    def corrupt_TMValidation(self, message: bytes, message_type_no: int) -> tuple[bytes, int, int]:
+    def corrupt_TMValidation(self, message: bytes, message_type_no: int, seed: int) -> tuple[bytes, int, int]:
         if self.small_scope:
+            rng = random.Random(seed)
             logger.debug(f"Corrupting TMValidation message which was {message.validation.hex()}")
-            message.validation = random.choice(self.old_validations)
+            message.validation = rng.choice(self.old_validations)
             logger.debug(f"New TMValidation message is {message.validation.hex()}")
         else:
             logger.debug(f"Corrupting TMValidation message which was {message.validation.hex()}")
@@ -222,11 +227,12 @@ class ByzzFuzzStrategy(Strategy):
             1,
         )
 
-    def corrupt_TMTransaction(self, message: bytes, message_type_no: int) -> tuple[bytes, int, int]:
+    def corrupt_TMTransaction(self, message: bytes, message_type_no: int, seed: int) -> tuple[bytes, int, int]:
         if self.small_scope:
+            rng = random.Random(seed)
             logger.debug(f"Corrupting TMTransaction message which was {message.rawTransaction.hex()}")
             transaction_hash_set = [tx[3] for tx in self.iteration_type.to_be_validated_txs] 
-            message.rawTransaction = self.iteration_type.reverse_compute_tx_hash(random.choice(transaction_hash_set))
+            message.rawTransaction = self.iteration_type.reverse_compute_tx_hash(rng.choice(transaction_hash_set))
             logger.debug(f"New TMTransaction message is {message.rawTransaction.hex()}")
         else:
             logger.debug(f"Corrupting TMTransaction message which was {message.rawTransaction.hex()}")

@@ -4,12 +4,12 @@ general:
 
 byzzfuzz:
   rounds: 8
-  min_network_faults: 3
-  max_network_faults: 5
+  min_network_faults: 1
+  max_network_faults: 2
   min_process_faults: 1
-  max_process_faults: 5
+  max_process_faults: 2
   small_scope: true
 
 baseline:
-  drop_probability: 0.1
-  corrupt_probability: 0.1
+  drop_probability: 0.2
+  corrupt_probability: 0.2

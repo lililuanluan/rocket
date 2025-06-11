@@ -35,14 +35,14 @@ network_partition: []
 # [[1, 0, 2], [2, 0, 1]] -> Node 1 and 2 trust all others, but node 0 trusts no one.
 #
 # Leaving this empty means all nodes in the network will trust each other.
-unl_partition: []
-#  - [0, 1, 2, 3, 4]
-#  - [1, 0, 2, 3, 4]
-#  - [2, 0, 1, 3, 4]
-#  - [3, 1, 2, 4, 5]
-#  - [4, 2, 3, 5, 6]
-#  - [5, 2, 3, 4, 6]
-#  - [6, 2, 3, 4, 5]
+unl_partition:
+  - [0, 1, 2, 3, 4]
+  - [1, 0, 2, 3, 4]
+  - [2, 0, 1, 3, 4]
+  - [3, 1, 2, 4, 5]
+  - [4, 2, 3, 5, 6]
+  - [5, 2, 3, 4, 6]
+  - [6, 2, 3, 4, 5]
 # Transaction configuration
 transactions:
   # Genesis transactions are performed immediately after network start.

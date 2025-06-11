@@ -154,7 +154,7 @@ class SpecChecker:
 
             # for each transaction for this ledger sequence check if it is in the tx_proposals_data for sequences from 1 until this sequence ledger_seq-1
 
-            all_hashes_pass &= ledger_hashes_same
+            all_hashes_pass &= ledger_hashes_same 
             all_sequences_pass &= ledger_seq_same
 
             for record in honest_records:

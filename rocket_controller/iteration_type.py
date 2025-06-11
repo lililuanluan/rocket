@@ -75,7 +75,13 @@ class TimeBasedIteration:
 
         self._byzantine_nodes = []
         self._on_new_iteration_callbacks = []
-    
+
+        self._logged_once_8 = False
+        self._logged_once_9 = False
+        self._logged_once_10 = False
+        self._logged_once_11 = False
+        self._logged_once_12 = False
+        
     def register_callback(self, callback):
         self._on_new_iteration_callbacks.append(callback)
 
@@ -105,7 +111,11 @@ class TimeBasedIteration:
 
     def _timeout_reached(self):
         """Function that is called when the timeout is reached."""
+        
         logger.info("Timeout reached.")
+        self.validate_transactions()
+        self.log_transactions_per_ledger()
+        self.log_accounts()
         self._reset_values()
         self.add_iteration()
 
@@ -233,6 +243,40 @@ class TimeBasedIteration:
                 self._tx_logger.log_transaction_validation(node_id, sender_alias, receiver_alias, amount, tx_hash, validated)
             except Exception as e:
                 logger.error(f"Error while validating transaction: {e}")
+    def log_transactions_per_ledger_10(self):
+        logger.info("Logging transactions at iteration 10.")
+        for ledger_seq in range(1, self._max_ledger_seq+1):
+            for peer_id in range(len(self._validator_nodes)):
+                ledger_hash, txs, validated, ledger_index = self._network.get_transactions(ledger_seq, peer_id)
+                logger.info(f"LOGGING LEDGER {ledger_seq}, peer {peer_id}: {ledger_hash}, {validated}, {txs}")
+
+    def log_transactions_per_ledger_9(self):
+        logger.info("Logging transactions at iteration 9.")
+        for ledger_seq in range(1, self._max_ledger_seq+1):
+            for peer_id in range(len(self._validator_nodes)):
+                ledger_hash, txs, validated, ledger_index = self._network.get_transactions(ledger_seq, peer_id)
+                logger.info(f"LOGGING LEDGER {ledger_seq}, peer {peer_id}: {ledger_hash}, {validated}, {txs}")
+
+    def log_transactions_per_ledger_8(self):
+        logger.info("Logging transactions at iteration 8.")
+        for ledger_seq in range(1, self._max_ledger_seq+1):
+            for peer_id in range(len(self._validator_nodes)):
+                ledger_hash, txs, validated, ledger_index = self._network.get_transactions(ledger_seq, peer_id)
+                logger.info(f"LOGGING LEDGER {ledger_seq}, peer {peer_id}: {ledger_hash}, {validated}, {txs}")
+
+    def log_transactions_per_ledger_11(self):
+        logger.info("Logging transactions at iteration 11.")
+        for ledger_seq in range(1, self._max_ledger_seq+1):
+            for peer_id in range(len(self._validator_nodes)):
+                ledger_hash, txs, validated, ledger_index = self._network.get_transactions(ledger_seq, peer_id)
+                logger.info(f"LOGGING LEDGER {ledger_seq}, peer {peer_id}: {ledger_hash}, {validated}, {txs}")
+
+    def log_transactions_per_ledger_12(self):
+        logger.info("Logging transactions at iteration 12.")
+        for ledger_seq in range(1, self._max_ledger_seq+1):
+            for peer_id in range(len(self._validator_nodes)):
+                ledger_hash, txs, validated, ledger_index = self._network.get_transactions(ledger_seq, peer_id)
+                logger.info(f"LOGGING LEDGER {ledger_seq}, peer {peer_id}: {ledger_hash}, {validated}, {txs}")
 
     def log_transactions_per_ledger(self):
         for ledger_seq in range(1, self._max_ledger_seq+1):
@@ -347,6 +391,11 @@ class TimeBasedIteration:
         # TODO Network should not reset here!
         self._network.accounts = {}
         self._network.tx_builder = TransactionBuilder()
+        self._logged_once_8 = False
+        self._logged_once_9 = False
+        self._logged_once_10 = False
+        self._logged_once_11 = False
+        self._logged_once_12 = False
 
     def on_status_change( 
         self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
@@ -408,6 +457,47 @@ class TimeBasedIteration:
             #logger.debug(
             #    f"Current ledger infos: {' '.join(str(entry['seq']) for entry in cur_ledger_infos)}, max_ledger_seq: {self._max_ledger_seq}"
             #)
+            if cur_ledger_infos and all(
+                entry["seq"] == 8
+                for node_id, entry in self.ledger_validation_map.items()
+                if node_id not in self._byzantine_nodes
+            ) and not self._logged_once_8:
+                self.log_transactions_per_ledger_8()
+                self._logged_once_8 = True
+
+            if cur_ledger_infos and all(
+                entry["seq"] == 9
+                for node_id, entry in self.ledger_validation_map.items()
+                if node_id not in self._byzantine_nodes
+            ) and not self._logged_once_9:
+                self.log_transactions_per_ledger_9()
+                self._logged_once_9 = True
+
+            if cur_ledger_infos and all(
+                entry["seq"] == 10
+                for node_id, entry in self.ledger_validation_map.items()
+                if node_id not in self._byzantine_nodes
+            ) and not self._logged_once_10:
+                self.log_transactions_per_ledger_10()
+                self._logged_once_10 = True
+
+            if cur_ledger_infos and all(
+                entry["seq"] == 11
+                for node_id, entry in self.ledger_validation_map.items()
+                if node_id not in self._byzantine_nodes
+            ) and not self._logged_once_11:
+                self.log_transactions_per_ledger_11()
+                self._logged_once_11 = True
+
+            if cur_ledger_infos and all(
+                entry["seq"] == 12
+                for node_id, entry in self.ledger_validation_map.items()
+                if node_id not in self._byzantine_nodes
+            ) and not self._logged_once_12:
+                self.log_transactions_per_ledger_12()
+                self._logged_once_12 = True
+
+
             if cur_ledger_infos and all(
                 entry["seq"] >= self._max_ledger_seq
                 for node_id, entry in self.ledger_validation_map.items()
