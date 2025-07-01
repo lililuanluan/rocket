@@ -457,6 +457,7 @@ class TimeBasedIteration:
             #logger.debug(
             #    f"Current ledger infos: {' '.join(str(entry['seq']) for entry in cur_ledger_infos)}, max_ledger_seq: {self._max_ledger_seq}"
             #)
+            """
             if cur_ledger_infos and all(
                 entry["seq"] == 8
                 for node_id, entry in self.ledger_validation_map.items()
@@ -496,7 +497,7 @@ class TimeBasedIteration:
             ) and not self._logged_once_12:
                 self.log_transactions_per_ledger_12()
                 self._logged_once_12 = True
-
+            """
 
             if cur_ledger_infos and all(
                 entry["seq"] >= self._max_ledger_seq

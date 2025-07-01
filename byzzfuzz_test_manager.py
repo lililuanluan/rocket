@@ -82,7 +82,7 @@ class ByzzFuzzTestManager:
         
         debug_file_path = Path(f"logs/{log_dir}/debug_messages.txt")
         if self.strategy == "ByzzFuzzStrategy":
-            command = f"{sys.executable} -u -m rocket_controller --rounds {self.rounds} --network_faults {network_faults} --process_faults {process_faults} --small_scope {self.small_scope} --log_dir {log_dir} ByzzFuzzStrategy > {debug_file_path} 2>&1"
+            command = f"{sys.executable} -u -m rocket_controller --rounds {self.rounds} --network_faults {network_faults} --process_faults {process_faults} --log_dir {log_dir} ByzzFuzzStrategy > {debug_file_path} 2>&1" #--small_scope {self.small_scope}
         elif self.strategy == "ByzzFuzzBaseline":
             command = f"{sys.executable} -u -m rocket_controller --drop_probability {self.drop_probability} --corrupt_probability {self.corrupt_probability} --log_dir {log_dir} ByzzFuzzBaseline > {debug_file_path} 2>&1"
 
@@ -107,12 +107,14 @@ class ByzzFuzzTestManager:
         if self.strategy == "ByzzFuzzStrategy":
             for network_faults in range(self.min_network_faults, self.max_network_faults + 1):
                 for process_faults in range(self.min_process_faults, self.max_process_faults + 1):
+                    if (process_faults == 0 and network_faults == 0):
+                        continue
                     start_time = datetime.now() # fully_seeded
-                    log_dir = f"{format_datetime(start_time)}/xpld-2.4.0-60UNL-small_scope-network_faults-{network_faults}_process_faults-{process_faults}"
+                    log_dir = f"{format_datetime(start_time)}/xrpld-2.4.0-60UNL-small_scope_process_faults-{process_faults}_network_faults-{network_faults}"
                     self.run_rocket(log_dir, network_faults, process_faults)
         elif self.strategy == "ByzzFuzzBaseline":
             start_time = datetime.now()
-            log_dir = f"{format_datetime(start_time)}/xpld-2.4.0-60UNL-drop-{self.drop_probability}_corrupt-{self.corrupt_probability}"
+            log_dir = f"{format_datetime(start_time)}/fully_seeded-60UNL-drop-{self.drop_probability}_corrupt-{self.corrupt_probability}"
             self.run_rocket(log_dir)
         return
 

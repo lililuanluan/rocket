@@ -15,7 +15,7 @@ def collect_logs_and_check_hashes(base_log_dir):
     rip_termination_iterations = []
     rip_termination = 0
 
-    for iteration in range(1, 51):
+    for iteration in range(1, 101):
         ledger_hashes = defaultdict(list)
         contains_goal_seq = False
         log_dir = os.path.join(base_log_dir, f"iteration-{iteration}", f"ledger-{iteration}.csv")
@@ -78,5 +78,5 @@ def collect_logs_and_check_hashes(base_log_dir):
     print(f"Total iterations with termination: {rip_termination} ({rip_termination_iterations})")
 
 if __name__ == "__main__":
-    base_log_directory = "/home/aistemaci/rocket-1/logs/2025_06_11_15h15m/fully_seeded-60UNL-small_scope-network_faults-2_process_faults-2"
+    base_log_directory = "/home/aistemaci/rocket-1/logs/2025_06_17_06h16m/xrpld-2.4.0-60UNL-small_scope_process_faults-2_network_faults-2"
     collect_logs_and_check_hashes(base_log_directory)
