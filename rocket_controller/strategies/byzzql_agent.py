@@ -22,6 +22,7 @@ class ByzzQLAgent:
         self.gamma = gamma
         self.epsilon = epsilon
         
+        # todo: initial values are 0 for state-action pair
         #self.q_table
         
     def choose_action(self, state_hash: str) -> str:

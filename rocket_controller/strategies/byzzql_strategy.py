@@ -47,7 +47,7 @@ class ByzzQLStrategy(Strategy):
         
         # Initialize RL agent
         self.rl_agent = ByzzQLAgent(
-            action_space=["DROP", "DELAY", "MUTATE", "DELIVER"]
+            action_space=["DROP", "MUTATE", "DELIVER"]
         )
 
     def setup(self):
@@ -63,7 +63,7 @@ class ByzzQLStrategy(Strategy):
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """Store message in queue and wait for dispatch"""
         
-        # Only process certain message types ???
+        # todo: only process certain message types: TMValildation, TMTransaction, TMProposal
         message, message_type_no = PacketEncoderDecoder.decode_packet(packet)
         if message_type_no not in set(range(30, 36)).union({41}):
             return packet.data, 0, 1
@@ -120,17 +120,12 @@ class ByzzQLStrategy(Strategy):
             # ...
             # todo: dropping logic
             event.set()
-        elif action == "DELAY":
-            # ...
-            # todo: delay logic
-            time.sleep(0.1)
-            event.set()
         elif action == "MUTATE":
             # ...
-            # todo: mutation logic
+            # todo: mutation logic, same mutation logic (mutation table) as in ByzzFuzzStrategy
             event.set()
         else:
-            event.set()  # default: just release
+            event.set()  # default: deliver
 
     def stop(self):
         self.running = False
