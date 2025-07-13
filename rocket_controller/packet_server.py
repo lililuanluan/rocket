@@ -209,6 +209,11 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 def serve(strategy: Strategy):
     """This function starts the server and listens for incoming packets."""
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    # TODO: should be unlimited messages in the queue which could be done by removing max_workers=10
+    # However, this is still limited by the number of cores in your computer
+    # And defaults to max_workers = min(32, (os.cpu_count() or 1) + 4) by ThreadPoolExecutor
+    # How many messages should we expect to receive at once? The number of number of messages
+    # buffered in the queue is deterimined by the dispatch interval
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
