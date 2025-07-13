@@ -185,6 +185,10 @@ class ByzzQLStrategy(Strategy):
                         event.set()
                         return
             event.set() # else just deliver the message
+            # TODO: it could happen that RL agent chooses action "mutate" and then we actually just deliver the message
+            # because the node is not byzantine, then in Q table we still store that action as "mutate". 
+            # We can either store it as "deliver"or we can have two separate action spaces (one with MUTATE other without)
+            # but then when choosing best action to take we would have to ignore MUTATE sometimes. Would this still be valid RL?
         else:  
             event.set() # default: deliver
 
