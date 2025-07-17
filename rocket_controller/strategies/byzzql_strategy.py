@@ -46,9 +46,15 @@ class ByzzQLStrategy(Strategy):
 
         self.message_queue = Queue()
         self.running = True
-        
-        # TODO: tune dispatch interval, this is also related to todo in packet_server.py (max_workers)
-        self.dispatch_interval = float(self.params.get("dispatch_interval_ms", 100)) / 1000.0
+
+        # Fields for dynamic rate
+        self.sensitivity_ratio = float(self.params.get("sensitivity_ratio", 1.2))
+        self.target_inbox = int(self.params.get("target_inbox", 30))
+        self.overflow_factor = float(self.params.get("overflow_factor", 1.2))
+        self.underflow_factor = float(self.params.get("underflow_factor", 0.8))
+        self.max_events = int(self.params.get("max_events", 300))  # figure this out
+        self.r = self.max_events / 2
+
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
         
         # Initialize RL agent
@@ -131,7 +137,22 @@ class ByzzQLStrategy(Strategy):
             try:
                 # 1. Get message and apply collection delay
                 packet, event, extracted_value, result_container = self.message_queue.get(timeout=1.0)
-                time.sleep(self.dispatch_interval) # fixed delay to ensure queue contains messages
+
+                # Following code inspired by PriorityStrategy, with some small changes.
+                # Applies a dynamic dispatch rate as defined in http://doi.org/10.1109/ICSE-SEIP58684.2023.00009
+                inbox_size = self.message_queue.qsize()
+
+                # Adjust rate r based on inbox size
+                if inbox_size > self.target_inbox * self.overflow_factor:
+                    self.r = min(self.r * self.sensitivity_ratio, inbox_size)
+                elif inbox_size < self.target_inbox * self.underflow_factor:
+                    self.r = max(self.r / self.sensitivity_ratio, inbox_size / 6)
+                # else: r doesn't change
+
+                # Rate is clamped |events|/6 <= r <= |events|
+                self.r = max(inbox_size/6, min(self.r, inbox_size))
+                interval = 1.0 / self.r
+                time.sleep(interval)
 
                 # 2. Now we have a collection window - make RL decision
                 current_state = self.get_inbox_state_hash()
