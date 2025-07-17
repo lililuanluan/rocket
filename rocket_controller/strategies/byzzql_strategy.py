@@ -150,9 +150,14 @@ class ByzzQLStrategy(Strategy):
                 # else: r doesn't change
 
                 # Rate is clamped |events|/6 <= r <= |events|
-                self.r = max(inbox_size/6, min(self.r, inbox_size))
-                interval = 1.0 / self.r
-                time.sleep(interval)
+                self.r = int(max(inbox_size / 6, min(self.r, inbox_size)))
+
+                logger.info(f"RATE {self.r}")
+
+                # Only apply rate if r is not zero
+                if self.r > 0:
+                    interval = 1.0 / self.r
+                    time.sleep(interval)
 
                 # 2. Now we have a collection window - make RL decision
                 current_state = self.get_inbox_state_hash()
