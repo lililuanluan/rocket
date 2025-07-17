@@ -54,9 +54,7 @@ class ByzzQLStrategy(Strategy):
         self.underflow_factor = float(self.params.get("underflow_factor", 0.8))
         self.max_events = int(self.params.get("max_events", 300))  # figure this out
         self.r = self.max_events / 2
-        
-        # TODO: tune dispatch interval, this is also related to todo in packet_server.py (max_workers)
-        self.dispatch_interval = float(self.params.get("dispatch_interval_ms", 100)) / 1000.0
+
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
         
         # Initialize RL agent
