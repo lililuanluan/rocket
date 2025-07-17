@@ -1,1 +1,6 @@
 dispatch_interval_ms: 500 #ms
+target_inbox: 30
+overflow_factor: 1.2
+underflow_factor: 0.8
+sensitivity_ratio: 1.2
+max_events: 300
