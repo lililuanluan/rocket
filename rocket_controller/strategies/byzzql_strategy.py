@@ -14,6 +14,7 @@ from rocket_controller.encoder_decoder import (
 )
 from rocket_controller.iteration_type import LedgerBasedIteration
 from rocket_controller.helper import MAX_U32
+from xrpl.core.binarycodec import decode
 
 # TODO: check how we learn from the RL agent, how often we update the Q-values. Are most values 0.0 or not?
 
@@ -111,11 +112,13 @@ class ByzzQLStrategy(Strategy):
 
         extracted_value = None
         if isinstance(message, ripple_pb2.TMProposeSet):
-            extracted_value = f"ProposeSet:{message.proposeSeq}:{message.currentTxHash.hex()}"
+            extracted_value = f"ProposeSet:{packet.from_port}:{packet.to_port}:{message.proposeSeq}:{message.currentTxHash.hex()}"
         elif isinstance(message, ripple_pb2.TMValidation):
-            extracted_value = f"Validation:{message.validation.hex()}"
+            extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{message.validation.hex()}"
         elif isinstance(message, ripple_pb2.TMTransaction):
-            extracted_value = f"Transaction:{message.rawTransaction.hex()}"
+            decoded = decode(message.rawTransaction.hex())
+            # Decoded TMTransaction: {'TransactionType': 'Payment', 'Flags': 0, 'Sequence': 2, 'LastLedgerSequence': 25, 'Amount': '100001000000', 'Fee': '10', 'SigningPubKey': '0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020', 'TxnSignature': '304402200BC25C59B3B22D01B9563D5CF0AB3ECD16B158916D885C26A60DA98CAE35757402207DEA9F34944AA7FAB26C8CC13FB9CD18A2F73EAF556CDEC6CCD0E216F4160A3D', 'Account': 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh', 'Destination': 'rMAyDK9H3z3CM6YhTcdGCYUC2RGcDtaGCY'}
+            extracted_value = f"Transaction:{packet.from_port}:{packet.to_port}:{decoded['TransactionType']}:{decoded['Sequence']}:{decoded['Amount']}"
 
         event = threading.Event()
         start_time = time.time()
