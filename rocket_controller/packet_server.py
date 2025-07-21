@@ -83,6 +83,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             original_data=original_packet_decoded[0].__str__().replace("\n", "; "),
             possibly_mutated_data=new_packet_decoded[0].__str__().replace("\n", "; "),
             custom_timestamp=timestamp,
+            sent_timestamp=int(datetime.datetime.now().timestamp() * 1000)
         )
 
         return packet_pb2.PacketAck(
@@ -137,7 +138,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         if self.strategy.keep_action_log:
             self.logger = ActionLogger(
-                f"{format_datetime(self.strategy.start_datetime)}/iteration-{self.strategy.iteration_type.cur_iteration}",
+                f"{self.strategy.iteration_type.get_log_dir()}/iteration-{self.strategy.iteration_type.cur_iteration}",
                 validator_node_list,
                 f"action-{self.strategy.iteration_type.cur_iteration}",
                 f"node_info-{self.strategy.iteration_type.cur_iteration}",
@@ -207,11 +208,17 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
 def serve(strategy: Strategy):
     """This function starts the server and listens for incoming packets."""
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1000000))
+    # TODO: should be unlimited messages in the queue which could be done by removing max_workers=10
+    # However, this is still limited by the number of cores in your computer
+    # And defaults to max_workers = min(32, (os.cpu_count() or 1) + 4) by ThreadPoolExecutor
+    # How many messages should we expect to receive at once? The number of number of messages
+    # buffered in the queue is deterimined by the dispatch interval
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()
     strategy.iteration_type.set_server(server)
+    strategy.iteration_type.set_network(strategy.network)
     strategy.iteration_type.add_iteration()
 
     return server

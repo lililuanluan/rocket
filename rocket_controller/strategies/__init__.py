@@ -4,7 +4,7 @@ import os
 import sys
 
 # Direct import for proper IDE integration (used in unit tests etc.)
-from .mutation_example import MutationExample
+from .byzzfuzz_baseline import ByzzFuzzBaseline
 from .random_fuzzer import RandomFuzzer
 from .strategy import Strategy
 

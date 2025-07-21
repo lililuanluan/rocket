@@ -54,3 +54,6 @@ base58~=2.1.1
 cryptography~=42.0.7
 PyYAML~=6.0.1
 typeguard~=4.3.0
+
+grpcio~=1.66.2
+deap~=1.4.3

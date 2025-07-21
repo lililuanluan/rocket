@@ -33,6 +33,7 @@ class Strategy(ABC):
         auto_parse_subsets: bool = True,
         keep_action_log: bool = True,
         iteration_type: TimeBasedIteration | None = None,
+        log_dir: str | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
     ):
@@ -90,7 +91,10 @@ class Strategy(ABC):
             if iteration_type is None
             else iteration_type
         )
-        self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
+        if log_dir is not None:
+            self.iteration_type.set_log_dir(log_dir)
+        else:
+            self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
 
     @staticmethod
     def init_configs(
@@ -124,7 +128,7 @@ class Strategy(ABC):
 
     def update_status(self, packet: packet_pb2.Packet):
         """
-        Update the iteration's state variables, when a new TMStatusChange is received.
+        Update the iteration's state variables, when a new TMStatusChange or TMProposeSet is received.
 
         Args:
             packet: The packet to check for a possible status update.
@@ -133,6 +137,12 @@ class Strategy(ABC):
             message, _ = PacketEncoderDecoder.decode_packet(packet)
             if isinstance(message, ripple_pb2.TMStatusChange):
                 self.iteration_type.on_status_change(
+                    message,
+                    self.network.port_to_id(packet.from_port),
+                    self.network.port_to_id(packet.to_port),
+                )
+            elif isinstance(message, ripple_pb2.TMTransaction):
+                self.iteration_type.on_transaction(
                     message,
                     self.network.port_to_id(packet.from_port),
                     self.network.port_to_id(packet.to_port),
@@ -195,7 +205,7 @@ class Strategy(ABC):
                     peer_from_id, peer_to_id, packet.data, final_data, action
                 )
 
-        self.update_status(packet)
+        self.update_status(packet) 
         return final_data, action, send_amount
 
     @abstractmethod
