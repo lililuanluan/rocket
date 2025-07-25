@@ -59,8 +59,9 @@ class ByzzQLStrategy(Strategy):
         self.max_events = int(self.params.get("max_events", 300))  # figure this out
         self.r = self.max_events / 2
 
-        logger.remove()
-        logger.add(sys.stderr, level="INFO")  # or "WARNING" to silence info logs too
+        # Uncomment to silence the debug printouts
+        # logger.remove()
+        # logger.add(sys.stderr, level="INFO")  # or "WARNING" to silence info logs too
 
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
         self.dispatch_lock = threading.Lock()
