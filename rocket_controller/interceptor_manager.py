@@ -24,10 +24,10 @@ class InterceptorManager:
         """Continuously log the stdout and stderr of the subprocess."""
         try:
             while running_flag() and proc.poll() is None:
-                output = proc.stdout.readline()
+                output = "\n".join(proc.stdout.readlines())
                 if output:
                     logger.debug(f"[Interceptor stdout] {output.strip()}")
-                error = proc.stderr.readline()
+                error = "\n".join(proc.stderr.readlines())
                 if error:
                     logger.info(f"[Interceptor stderr] {error.strip()}")
         except Exception as e:
@@ -57,7 +57,7 @@ class InterceptorManager:
                 stdout=PIPE,
                 stderr=PIPE,
                 text=True,
-                bufsize=1
+                bufsize=1,
             )
             self.running = True
         except FileNotFoundError as exc:
@@ -67,7 +67,11 @@ class InterceptorManager:
             traceback.print_exception(exc)
             exit(2)
 
-        self.output_thread = Thread(target=self.__check_output, args=[self.process, lambda: self.running], daemon=True)
+        self.output_thread = Thread(
+            target=self.__check_output,
+            args=[self.process, lambda: self.running],
+            daemon=True,
+        )
         self.output_thread.start()
 
     def restart(self):
