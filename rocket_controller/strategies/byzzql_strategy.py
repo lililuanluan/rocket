@@ -1,10 +1,13 @@
 import random
+import sys
 import threading
 import time
 import hashlib
 from queue import Queue
 from typing import Tuple
 from loguru import logger
+from xrpl.clients import JsonRpcClient
+
 from protos import packet_pb2, ripple_pb2
 from rocket_controller.strategies.strategy import Strategy
 from rocket_controller.strategies.byzzql_agent import ByzzQLAgent
@@ -56,8 +59,14 @@ class ByzzQLStrategy(Strategy):
         self.max_events = int(self.params.get("max_events", 300))  # figure this out
         self.r = self.max_events / 2
 
+        # Uncomment to silence the debug printouts
+        # logger.remove()
+        # logger.add(sys.stderr, level="INFO")  # or "WARNING" to silence info logs too
+
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
-        
+        self.dispatch_lock = threading.Lock()
+        self.clients = {}
+
         # Initialize RL agent
         self.rl_agent = ByzzQLAgent(
             action_space=["DROP", "MUTATE", "DELIVER"]
@@ -92,6 +101,11 @@ class ByzzQLStrategy(Strategy):
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
         self.dispatch_thread.start()
 
+        for peer_id in range(self.network.node_amount):
+            validator = self.network.validator_node_list[peer_id]
+            rpc_address = f"http://{validator.rpc.as_url()}/"
+            self.clients[peer_id] = JsonRpcClient(rpc_address)
+
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """Store message in queue and wait for dispatch"""
         
@@ -112,8 +126,14 @@ class ByzzQLStrategy(Strategy):
 
         extracted_value = None
         if isinstance(message, ripple_pb2.TMProposeSet):
+            with self.dispatch_lock:
+                # We should use transactions here to extract values.
+                ledger_hash, transactions, validated, ledger_index = self.network.get_transactions('current', self.network.port_to_id(packet.from_port), self.clients)
             extracted_value = f"ProposeSet:{packet.from_port}:{packet.to_port}:{message.proposeSeq}:{message.currentTxHash.hex()}"
         elif isinstance(message, ripple_pb2.TMValidation):
+            with self.dispatch_lock:
+                # We should use transactions here to extract values.
+                ledger_hash, transactions, validated, ledger_index = self.network.get_transactions('closed', self.network.port_to_id(packet.from_port))
             extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{message.validation.hex()}"
         elif isinstance(message, ripple_pb2.TMTransaction):
             decoded = decode(message.rawTransaction.hex())
@@ -138,41 +158,41 @@ class ByzzQLStrategy(Strategy):
     def dispatch_loop(self):
         while self.running:
             try:
-                # 1. Get message and apply collection delay
-                packet, event, extracted_value, result_container = self.message_queue.get(timeout=1.0)
+                with self.dispatch_lock:
+                    # 1. Get message and apply collection delay
+                    packet, event, extracted_value, result_container = self.message_queue.get(timeout=1.0)
 
-                # Following code inspired by PriorityStrategy, with some small changes.
-                # Applies a dynamic dispatch rate as defined in http://doi.org/10.1109/ICSE-SEIP58684.2023.00009
-                inbox_size = self.message_queue.qsize()
+                    # Following code inspired by PriorityStrategy, with some small changes.
+                    # Applies a dynamic dispatch rate as defined in http://doi.org/10.1109/ICSE-SEIP58684.2023.00009
+                    inbox_size = self.message_queue.qsize()
 
-                # Adjust rate r based on inbox size
-                if inbox_size > self.target_inbox * self.overflow_factor:
-                    self.r = min(self.r * self.sensitivity_ratio, inbox_size)
-                elif inbox_size < self.target_inbox * self.underflow_factor:
-                    self.r = max(self.r / self.sensitivity_ratio, inbox_size / 6)
-                # else: r doesn't change
+                    # Adjust rate r based on inbox size
+                    if inbox_size > self.target_inbox * self.overflow_factor:
+                        self.r = min(self.r * self.sensitivity_ratio, inbox_size)
+                    elif inbox_size < self.target_inbox * self.underflow_factor:
+                        self.r = max(self.r / self.sensitivity_ratio, inbox_size / 6)
+                    # else: r doesn't change
 
-                # Rate is clamped |events|/6 <= r <= |events|
-                self.r = int(max(inbox_size / 6, min(self.r, inbox_size)))
+                    # Rate is clamped |events|/6 <= r <= |events|
+                    self.r = int(max(inbox_size / 6, min(self.r, inbox_size)))
 
-                logger.info(f"RATE {self.r}")
+                    logger.debug(f"RATE {self.r}")
 
-                # Only apply rate if r is not zero
-                if self.r > 0:
-                    interval = 1.0 / self.r
-                    time.sleep(interval)
+                    # Only apply rate if r is not zero
+                    if self.r > 0:
+                        interval = 1.0 / self.r
+                        time.sleep(interval)
 
-                # 2. Now we have a collection window - make RL decision
-                current_state = self.get_inbox_state_hash()
-                action = self.rl_agent.choose_action(current_state)
-                
-                # 3. Apply RL action (additional processing based on state)
-                self.apply_rl_action(action, packet, event, result_container)
+                    # 2. Now we have a collection window - make RL decision
+                    current_state = self.get_inbox_state_hash()
+                    action = self.rl_agent.choose_action(current_state)
 
-                # 4. Update RL learning
-                next_state = self.get_inbox_state_hash()
-                self.rl_agent.update_q_value(current_state, action, next_state)
+                    # 3. Apply RL action (additional processing based on state)
+                    self.apply_rl_action(action, packet, event, result_container)
 
+                    # 4. Update RL learning
+                    next_state = self.get_inbox_state_hash()
+                    self.rl_agent.update_q_value(current_state, action, next_state)
             except:
                 continue
 

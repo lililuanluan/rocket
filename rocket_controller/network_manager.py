@@ -419,7 +419,14 @@ class NetworkManager:
         if account_alias is None or account_alias == "None":
             return None
         if account_alias not in self.accounts:
-            seed = generate_seed(algorithm=CryptoAlgorithm.SECP256K1)
+            if account_alias == "Account1":
+                seed = "ss2dvG5VFJ4Aj7eWCULreCEVV7dj9"
+            elif account_alias == "Account2":
+                seed = "ssJLw91EocCehCfTJ3zAbzmmk3Dgg"
+            elif account_alias == "Account3":
+                seed = "shGFv5sHEXqACmT9RcdCp7CjAH6Sd"
+            else:
+                seed = generate_seed(algorithm=CryptoAlgorithm.SECP256K1)
             wallet = Wallet.from_seed(seed=seed, algorithm=CryptoAlgorithm.SECP256K1)
             self.accounts[account_alias] = {
                 'address': wallet.classic_address,
@@ -482,21 +489,26 @@ class NetworkManager:
         else:
             return False
 
-    def get_transactions(self, ledger_seq: int | str, peer_id: int) -> (str | None, list[str] | None):
+    def get_transactions(self, ledger_seq: int | str, peer_id: int, clients: dict[int, JsonRpcClient] | None = None) -> (str | None, list[str] | None):
         """
         Get set of validated transactions for a certain peer and ledger sequence
 
         Args:
             ledger_seq: ledger sequence/index
             peer_id: peer id
+            clients: dict of peer id's mapped to JsonRpcClient's or None
 
         Returns:
             list of transactions or None when an error occurred
         """
 
-        validator = self.validator_node_list[peer_id]
-        rpc_address = f"http://{validator.rpc.as_url()}/"
-        client = JsonRpcClient(rpc_address)
+        if clients is None:
+            validator = self.validator_node_list[peer_id]
+            rpc_address = f"http://{validator.rpc.as_url()}/"
+            client = JsonRpcClient(rpc_address)
+        else:
+            client = clients[peer_id]
+
         ledger_result = client.request(xrpl.models.requests.Ledger(ledger_index=ledger_seq, transactions=True))
 
         # Handle null-pointers / empty values
