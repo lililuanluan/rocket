@@ -64,7 +64,6 @@ class ByzzQLStrategy(Strategy):
         # logger.add(sys.stderr, level="INFO")  # or "WARNING" to silence info logs too
 
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
-        self.dispatch_lock = threading.Lock()
         self.clients = {}
 
         # Initialize RL agent
@@ -128,9 +127,8 @@ class ByzzQLStrategy(Strategy):
         if isinstance(message, ripple_pb2.TMProposeSet):
             extracted_value = f"ProposeSet:{packet.from_port}:{packet.to_port}:{message.proposeSeq}:{message.currentTxHash.hex()}"
         elif isinstance(message, ripple_pb2.TMValidation):
-            with self.dispatch_lock:
-                # We should use transactions here to extract values.
-                ledger_hash, transactions, validated, ledger_index = self.network.get_transactions('closed', self.network.port_to_id(packet.from_port))
+            # We should use transactions here to extract values.
+            ledger_hash, transactions, validated, ledger_index = self.network.get_transactions('closed', self.network.port_to_id(packet.from_port))
             extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{message.validation.hex()}"
         elif isinstance(message, ripple_pb2.TMTransaction):
             decoded = decode(message.rawTransaction.hex())
@@ -155,41 +153,40 @@ class ByzzQLStrategy(Strategy):
     def dispatch_loop(self):
         while self.running:
             try:
-                with self.dispatch_lock:
-                    # 1. Get message and apply collection delay
-                    packet, event, extracted_value, result_container = self.message_queue.get(timeout=1.0)
+                # 1. Get message and apply collection delay
+                packet, event, extracted_value, result_container = self.message_queue.get(timeout=1.0)
 
-                    # Following code inspired by PriorityStrategy, with some small changes.
-                    # Applies a dynamic dispatch rate as defined in http://doi.org/10.1109/ICSE-SEIP58684.2023.00009
-                    inbox_size = self.message_queue.qsize()
+                # Following code inspired by PriorityStrategy, with some small changes.
+                # Applies a dynamic dispatch rate as defined in http://doi.org/10.1109/ICSE-SEIP58684.2023.00009
+                inbox_size = self.message_queue.qsize()
 
-                    # Adjust rate r based on inbox size
-                    if inbox_size > self.target_inbox * self.overflow_factor:
-                        self.r = min(self.r * self.sensitivity_ratio, inbox_size)
-                    elif inbox_size < self.target_inbox * self.underflow_factor:
-                        self.r = max(self.r / self.sensitivity_ratio, inbox_size / 6)
-                    # else: r doesn't change
+                # Adjust rate r based on inbox size
+                if inbox_size > self.target_inbox * self.overflow_factor:
+                    self.r = min(self.r * self.sensitivity_ratio, inbox_size)
+                elif inbox_size < self.target_inbox * self.underflow_factor:
+                    self.r = max(self.r / self.sensitivity_ratio, inbox_size / 6)
+                # else: r doesn't change
 
-                    # Rate is clamped |events|/6 <= r <= |events|
-                    self.r = int(max(inbox_size / 6, min(self.r, inbox_size)))
+                # Rate is clamped |events|/6 <= r <= |events|
+                self.r = int(max(inbox_size / 6, min(self.r, inbox_size)))
 
-                    logger.debug(f"RATE {self.r}")
+                logger.debug(f"RATE {self.r}")
 
-                    # Only apply rate if r is not zero
-                    if self.r > 0:
-                        interval = 1.0 / self.r
-                        time.sleep(interval)
+                # Only apply rate if r is not zero
+                if self.r > 0:
+                    interval = 1.0 / self.r
+                    time.sleep(interval)
 
-                    # 2. Now we have a collection window - make RL decision
-                    current_state = self.get_inbox_state_hash()
-                    action = self.rl_agent.choose_action(current_state)
+                # 2. Now we have a collection window - make RL decision
+                current_state = self.get_inbox_state_hash()
+                action = self.rl_agent.choose_action(current_state)
 
-                    # 3. Apply RL action (additional processing based on state)
-                    self.apply_rl_action(action, packet, event, result_container)
+                # 3. Apply RL action (additional processing based on state)
+                self.apply_rl_action(action, packet, event, result_container)
 
-                    # 4. Update RL learning
-                    next_state = self.get_inbox_state_hash()
-                    self.rl_agent.update_q_value(current_state, action, next_state)
+                # 4. Update RL learning
+                next_state = self.get_inbox_state_hash()
+                self.rl_agent.update_q_value(current_state, action, next_state)
             except:
                 continue
 
