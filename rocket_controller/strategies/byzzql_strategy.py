@@ -126,9 +126,6 @@ class ByzzQLStrategy(Strategy):
 
         extracted_value = None
         if isinstance(message, ripple_pb2.TMProposeSet):
-            with self.dispatch_lock:
-                # We should use transactions here to extract values.
-                ledger_hash, transactions, validated, ledger_index = self.network.get_transactions('current', self.network.port_to_id(packet.from_port), self.clients)
             extracted_value = f"ProposeSet:{packet.from_port}:{packet.to_port}:{message.proposeSeq}:{message.currentTxHash.hex()}"
         elif isinstance(message, ripple_pb2.TMValidation):
             with self.dispatch_lock:

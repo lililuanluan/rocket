@@ -55,13 +55,28 @@ class TransactionBuilder:
                 seed=sender_account_seed, algorithm=CryptoAlgorithm.SECP256K1
             )
 
-        payment_tx = Payment(
+
+        # If genesis transactions are sent (3 total), manually set sequence number to maintain deterministic properties
+        if len(self.transactions) >= 3:
+            payment_tx = Payment(
             account=self.genesis_address if sender_account is None else sender_account,
+            fee='10',
+            sequence=5,
             amount=str(amount),  # Amount in drops (1 XRP = 1,000,000 drops)
             destination=self.destination_account_id
             if destination_account is None
             else destination_account,
         )
+        else:
+            payment_tx = Payment(
+                account=self.genesis_address if sender_account is None else sender_account,
+                fee='10',
+                amount=str(amount),  # Amount in drops (1 XRP = 1,000,000 drops)
+                destination=self.destination_account_id
+                if destination_account is None
+                else destination_account,
+            )
+
         return payment_tx
 
     def add_transaction(self, transaction: Transaction):

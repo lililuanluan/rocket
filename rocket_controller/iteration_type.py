@@ -153,11 +153,7 @@ class TimeBasedIteration:
             sender_alias = tx.get('sender_account')
             destination_alias = tx.get('destination_account')
             logger.info(f"Sending {amount} from {sender_alias} to {destination_alias} using peer {peer_id}...")
-            thread = threading.Thread(target=self.perform_transaction, args=(peer_id, amount, sender_alias, destination_alias))
-            thread.start()
-            threads.append(thread)
-        for thread in threads: # Wait for all genesis transactions to be submitted (account creation)
-            thread.join()
+            self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
         time.sleep(5) # min delay to make sure a ledger is validated before submitting regular transactions
         for tx in regular_transactions:
             # logger.info(f"Performing Regular Transaction: {tx}")
@@ -167,9 +163,7 @@ class TimeBasedIteration:
             destination_alias = tx.get('destination_account')
             delay = tx.get('time')
             logger.info(f"Sending {amount} from {sender_alias} to {destination_alias} after {delay} seconds using peer {peer_id}...")
-            timer = threading.Timer(delay, self.perform_transaction, args=(peer_id, amount, sender_alias, destination_alias))
-            timer.start()
-            self._timers.append(timer)
+            self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
 
     def perform_transaction(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None):
         try:
