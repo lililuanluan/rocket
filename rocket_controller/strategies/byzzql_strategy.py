@@ -129,7 +129,8 @@ class ByzzQLStrategy(Strategy):
         elif isinstance(message, ripple_pb2.TMValidation):
             # We should use transactions here to extract values.
             ledger_hash, transactions, validated, ledger_index = self.network.get_transactions('closed', self.network.port_to_id(packet.from_port))
-            extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{message.validation.hex()}"
+            extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{', '.join(transactions) if transactions else ''}"
+
         elif isinstance(message, ripple_pb2.TMTransaction):
             decoded = decode(message.rawTransaction.hex())
             # Decoded TMTransaction: {'TransactionType': 'Payment', 'Flags': 0, 'Sequence': 2, 'LastLedgerSequence': 25, 'Amount': '100001000000', 'Fee': '10', 'SigningPubKey': '0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020', 'TxnSignature': '304402200BC25C59B3B22D01B9563D5CF0AB3ECD16B158916D885C26A60DA98CAE35757402207DEA9F34944AA7FAB26C8CC13FB9CD18A2F73EAF556CDEC6CCD0E216F4160A3D', 'Account': 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh', 'Destination': 'rMAyDK9H3z3CM6YhTcdGCYUC2RGcDtaGCY'}
