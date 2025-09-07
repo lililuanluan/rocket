@@ -75,6 +75,7 @@ class TimeBasedIteration:
 
         self._byzantine_nodes = []
         self._on_new_iteration_callbacks = []
+        self._after_iteration_callbacks = []
 
         self._logged_once_8 = False
         self._logged_once_9 = False
@@ -84,9 +85,16 @@ class TimeBasedIteration:
         
     def register_callback(self, callback):
         self._on_new_iteration_callbacks.append(callback)
+    
+    def register_after_iteration_callback(self, callback):
+        self._after_iteration_callbacks.append(callback)
 
     def add_iteration_callbacks(self):
         for callback in self._on_new_iteration_callbacks:
+            callback()
+            
+    def add_after_iteration_callbacks(self):
+        for callback in self._after_iteration_callbacks:
             callback()
 
     def _stop_all(self):
@@ -349,6 +357,7 @@ class TimeBasedIteration:
 
         if self.cur_iteration > 1:
             self._spec_checker.spec_check(self.cur_iteration - 1, len(self._validator_nodes), self._max_ledger_seq, self._byzantine_nodes)
+            self.add_after_iteration_callbacks()
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)

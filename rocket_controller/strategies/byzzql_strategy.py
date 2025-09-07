@@ -11,6 +11,7 @@ from loguru import logger
 from xrpl.clients import JsonRpcClient
 
 from protos import packet_pb2, ripple_pb2
+from rocket_controller.csv_logger import StateCoverageLogger
 from rocket_controller.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
@@ -24,11 +25,21 @@ from rocket_controller.strategies.strategy import Strategy
 
 
 class StateAbstraction(ABC):
-    def __init__(self) -> None:
+    def __init__(self, log_dir: str) -> None:
+        self.log_dir = log_dir
         self.message_queue = Queue()
+        self.rl_agent = ByzzQLAgent(action_space=["DROP", "MUTATE", "DELIVER"])
+        self.logger = StateCoverageLogger(log_dir)
 
     def get_queue(self):
         return self.message_queue
+
+    def log_state(self, cur_iteration: int):
+        self.logger.log_state_coverage(
+            unique_states=len(self.rl_agent.q_table.keys()),
+            iteration=cur_iteration - 1,
+            timestamp=time.time(),
+        )
 
     @abstractmethod
     def get_hash(self) -> str:
@@ -41,15 +52,14 @@ class StateAbstraction(ABC):
     @abstractmethod
     def run(
         self,
-        rl_agent: ByzzQLAgent,
         apply_action_callback: Callable,
     ):
         pass
 
 
 class MessageInboxAbstraction(StateAbstraction):
-    def __init__(self, params) -> None:
-        super().__init__()
+    def __init__(self, log_dir: str, params) -> None:
+        super().__init__(log_dir)
 
         # Fields for dynamic rate
         self.sensitivity_ratio = float(params.get("sensitivity_ratio", 1.2))
@@ -81,7 +91,6 @@ class MessageInboxAbstraction(StateAbstraction):
 
     def run(
         self,
-        rl_agent: ByzzQLAgent,
         apply_action_callback: Callable,
     ):
         # 1. Get message and apply collection delay
@@ -115,19 +124,19 @@ class MessageInboxAbstraction(StateAbstraction):
 
         # 2. Now we have a collection window - make RL decision
         current_state = self.get_hash()
-        action = rl_agent.choose_action(current_state)
+        action = self.rl_agent.choose_action(current_state)
 
         # 3. Apply RL action (additional processing based on state)
         apply_action_callback(action, packet, event, result_container)
 
         # 4. Update RL learning
         next_state = self.get_hash()
-        rl_agent.update_q_value(current_state, action, next_state)
+        self.rl_agent.update_q_value(current_state, action, next_state)
 
 
 class TraceAbstraction(StateAbstraction):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, log_dir: str) -> None:
+        super().__init__(log_dir)
 
         # Initialise trace_log as a dict that stores received messages per node (=per process)
         self.trace_log: dict[int, list[str]] = defaultdict(list)
@@ -160,7 +169,6 @@ class TraceAbstraction(StateAbstraction):
 
     def run(
         self,
-        rl_agent: ByzzQLAgent,
         apply_action_callback: Callable,
     ):
         try:
@@ -184,7 +192,7 @@ class TraceAbstraction(StateAbstraction):
         current_state = self.get_hash()
 
         # RL agent chooses action based on current trace state
-        action = rl_agent.choose_action(current_state)
+        action = self.rl_agent.choose_action(current_state)
 
         # Record action in the trace log and apply it
         self.record_event(packet.to_port, extracted_value)
@@ -192,7 +200,7 @@ class TraceAbstraction(StateAbstraction):
 
         # Update Q-learning with new trace state
         next_state = self.get_hash()
-        rl_agent.update_q_value(current_state, action, next_state)
+        self.rl_agent.update_q_value(current_state, action, next_state)
 
 
 class ByzzQLStrategy(Strategy):
@@ -226,18 +234,24 @@ class ByzzQLStrategy(Strategy):
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
 
         # Initialize RL Agent and State Abstraction
-        self.rl_agent = ByzzQLAgent(action_space=["DROP", "MUTATE", "DELIVER"])
-        self.state = TraceAbstraction()
+        self.state = MessageInboxAbstraction(
+            log_dir=self.iteration_type.get_log_dir() or "missing_dir",
+            params=self.params,
+        )
+        # self.state = TraceAbstraction(
+        #     log_dir=self.iteration_type.get_log_dir() or "missing_dir",
+        # )
 
         # Uncomment to silence the debug printouts
         # logger.remove()
         # logger.add(sys.stderr, level="INFO")  # or "WARNING" to silence info logs too
         self.clients = {}
-        # Initialize RL agent
-        self.rl_agent = ByzzQLAgent(action_space=["DROP", "MUTATE", "DELIVER"])
 
         # initialize process faults (mutations)
         self.iteration_type.register_callback(self.init_faults)
+        self.iteration_type.register_after_iteration_callback(
+            lambda: self.state.log_state(self.iteration_type.cur_iteration)
+        )
 
         self.old_proposals = []
         self.old_validations = []
@@ -341,14 +355,9 @@ class ByzzQLStrategy(Strategy):
 
     def dispatch_loop(self):
         while self.running:
-            # try:
             self.state.run(
-                self.rl_agent,
                 self.apply_rl_action,
             )
-        # except BaseException:
-        #     logger.debug()
-        #     continue
 
     def apply_rl_action(self, action, packet, event, result_container):
         peer_from_id = self.network.port_to_id(packet.from_port)
