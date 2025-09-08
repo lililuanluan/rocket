@@ -5,10 +5,11 @@ import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from queue import Empty, Queue
-from typing import Callable, Tuple
+from typing import Any, Callable, Tuple
 
 from loguru import logger
 from xrpl.clients import JsonRpcClient
+from xrpl.core.binarycodec import decode
 
 from protos import packet_pb2, ripple_pb2
 from rocket_controller.csv_logger import StateCoverageLogger
@@ -18,6 +19,7 @@ from rocket_controller.encoder_decoder import (
 )
 from rocket_controller.helper import MAX_U32
 from rocket_controller.iteration_type import LedgerBasedIteration
+from rocket_controller.network_manager import NetworkManager
 from rocket_controller.strategies.byzzql_agent import ByzzQLAgent
 from rocket_controller.strategies.strategy import Strategy
 
@@ -40,6 +42,18 @@ class StateAbstraction(ABC):
             iteration=cur_iteration - 1,
             timestamp=time.time(),
         )
+
+    @abstractmethod
+    def extract_message(
+        self,
+        message: ripple_pb2.TMProposeSet
+        | ripple_pb2.TMValidation
+        | ripple_pb2.TMTransaction,
+        packet: packet_pb2.Packet,
+        current_round: int,
+        **kwargs: Any,
+    ) -> str:
+        pass
 
     @abstractmethod
     def get_hash(self) -> str:
@@ -88,6 +102,33 @@ class MessageInboxAbstraction(StateAbstraction):
     def reset(self):
         # No manual reset needed between iterations
         pass
+
+    def extract_message(
+        self,
+        message: ripple_pb2.TMProposeSet
+        | ripple_pb2.TMValidation
+        | ripple_pb2.TMTransaction,
+        packet: packet_pb2.Packet,
+        current_round: int,
+        **kwargs: Any,
+    ) -> str:
+        extracted_value = None
+        if isinstance(message, ripple_pb2.TMProposeSet):
+            extracted_value = f"ProposeSet:{packet.from_port}:{packet.to_port}:{message.proposeSeq}:{message.currentTxHash.hex()}"
+        elif isinstance(message, ripple_pb2.TMValidation):
+            network: NetworkManager | None = kwargs.get("network")
+            if not network:
+                raise ValueError("NetworkManager is required for TMValidation messages")
+            # We should use transactions here to extract values.
+            ledger_hash, transactions, validated, ledger_index = (
+                network.get_transactions("closed", network.port_to_id(packet.from_port))
+            )
+            extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{', '.join(transactions) if transactions else ''}"
+        elif isinstance(message, ripple_pb2.TMTransaction):
+            decoded = decode(message.rawTransaction.hex())
+            # Decoded TMTransaction: {'TransactionType': 'Payment', 'Flags': 0, 'Sequence': 2, 'LastLedgerSequence': 25, 'Amount': '100001000000', 'Fee': '10', 'SigningPubKey': '0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020', 'TxnSignature': '304402200BC25C59B3B22D01B9563D5CF0AB3ECD16B158916D885C26A60DA98CAE35757402207DEA9F34944AA7FAB26C8CC13FB9CD18A2F73EAF556CDEC6CCD0E216F4160A3D', 'Account': 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh', 'Destination': 'rMAyDK9H3z3CM6YhTcdGCYUC2RGcDtaGCY'}
+            extracted_value = f"Transaction:{packet.from_port}:{packet.to_port}:{decoded['TransactionType']}:{decoded['Sequence']}:{decoded['Amount']}"
+        return extracted_value
 
     def run(
         self,
@@ -166,6 +207,30 @@ class TraceAbstraction(StateAbstraction):
         for k, v in self.trace_log.items():
             logger.debug(f"Trace Len {k}: {len(v)}")
         self.trace_log = defaultdict(list)
+
+    def extract_message(
+        self,
+        message: ripple_pb2.TMProposeSet
+        | ripple_pb2.TMValidation
+        | ripple_pb2.TMTransaction,
+        packet: packet_pb2.Packet,
+        current_round: int,
+        **kwargs: Any,
+    ) -> str:
+        extracted_value = None
+        if isinstance(message, ripple_pb2.TMProposeSet):
+            extracted_value = (
+                f"{current_round}-ProposeSet:{packet.from_port}:{packet.to_port}"
+            )
+        elif isinstance(message, ripple_pb2.TMValidation):
+            extracted_value = (
+                f"{current_round}-Validation:{packet.from_port}:{packet.to_port}"
+            )
+        elif isinstance(message, ripple_pb2.TMTransaction):
+            extracted_value = (
+                f"{current_round}-Transaction:{packet.from_port}:{packet.to_port}"
+            )
+        return extracted_value
 
     def run(
         self,
@@ -309,30 +374,14 @@ class ByzzQLStrategy(Strategy):
             self.network.port_to_id(packet.to_port)
         )
 
-        # NOTE: The extracted value now only contains the message type and round number, I think this was
-        # discussed during the meeting as a way to simplify the state abstraction.
-        extracted_value = None
-        if isinstance(message, ripple_pb2.TMProposeSet):
-            # extracted_value = f"ProposeSet:{packet.from_port}:{packet.to_port}:{message.proposeSeq}:{message.currentTxHash.hex()}"
-            extracted_value = (
-                f"{current_round}-ProposeSet:{packet.from_port}:{packet.to_port}"
+        # Get string representation of message to use in the state abstraction
+        # Only pass self.network to MessageInboxAbstraction
+        if isinstance(self.state, MessageInboxAbstraction):
+            extracted_value = self.state.extract_message(
+                message, packet, current_round, network=self.network
             )
-        elif isinstance(message, ripple_pb2.TMValidation):
-            # We should use transactions here to extract values.
-            # ledger_hash, transactions, validated, ledger_index = self.network.get_transactions('closed', self.network.port_to_id(packet.from_port))
-            # extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{', '.join(transactions) if transactions else ''}"
-
-            # extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{message.validation.hex()}"
-            extracted_value = (
-                f"{current_round}-Validation:{packet.from_port}:{packet.to_port}"
-            )
-        elif isinstance(message, ripple_pb2.TMTransaction):
-            # decoded = decode(message.rawTransaction.hex())
-            # Decoded TMTransaction: {'TransactionType': 'Payment', 'Flags': 0, 'Sequence': 2, 'LastLedgerSequence': 25, 'Amount': '100001000000', 'Fee': '10', 'SigningPubKey': '0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020', 'TxnSignature': '304402200BC25C59B3B22D01B9563D5CF0AB3ECD16B158916D885C26A60DA98CAE35757402207DEA9F34944AA7FAB26C8CC13FB9CD18A2F73EAF556CDEC6CCD0E216F4160A3D', 'Account': 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh', 'Destination': 'rMAyDK9H3z3CM6YhTcdGCYUC2RGcDtaGCY'}
-            # extracted_value = f"Transaction:{packet.from_port}:{packet.to_port}:{decoded['TransactionType']}:{decoded['Sequence']}:{decoded['Amount']}"
-            extracted_value = (
-                f"{current_round}-Transaction:{packet.from_port}:{packet.to_port}"
-            )
+        else:
+            extracted_value = self.state.extract_message(message, packet, current_round)
 
         event = threading.Event()
         start_time = time.time()
@@ -355,9 +404,13 @@ class ByzzQLStrategy(Strategy):
 
     def dispatch_loop(self):
         while self.running:
-            self.state.run(
-                self.apply_rl_action,
-            )
+            try:
+                self.state.run(
+                    self.apply_rl_action,
+                )
+            except Exception as e:
+                logger.error(f"Error in dispatch loop: {e}")
+                continue
 
     def apply_rl_action(self, action, packet, event, result_container):
         peer_from_id = self.network.port_to_id(packet.from_port)
