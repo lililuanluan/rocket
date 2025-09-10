@@ -48,6 +48,7 @@ class ByzzQLStrategy(Strategy):
             strategy_overrides,
         )
 
+        self.node_amount = self.network.network_config["number_of_nodes"]
         self.message_queue = Queue()
         self.running = True
 
@@ -66,9 +67,12 @@ class ByzzQLStrategy(Strategy):
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
         self.clients = {}
 
-        # Initialize RL agent
+        # Initialize RL agent with two action spaces
+        self.action_space_with_mutation = ["DROP", "MUTATE", "DELIVER"]
+        self.action_space_without_mutation = ["DROP", "DELIVER"]
+        
         self.rl_agent = ByzzQLAgent(
-            action_space=["DROP", "MUTATE", "DELIVER"]
+            action_space=self.action_space_with_mutation
         )
         
         # initialize process faults (mutations)
@@ -80,16 +84,18 @@ class ByzzQLStrategy(Strategy):
     def init_faults(self) -> None:
         self.process_faults_list = []
         
-        # for each round generate a random seed and use it for mutating messages,
+        # For each round generate a random receiver subset and seed
         # this ensures that mutations are deterministic for each test run
-        for i in range(1, self.iteration_type._max_ledger_seq + 1):
-            seed = random.randint(0, 1000000)
-            self.process_faults_list.append((i, seed))
+        for round_number in range(1, self.iteration_type._max_ledger_seq + 1):
+            # Choose a random subset of receivers uniformly from all possible subsets
+            receiver_subset = generate_random_subset(self.node_amount)
+            mutation_seed = random.randint(0, 1000000)
+            self.process_faults_list.append((round_number, receiver_subset, mutation_seed))
 
-        logger.debug("Process faults (rounds and seeds):")
-        for round_num, seed in self.process_faults_list:
-            logger.debug(f"Round {round_num}:, {seed}")
-
+        logger.debug("Process faults (round, receiver subset, and seed):")
+        for round_num, subset, seed in self.process_faults_list:
+            logger.debug(f"Round {round_num}: receivers={subset}, seed={seed}")
+      
     def setup(self):
         if self.dispatch_thread.is_alive():
             logger.info("Joining dispatch thread")
@@ -180,7 +186,8 @@ class ByzzQLStrategy(Strategy):
 
                 # 2. Now we have a collection window - make RL decision
                 current_state = self.get_inbox_state_hash()
-                action = self.rl_agent.choose_action(current_state)
+                available_action_space = self.get_available_action_space(packet)
+                action = self.rl_agent.choose_action(current_state, available_action_space)
 
                 # 3. Apply RL action (additional processing based on state)
                 self.apply_rl_action(action, packet, event, result_container)
@@ -218,24 +225,26 @@ class ByzzQLStrategy(Strategy):
             event.set()
         elif action == "MUTATE":
             if peer_from_id in self.iteration_type._byzantine_nodes:
-                # mutation logic
-                for round_num, seed in self.process_faults_list:
-                    if round_num == self.get_current_round_of_node(peer_from_id):
-                        logger.debug(f"RL Action: MUTATE - packet from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}.")
-                        mutated_data, delay, action_type = self.corrupt_message(packet, seed)
+                # Find the appropriate mutation seed for this round and receiver
+                current_round = self.get_current_round_of_node(peer_from_id)
+                mutation_applied = False
+                
+                for round_num, receiver_subset, mutation_seed in self.process_faults_list:
+                    if round_num == current_round and peer_to_id in receiver_subset:
+                        logger.debug(f"RL Action: MUTATE - packet from {peer_from_id} to {peer_to_id}, round: {current_round}")
+                        mutated_data, delay, action_type = self.corrupt_message(packet, mutation_seed)
                         result_container[0] = mutated_data
                         result_container[1] = delay
                         result_container[2] = action_type
-                        event.set()
-                        return
-            event.set() # else just deliver the message
-            # TODO: it could happen that RL agent chooses action "mutate" and then we actually just deliver the message
-            # because the node is not byzantine, then in Q table we still store that action as "mutate". 
-            # We can either store it as "deliver"or we can have two separate action spaces (one with MUTATE other without)
-            # but then when choosing best action to take we would have to ignore MUTATE sometimes. Would this still be valid RL?
+                        mutation_applied = True
+                        break
+                    
+                if not mutation_applied:
+                    logger.debug(f"RL Action: MUTATE requested but no mutation rule applies - delivering normally")
+            event.set()
         else:  
             event.set() # default: deliver
-
+            
     def stop(self):
         self.running = False
         self.dispatch_thread.join()
@@ -299,3 +308,43 @@ class ByzzQLStrategy(Strategy):
         message.rawTransaction = self.iteration_type.reverse_compute_tx_hash(rng.choice(transaction_hash_set))
         logger.debug(f"New TMTransaction message is {message.rawTransaction.hex()}")
         return PacketEncoderDecoder.encode_message(message, message_type_no), 0, 1
+    
+        
+    def get_available_action_space(self, packet):
+        """
+        Determine available action space based on whether mutation is possible
+        Returns appropriate action space for the current packet context
+        """
+        peer_from_id = self.network.port_to_id(packet.from_port)
+        peer_to_id = self.network.port_to_id(packet.to_port)
+        
+        # Check if mutation is possible for this packet
+        can_mutate = False
+        if peer_from_id in self.iteration_type._byzantine_nodes:
+            current_round = self.get_current_round_of_node(peer_from_id)
+            for round_num, receiver_subset, mutation_seed in self.process_faults_list:
+                if round_num == current_round and peer_to_id in receiver_subset:
+                    can_mutate = True
+                    break
+        
+        if can_mutate:
+            logger.debug(f"Using action_space_with_mutation for packet {peer_from_id}->{peer_to_id}")
+            return self.action_space_with_mutation
+        else:
+            logger.debug(f"Using action_space_without_mutation for packet {peer_from_id}->{peer_to_id}")
+            return self.action_space_without_mutation
+    
+def generate_random_partition(node_count: int) -> list[set[int]]:
+    nodes = list(range(node_count))
+    partition = []
+    while nodes:
+        subset_size = random.randint(1, len(nodes))
+        subset = set(random.sample(nodes, subset_size))
+        partition.append(subset)
+        nodes = [node for node in nodes if node not in subset]
+    return partition
+
+def generate_random_subset(node_count: int) -> set[int]:
+    # uniformly choose a subset of nodes
+    nodes = list(range(node_count))
+    return set(node for node in nodes if random.choice([True, False]))
