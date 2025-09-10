@@ -5,7 +5,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from queue import Empty, Queue
-from typing import Any, Callable, Tuple
+from typing import Callable, Tuple
 
 from loguru import logger
 from xrpl.clients import JsonRpcClient
@@ -19,253 +19,27 @@ from rocket_controller.encoder_decoder import (
 )
 from rocket_controller.helper import MAX_U32
 from rocket_controller.iteration_type import LedgerBasedIteration
-from rocket_controller.network_manager import NetworkManager
 from rocket_controller.strategies.byzzql_agent import ByzzQLAgent
 from rocket_controller.strategies.strategy import Strategy
 
 # TODO: check how we learn from the RL agent, how often we update the Q-values. Are most values 0.0 or not?
 
 
-class StateAbstraction(ABC):
-    def __init__(self, log_dir: str) -> None:
-        self.log_dir = log_dir
-        self.message_queue = Queue()
-        self.rl_agent = ByzzQLAgent(action_space=["DROP", "MUTATE", "DELIVER"])
-        self.logger = StateCoverageLogger(log_dir)
-
-    def get_queue(self):
-        return self.message_queue
-
-    def log_state(self, cur_iteration: int):
-        self.logger.log_state_coverage(
-            unique_states=len(self.rl_agent.q_table.keys()),
-            iteration=cur_iteration - 1,
-            timestamp=time.time(),
-        )
-
-    @abstractmethod
-    def extract_message(
-        self,
-        message: ripple_pb2.TMProposeSet
-        | ripple_pb2.TMValidation
-        | ripple_pb2.TMTransaction,
-        packet: packet_pb2.Packet,
-        current_round: int,
-        **kwargs: Any,
-    ) -> str:
-        pass
-
-    @abstractmethod
-    def get_hash(self) -> str:
-        pass
-
-    @abstractmethod
-    def reset(self):
-        pass
-
-    @abstractmethod
-    def run(
-        self,
-        apply_action_callback: Callable,
-    ):
-        pass
+def generate_random_partition(node_count: int) -> list[set[int]]:
+    nodes = list(range(node_count))
+    partition = []
+    while nodes:
+        subset_size = random.randint(1, len(nodes))
+        subset = set(random.sample(nodes, subset_size))
+        partition.append(subset)
+        nodes = [node for node in nodes if node not in subset]
+    return partition
 
 
-class MessageInboxAbstraction(StateAbstraction):
-    def __init__(self, log_dir: str, params) -> None:
-        super().__init__(log_dir)
-
-        # Fields for dynamic rate
-        self.sensitivity_ratio = float(params.get("sensitivity_ratio", 1.2))
-        self.target_inbox = int(params.get("target_inbox", 30))
-        self.overflow_factor = float(params.get("overflow_factor", 1.2))
-        self.underflow_factor = float(params.get("underflow_factor", 0.8))
-        self.max_events = int(params.get("max_events", 300))  # TODO: figure this out
-        self.r = self.max_events / 2
-
-    def get_hash(self):
-        """
-        For Inbox State Abstraction, use extracted key fields instead of just hashing the raw serialized
-        data to get a more meaningful state representation:
-        - TMProposeSet: proposeSeq, currentTxHash
-        - TMValidation: validation
-        - TMTransaction: rawTransaction
-        We sort, concatenate  and hash these extracted values from messages currently queued for
-        processing at each replica.
-        """
-        queue_contents = list(self.message_queue.queue)
-        extracted_values = [item[2] for item in queue_contents if item[2] is not None]
-        sorted_values = sorted(extracted_values)
-        concatenated = "|".join(sorted_values)
-        return hashlib.sha256(concatenated.encode()).hexdigest()
-
-    def reset(self):
-        # No manual reset needed between iterations
-        pass
-
-    def extract_message(
-        self,
-        message: ripple_pb2.TMProposeSet
-        | ripple_pb2.TMValidation
-        | ripple_pb2.TMTransaction,
-        packet: packet_pb2.Packet,
-        current_round: int,
-        **kwargs: Any,
-    ) -> str:
-        extracted_value = None
-        if isinstance(message, ripple_pb2.TMProposeSet):
-            extracted_value = f"ProposeSet:{packet.from_port}:{packet.to_port}:{message.proposeSeq}:{message.currentTxHash.hex()}"
-        elif isinstance(message, ripple_pb2.TMValidation):
-            network: NetworkManager | None = kwargs.get("network")
-            if not network:
-                raise ValueError("NetworkManager is required for TMValidation messages")
-            # We should use transactions here to extract values.
-            ledger_hash, transactions, validated, ledger_index = (
-                network.get_transactions("closed", network.port_to_id(packet.from_port))
-            )
-            extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{', '.join(transactions) if transactions else ''}"
-        elif isinstance(message, ripple_pb2.TMTransaction):
-            decoded = decode(message.rawTransaction.hex())
-            # Decoded TMTransaction: {'TransactionType': 'Payment', 'Flags': 0, 'Sequence': 2, 'LastLedgerSequence': 25, 'Amount': '100001000000', 'Fee': '10', 'SigningPubKey': '0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020', 'TxnSignature': '304402200BC25C59B3B22D01B9563D5CF0AB3ECD16B158916D885C26A60DA98CAE35757402207DEA9F34944AA7FAB26C8CC13FB9CD18A2F73EAF556CDEC6CCD0E216F4160A3D', 'Account': 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh', 'Destination': 'rMAyDK9H3z3CM6YhTcdGCYUC2RGcDtaGCY'}
-            extracted_value = f"Transaction:{packet.from_port}:{packet.to_port}:{decoded['TransactionType']}:{decoded['Sequence']}:{decoded['Amount']}"
-        return extracted_value
-
-    def run(
-        self,
-        apply_action_callback: Callable,
-    ):
-        # 1. Get message and apply collection delay
-        try:
-            packet, event, extracted_value, result_container = self.message_queue.get(
-                timeout=1.0
-            )
-        except Empty:
-            return
-
-        # Following code inspired by PriorityStrategy, with some small changes.
-        # Applies a dynamic dispatch rate as defined in http://doi.org/10.1109/ICSE-SEIP58684.2023.00009
-        inbox_size = self.message_queue.qsize()
-
-        # Adjust rate r based on inbox size
-        if inbox_size > self.target_inbox * self.overflow_factor:
-            self.r = min(self.r * self.sensitivity_ratio, inbox_size)
-        elif inbox_size < self.target_inbox * self.underflow_factor:
-            self.r = max(self.r / self.sensitivity_ratio, inbox_size / 6)
-        # else: r doesn't change
-
-        # Rate is clamped |events|/6 <= r <= |events|
-        self.r = int(max(inbox_size / 6, min(self.r, inbox_size)))
-
-        logger.debug(f"RATE {self.r}")
-
-        # Only apply rate if r is not zero
-        if self.r > 0:
-            interval = 1.0 / self.r
-            time.sleep(interval)
-
-        # 2. Now we have a collection window - make RL decision
-        current_state = self.get_hash()
-        action = self.rl_agent.choose_action(current_state)
-
-        # 3. Apply RL action (additional processing based on state)
-        apply_action_callback(action, packet, event, result_container)
-
-        # 4. Update RL learning
-        next_state = self.get_hash()
-        self.rl_agent.update_q_value(current_state, action, next_state)
-
-
-class TraceAbstraction(StateAbstraction):
-    def __init__(self, log_dir: str) -> None:
-        super().__init__(log_dir)
-
-        # Initialise trace_log as a dict that stores received messages per node (=per process)
-        self.trace_log: dict[int, list[str]] = defaultdict(list)
-
-    def record_event(self, node_port: int, extracted_value: str):
-        self.trace_log[node_port].append(extracted_value)
-
-    def get_hash(self) -> str:
-        concatenated = "|".join(
-            [
-                item
-                for node in sorted(self.trace_log.keys())
-                for item in self.trace_log[node]
-            ]
-        )
-        return hashlib.sha256(concatenated.encode()).hexdigest()
-
-    def get_hash_per_node(self, node_port: int) -> str:
-        concatenated = "|".join(self.trace_log[node_port])
-        return hashlib.sha256(concatenated.encode()).hexdigest()
-
-    def reset(self):
-        """
-        Resets the current trace log when dispatch thread is no longer active (in between iterations),
-        This needs to be done manually since the trace abstraction uses a seperate list, and not the queue (which is emptied by design).
-        """
-        for k, v in self.trace_log.items():
-            logger.debug(f"Trace Len {k}: {len(v)}")
-        self.trace_log = defaultdict(list)
-
-    def extract_message(
-        self,
-        message: ripple_pb2.TMProposeSet
-        | ripple_pb2.TMValidation
-        | ripple_pb2.TMTransaction,
-        packet: packet_pb2.Packet,
-        current_round: int,
-        **kwargs: Any,
-    ) -> str:
-        extracted_value = None
-        if isinstance(message, ripple_pb2.TMProposeSet):
-            extracted_value = (
-                f"{current_round}-ProposeSet:{packet.from_port}:{packet.to_port}"
-            )
-        elif isinstance(message, ripple_pb2.TMValidation):
-            extracted_value = (
-                f"{current_round}-Validation:{packet.from_port}:{packet.to_port}"
-            )
-        elif isinstance(message, ripple_pb2.TMTransaction):
-            extracted_value = (
-                f"{current_round}-Transaction:{packet.from_port}:{packet.to_port}"
-            )
-        return extracted_value
-
-    def run(
-        self,
-        apply_action_callback: Callable,
-    ):
-        try:
-            packet, event, extracted_value, result_container = self.message_queue.get(
-                timeout=1.0
-            )
-        except Empty:
-            return
-
-        # NOTE: It was unclear to me whether to implement the state hashing
-        # per process (node), or for the whole system, since it mentions 'per process'
-        # in the paper. However it would not be logical to do this, since QLearning needs
-        # information from the whole system to find bugs that arise from complex interactions
-        # between different nodes. The state space however is huge with this method.
-        # (but I guess that is expected from the 'trace' abstraction)
-        #
-        # I do keep the states for each process in a separate list, and combine them only for
-        # the hashing.
-        #
-        # current_state = self.get_hash_node(packet.to_port)
-        current_state = self.get_hash()
-
-        # RL agent chooses action based on current trace state
-        action = self.rl_agent.choose_action(current_state)
-
-        # Record action in the trace log and apply it
-        self.record_event(packet.to_port, extracted_value)
-        apply_action_callback(action, packet, event, result_container)
-
-        # Update Q-learning with new trace state
-        next_state = self.get_hash()
-        self.rl_agent.update_q_value(current_state, action, next_state)
+def generate_random_subset(node_count: int) -> set[int]:
+    # uniformly choose a subset of nodes
+    nodes = list(range(node_count))
+    return set(node for node in nodes if random.choice([True, False]))
 
 
 class ByzzQLStrategy(Strategy):
@@ -294,17 +68,18 @@ class ByzzQLStrategy(Strategy):
             network_overrides,
             strategy_overrides,
         )
-
+        self.node_amount = self.network.network_config["number_of_nodes"]
         self.running = True
         self.dispatch_thread = threading.Thread(target=self.dispatch_loop, daemon=True)
 
         # Initialize RL Agent and State Abstraction
         self.state = MessageInboxAbstraction(
             log_dir=self.iteration_type.get_log_dir() or "missing_dir",
-            params=self.params,
+            strategy=self,
         )
         # self.state = TraceAbstraction(
         #     log_dir=self.iteration_type.get_log_dir() or "missing_dir",
+        #     strategy=self,
         # )
 
         # Uncomment to silence the debug printouts
@@ -324,15 +99,19 @@ class ByzzQLStrategy(Strategy):
     def init_faults(self) -> None:
         self.process_faults_list = []
 
-        # for each round generate a random seed and use it for mutating messages,
+        # For each round generate a random receiver subset and seed
         # this ensures that mutations are deterministic for each test run
-        for i in range(1, self.iteration_type._max_ledger_seq + 1):
-            seed = random.randint(0, 1000000)
-            self.process_faults_list.append((i, seed))
+        for round_number in range(1, self.iteration_type._max_ledger_seq + 1):
+            # Choose a random subset of receivers uniformly from all possible subsets
+            receiver_subset = generate_random_subset(self.node_amount)
+            mutation_seed = random.randint(0, 1000000)
+            self.process_faults_list.append(
+                (round_number, receiver_subset, mutation_seed)
+            )
 
-        logger.debug("Process faults (rounds and seeds):")
-        for round_num, seed in self.process_faults_list:
-            logger.debug(f"Round {round_num}:, {seed}")
+        logger.debug("Process faults (round, receiver subset, and seed):")
+        for round_num, subset, seed in self.process_faults_list:
+            logger.debug(f"Round {round_num}: receivers={subset}, seed={seed}")
 
     def setup(self):
         if self.dispatch_thread.is_alive():
@@ -375,13 +154,7 @@ class ByzzQLStrategy(Strategy):
         )
 
         # Get string representation of message to use in the state abstraction
-        # Only pass self.network to MessageInboxAbstraction
-        if isinstance(self.state, MessageInboxAbstraction):
-            extracted_value = self.state.extract_message(
-                message, packet, current_round, network=self.network
-            )
-        else:
-            extracted_value = self.state.extract_message(message, packet, current_round)
+        extracted_value = self.state.extract_message(message, packet, current_round)
 
         event = threading.Event()
         start_time = time.time()
@@ -425,25 +198,33 @@ class ByzzQLStrategy(Strategy):
             event.set()
         elif action == "MUTATE":
             if peer_from_id in self.iteration_type._byzantine_nodes:
-                # mutation logic
-                for round_num, seed in self.process_faults_list:
-                    if round_num == self.get_current_round_of_node(peer_from_id):
+                # Find the appropriate mutation seed for this round and receiver
+                current_round = self.get_current_round_of_node(peer_from_id)
+                mutation_applied = False
+
+                for (
+                    round_num,
+                    receiver_subset,
+                    mutation_seed,
+                ) in self.process_faults_list:
+                    if round_num == current_round and peer_to_id in receiver_subset:
                         logger.debug(
-                            f"RL Action: MUTATE - packet from {peer_from_id} to {peer_to_id}, round: {self.get_current_round_of_node(peer_from_id)}."
+                            f"RL Action: MUTATE - packet from {peer_from_id} to {peer_to_id}, round: {current_round}"
                         )
                         mutated_data, delay, action_type = self.corrupt_message(
-                            packet, seed
+                            packet, mutation_seed
                         )
                         result_container[0] = mutated_data
                         result_container[1] = delay
                         result_container[2] = action_type
-                        event.set()
-                        return
-            event.set()  # else just deliver the message
-            # TODO: it could happen that RL agent chooses action "mutate" and then we actually just deliver the message
-            # because the node is not byzantine, then in Q table we still store that action as "mutate".
-            # We can either store it as "deliver"or we can have two separate action spaces (one with MUTATE other without)
-            # but then when choosing best action to take we would have to ignore MUTATE sometimes. Would this still be valid RL?
+                        mutation_applied = True
+                        break
+
+                if not mutation_applied:
+                    logger.debug(
+                        "RL Action: MUTATE requested but no mutation rule applies - delivering normally"
+                    )
+            event.set()
         else:
             event.set()  # default: deliver
 
@@ -531,3 +312,285 @@ class ByzzQLStrategy(Strategy):
         )
         logger.debug(f"New TMTransaction message is {message.rawTransaction.hex()}")
         return PacketEncoderDecoder.encode_message(message, message_type_no), 0, 1
+
+
+class StateAbstraction(ABC):
+    def __init__(self, log_dir: str, strategy: ByzzQLStrategy) -> None:
+        self.log_dir = log_dir
+        self.strategy = strategy
+
+        self.message_queue = Queue()
+
+        # Initialize RL agent with two action spaces
+        self.action_space_with_mutation = ["DROP", "MUTATE", "DELIVER"]
+        self.action_space_without_mutation = ["DROP", "DELIVER"]
+
+        self.rl_agent = ByzzQLAgent(action_space=self.action_space_with_mutation)
+        self.logger = StateCoverageLogger(log_dir)
+
+    def get_queue(self):
+        return self.message_queue
+
+    def log_state(self, cur_iteration: int):
+        self.logger.log_state_coverage(
+            unique_states=len(self.rl_agent.q_table.keys()),
+            iteration=cur_iteration - 1,
+            timestamp=time.time(),
+        )
+
+    def get_available_action_space(self, packet):
+        """
+        Determine available action space based on whether mutation is possible
+        Returns appropriate action space for the current packet context
+        """
+        peer_from_id = self.strategy.network.port_to_id(packet.from_port)
+        peer_to_id = self.strategy.network.port_to_id(packet.to_port)
+
+        # Check if mutation is possible for this packet
+        can_mutate = False
+        if peer_from_id in self.strategy.iteration_type._byzantine_nodes:
+            current_round = self.strategy.get_current_round_of_node(peer_from_id)
+            for (
+                round_num,
+                receiver_subset,
+                mutation_seed,
+            ) in self.strategy.process_faults_list:
+                if round_num == current_round and peer_to_id in receiver_subset:
+                    can_mutate = True
+                    break
+
+        if can_mutate:
+            logger.debug(
+                f"Using action_space_with_mutation for packet {peer_from_id}->{peer_to_id}"
+            )
+            return self.action_space_with_mutation
+        else:
+            logger.debug(
+                f"Using action_space_without_mutation for packet {peer_from_id}->{peer_to_id}"
+            )
+            return self.action_space_without_mutation
+
+    @abstractmethod
+    def extract_message(
+        self,
+        message: ripple_pb2.TMProposeSet
+        | ripple_pb2.TMValidation
+        | ripple_pb2.TMTransaction,
+        packet: packet_pb2.Packet,
+        current_round: int,
+    ) -> str:
+        pass
+
+    @abstractmethod
+    def get_hash(self) -> str:
+        pass
+
+    @abstractmethod
+    def reset(self):
+        pass
+
+    @abstractmethod
+    def run(
+        self,
+        apply_action_callback: Callable,
+    ):
+        pass
+
+
+class MessageInboxAbstraction(StateAbstraction):
+    def __init__(self, log_dir: str, strategy: ByzzQLStrategy) -> None:
+        super().__init__(log_dir, strategy)
+
+        # Fields for dynamic rate
+        self.sensitivity_ratio = float(strategy.params.get("sensitivity_ratio", 1.2))
+        self.target_inbox = int(strategy.params.get("target_inbox", 30))
+        self.overflow_factor = float(strategy.params.get("overflow_factor", 1.2))
+        self.underflow_factor = float(strategy.params.get("underflow_factor", 0.8))
+        self.max_events = int(
+            strategy.params.get("max_events", 300)
+        )  # TODO: figure this out
+        self.r = self.max_events / 2
+
+    def get_hash(self):
+        """
+        For Inbox State Abstraction, use extracted key fields instead of just hashing the raw serialized
+        data to get a more meaningful state representation:
+        - TMProposeSet: proposeSeq, currentTxHash
+        - TMValidation: validation
+        - TMTransaction: rawTransaction
+        We sort, concatenate  and hash these extracted values from messages currently queued for
+        processing at each replica.
+        """
+        queue_contents = list(self.message_queue.queue)
+        extracted_values = [item[2] for item in queue_contents if item[2] is not None]
+        sorted_values = sorted(extracted_values)
+        concatenated = "|".join(sorted_values)
+        return hashlib.sha256(concatenated.encode()).hexdigest()
+
+    def reset(self):
+        # No manual reset needed between iterations
+        pass
+
+    def extract_message(
+        self,
+        message: ripple_pb2.TMProposeSet
+        | ripple_pb2.TMValidation
+        | ripple_pb2.TMTransaction,
+        packet: packet_pb2.Packet,
+        current_round: int,
+    ) -> str:
+        # TODO: This method being called for every message causes very high CPU usage
+        # This method might need to be optimized.
+        extracted_value = None
+        if isinstance(message, ripple_pb2.TMProposeSet):
+            extracted_value = f"ProposeSet:{packet.from_port}:{packet.to_port}:{message.proposeSeq}:{message.currentTxHash.hex()}"
+        elif isinstance(message, ripple_pb2.TMValidation):
+            # We should use transactions here to extract values.
+            ledger_hash, transactions, validated, ledger_index = (
+                self.strategy.network.get_transactions(
+                    "closed", self.strategy.network.port_to_id(packet.from_port)
+                )
+            )
+            extracted_value = f"Validation:{packet.from_port}:{packet.to_port}:{', '.join(transactions) if transactions else ''}"
+        elif isinstance(message, ripple_pb2.TMTransaction):
+            decoded = decode(message.rawTransaction.hex())
+            # Decoded TMTransaction: {'TransactionType': 'Payment', 'Flags': 0, 'Sequence': 2, 'LastLedgerSequence': 25, 'Amount': '100001000000', 'Fee': '10', 'SigningPubKey': '0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020', 'TxnSignature': '304402200BC25C59B3B22D01B9563D5CF0AB3ECD16B158916D885C26A60DA98CAE35757402207DEA9F34944AA7FAB26C8CC13FB9CD18A2F73EAF556CDEC6CCD0E216F4160A3D', 'Account': 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh', 'Destination': 'rMAyDK9H3z3CM6YhTcdGCYUC2RGcDtaGCY'}
+            extracted_value = f"Transaction:{packet.from_port}:{packet.to_port}:{decoded['TransactionType']}:{decoded['Sequence']}:{decoded['Amount']}"
+        return extracted_value
+
+    def run(
+        self,
+        apply_action_callback: Callable,
+    ):
+        try:
+            packet, event, extracted_value, result_container = self.message_queue.get(
+                timeout=1.0
+            )
+        except Empty:
+            return
+
+        # Following code inspired by PriorityStrategy, with some small changes.
+        # Applies a dynamic dispatch rate as defined in http://doi.org/10.1109/ICSE-SEIP58684.2023.00009
+        inbox_size = self.message_queue.qsize()
+
+        # Adjust rate r based on inbox size
+        if inbox_size > self.target_inbox * self.overflow_factor:
+            self.r = min(self.r * self.sensitivity_ratio, inbox_size)
+        elif inbox_size < self.target_inbox * self.underflow_factor:
+            self.r = max(self.r / self.sensitivity_ratio, inbox_size / 6)
+        # else: r doesn't change
+
+        # Rate is clamped |events|/6 <= r <= |events|
+        self.r = int(max(inbox_size / 6, min(self.r, inbox_size)))
+
+        logger.debug(f"RATE {self.r}")
+
+        # Only apply rate if r is not zero
+        if self.r > 0:
+            interval = 1.0 / self.r
+            time.sleep(interval)
+
+        # 2. Now we have a collection window - make RL decision
+        current_state = self.get_hash()
+        available_action_space = self.get_available_action_space(packet)
+        action = self.rl_agent.choose_action(current_state, available_action_space)
+
+        # 3. Apply RL action (additional processing based on state)
+        apply_action_callback("DELIVER", packet, event, result_container)
+
+        # 4. Update RL learning
+        next_state = self.get_hash()
+        self.rl_agent.update_q_value(current_state, action, next_state)
+
+
+class TraceAbstraction(StateAbstraction):
+    def __init__(self, log_dir: str, strategy: ByzzQLStrategy) -> None:
+        super().__init__(log_dir, strategy)
+
+        # Initialise trace_log as a dict that stores received messages per node (=per process)
+        self.trace_log: dict[int, list[str]] = defaultdict(list)
+
+    def record_event(self, node_port: int, extracted_value: str):
+        self.trace_log[node_port].append(extracted_value)
+
+    def get_hash(self) -> str:
+        concatenated = "|".join(
+            [
+                item
+                for node in sorted(self.trace_log.keys())
+                for item in self.trace_log[node]
+            ]
+        )
+        return hashlib.sha256(concatenated.encode()).hexdigest()
+
+    def get_hash_per_node(self, node_port: int) -> str:
+        concatenated = "|".join(self.trace_log[node_port])
+        return hashlib.sha256(concatenated.encode()).hexdigest()
+
+    def reset(self):
+        """
+        Resets the current trace log when dispatch thread is no longer active (in between iterations),
+        This needs to be done manually since the trace abstraction uses a seperate list, and not the queue (which is emptied by design).
+        """
+        for k, v in self.trace_log.items():
+            logger.debug(f"Trace Len {k}: {len(v)}")
+        self.trace_log = defaultdict(list)
+
+    def extract_message(
+        self,
+        message: ripple_pb2.TMProposeSet
+        | ripple_pb2.TMValidation
+        | ripple_pb2.TMTransaction,
+        packet: packet_pb2.Packet,
+        current_round: int,
+    ) -> str:
+        extracted_value = None
+        if isinstance(message, ripple_pb2.TMProposeSet):
+            extracted_value = (
+                f"{current_round}-ProposeSet:{packet.from_port}:{packet.to_port}"
+            )
+        elif isinstance(message, ripple_pb2.TMValidation):
+            extracted_value = (
+                f"{current_round}-Validation:{packet.from_port}:{packet.to_port}"
+            )
+        elif isinstance(message, ripple_pb2.TMTransaction):
+            extracted_value = (
+                f"{current_round}-Transaction:{packet.from_port}:{packet.to_port}"
+            )
+        return extracted_value
+
+    def run(
+        self,
+        apply_action_callback: Callable,
+    ):
+        try:
+            packet, event, extracted_value, result_container = self.message_queue.get(
+                timeout=1.0
+            )
+        except Empty:
+            return
+
+        # NOTE: It was unclear to me whether to implement the state hashing
+        # per process (node), or for the whole system, since it mentions 'per process'
+        # in the paper. However it would not be logical to do this, since QLearning needs
+        # information from the whole system to find bugs that arise from complex interactions
+        # between different nodes. The state space however is huge with this method.
+        # (but I guess that is expected from the 'trace' abstraction)
+        #
+        # I do keep the states for each process in a separate list, and combine them only for
+        # the hashing.
+        #
+        # current_state = self.get_hash_node(packet.to_port)
+        current_state = self.get_hash()
+
+        # RL agent chooses action based on current trace state
+        available_action_space = self.get_available_action_space(packet)
+        action = self.rl_agent.choose_action(current_state, available_action_space)
+
+        # Record action in the trace log and apply it
+        self.record_event(packet.to_port, extracted_value)
+        apply_action_callback(action, packet, event, result_container)
+
+        # Update Q-learning with new trace state
+        next_state = self.get_hash()
+        self.rl_agent.update_q_value(current_state, action, next_state)

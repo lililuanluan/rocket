@@ -24,17 +24,23 @@ class ByzzQLAgent:
         
         # Q-table: initial values are 0.0 for each state-action pair
         self.q_table = defaultdict(lambda: {action: 0.0 for action in self.action_space}) 
+    
+    def choose_action(self, state_hash: str, available_action_space: List[str] | None = None) -> str:
+        # Use provided action space or fall back to default
+        action_space_to_use = available_action_space if available_action_space else self.action_space
         
-    def choose_action(self, state_hash: str) -> str:
         if random.random() < self.epsilon:
             # exploration
-            action = random.choice(self.action_space)
-            logger.debug(f"RL Agent: Exploring with random action '{action}'")
+            action = random.choice(action_space_to_use)
+            logger.debug(f"RL Agent: Exploring with random action '{action}' from {action_space_to_use}")
         else:
-            # exploitation: choose best action based on Q-table
+            # exploitation: choose best action from available actions based on Q-table
             q_values = self.q_table[state_hash]
-            max_q_value = max(q_values.values())
-            best_actions = [action for action, q_val in q_values.items() if q_val == max_q_value]
+            # Filter Q-values to only include available actions
+            available_q_values = {action: q_val for action, q_val in q_values.items() 
+                                if action in action_space_to_use}
+            max_q_value = max(available_q_values.values())
+            best_actions = [action for action, q_val in available_q_values.items() if q_val == max_q_value]
             action = random.choice(best_actions)  # break ties randomly
             logger.debug(f"RL Agent: Exploiting with action '{action}' (Q={max_q_value:.3f})")
         return action
