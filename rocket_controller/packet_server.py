@@ -208,7 +208,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
 def serve(strategy: Strategy):
     """This function starts the server and listens for incoming packets."""
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1000000))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1000))
     # TODO: should be unlimited messages in the queue which could be done by removing max_workers=10
     # However, this is still limited by the number of cores in your computer
     # And defaults to max_workers = min(32, (os.cpu_count() or 1) + 4) by ThreadPoolExecutor
