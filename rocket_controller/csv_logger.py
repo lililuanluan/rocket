@@ -46,7 +46,7 @@ transaction_log_columns = [
     "receiver account alias",
     "amount",
     "tx_hash",
-    "validated"
+    "validated",
 ]
 
 ledger_log_columns = [
@@ -54,21 +54,22 @@ ledger_log_columns = [
     "peer_id",
     "validated",
     "ledger_hash",
-    "transactions"
+    "transactions",
 ]
 
 tx_proposals_log_columns = [
     "sender_peer_id",
     "receiver_peer_id",
     "tx_hash",
-    "next_ledger_seq"
+    "next_ledger_seq",
 ]
 
-account_log_columns = [
-    "peer_id",
-    "account_alias",
-    "account_address",
-    "balance"
+account_log_columns = ["peer_id", "account_alias", "account_address", "balance"]
+
+state_coverage_log_columns = [
+    "iteration",
+    "unique_states",
+    "timestamp",
 ]
 
 
@@ -197,12 +198,20 @@ class ActionLogger(CSVLogger):
         # Note: timestamp is milliseconds since epoch (January 1, 1970)
         self.log_row(
             [
-                datetime.fromtimestamp(datetime.now().timestamp()).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                datetime.fromtimestamp(datetime.now().timestamp()).strftime(
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )[:-3]
                 if custom_timestamp is None
-                else datetime.fromtimestamp(custom_timestamp/1000).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                datetime.fromtimestamp(datetime.now().timestamp()).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                else datetime.fromtimestamp(custom_timestamp / 1000).strftime(
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )[:-3],
+                datetime.fromtimestamp(datetime.now().timestamp()).strftime(
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )[:-3]
                 if sent_timestamp is None
-                else datetime.fromtimestamp(sent_timestamp/1000).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                else datetime.fromtimestamp(sent_timestamp / 1000).strftime(
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )[:-3],
                 action,
                 send_amount,
                 from_node_id,
@@ -327,14 +336,11 @@ class SpecCheckLogger(CSVLogger):
                 ]
             )
 
+
 class TransactionLogger(CSVLogger):
     """CSVLogger child class dedicated to handling transaction validation logging."""
 
-    def __init__(
-            self,
-            sub_directory: str,
-            iteration: int
-    ):
+    def __init__(self, sub_directory: str, iteration: int):
         """
         Initialize TransactionLogger class.
 
@@ -350,13 +356,13 @@ class TransactionLogger(CSVLogger):
         self._lock = threading.Lock()
 
     def log_transaction_validation(
-            self,
-            node_id: int,
-            sender_alias: str,
-            receiver_alias: str,
-            amount: int,
-            tx_hash: str,
-            validated: bool,
+        self,
+        node_id: int,
+        sender_alias: str,
+        receiver_alias: str,
+        amount: int,
+        tx_hash: str,
+        validated: bool,
     ):
         """
         Log a transaction validation row to the CSV file.
@@ -372,22 +378,13 @@ class TransactionLogger(CSVLogger):
         with self._lock:
             with open(self.filepath, mode="a", newline="") as file:
                 writer = csv.writer(file)
-                writer.writerow([
-                    node_id,
-                    sender_alias,
-                    receiver_alias,
-                    amount,
-                    tx_hash,
-                    validated
-                ])
+                writer.writerow(
+                    [node_id, sender_alias, receiver_alias, amount, tx_hash, validated]
+                )
 
 
 class LedgerLogger(CSVLogger):
-    def __init__(
-            self,
-            sub_directory: str,
-            iteration: int
-    ):
+    def __init__(self, sub_directory: str, iteration: int):
         """
         Initialize LedgerLogger class.
 
@@ -403,12 +400,12 @@ class LedgerLogger(CSVLogger):
         self._lock = threading.Lock()
 
     def log_transaction_set(
-            self,
-            ledger_seq: int | str,
-            peer_id: int,
-            validated: bool,
-            ledger_hash: str,
-            txs: list[str],
+        self,
+        ledger_seq: int | str,
+        peer_id: int,
+        validated: bool,
+        ledger_hash: str,
+        txs: list[str],
     ):
         """
         Log a transaction validation row to the CSV file.
@@ -423,21 +420,11 @@ class LedgerLogger(CSVLogger):
         with self._lock:
             with open(self.filepath, mode="a", newline="") as file:
                 writer = csv.writer(file)
-                writer.writerow([
-                    ledger_seq,
-                    peer_id,
-                    validated,
-                    ledger_hash,
-                    txs
-                ])
+                writer.writerow([ledger_seq, peer_id, validated, ledger_hash, txs])
 
 
 class TXProposalLogger(CSVLogger):
-    def __init__(
-            self,
-            sub_directory: str,
-            iteration: int
-    ):
+    def __init__(self, sub_directory: str, iteration: int):
         """
         Initialize TXProposalLogger class.
 
@@ -453,11 +440,11 @@ class TXProposalLogger(CSVLogger):
         self._lock = threading.Lock()
 
     def log_proposal(
-            self,
-            sender_peer_id: int,
-            receiver_peer_id: int,
-            tx_hash: str,
-            next_ledger_seq: int
+        self,
+        sender_peer_id: int,
+        receiver_peer_id: int,
+        tx_hash: str,
+        next_ledger_seq: int,
     ):
         """
         Log a transaction validation row to the CSV file.
@@ -468,20 +455,11 @@ class TXProposalLogger(CSVLogger):
             tx_hash: hash of transaction
             next_ledger_seq: next up ledger sequence
         """
-        self.log_row([
-            sender_peer_id,
-            receiver_peer_id,
-            tx_hash,
-            next_ledger_seq
-        ])
+        self.log_row([sender_peer_id, receiver_peer_id, tx_hash, next_ledger_seq])
 
 
 class AccountLogger(CSVLogger):
-    def __init__(
-            self,
-            sub_directory: str,
-            iteration: int
-    ):
+    def __init__(self, sub_directory: str, iteration: int):
         """
         Initialize ProposalLogger class.
 
@@ -497,11 +475,7 @@ class AccountLogger(CSVLogger):
         self._lock = threading.Lock()
 
     def log_account_info(
-            self,
-            peer_id: int,
-            account_alias: str,
-            account_address,
-            balance: int
+        self, peer_id: int, account_alias: str, account_address, balance: int
     ):
         """
         Log a transaction validation row to the CSV file.
@@ -512,9 +486,31 @@ class AccountLogger(CSVLogger):
             account_address: address of the account
             balance: the balance
         """
-        self.log_row([
-            peer_id,
-            account_alias,
-            account_address,
-            balance
-        ])
+        self.log_row([peer_id, account_alias, account_address, balance])
+
+
+class StateCoverageLogger(CSVLogger):
+    def __init__(self, sub_directory: str):
+        """
+        Initialize StateCoverageLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the state coverage results in.
+            iteration: Current iteration number
+        """
+        super().__init__(
+            filename="state_coverage.csv",
+            columns=state_coverage_log_columns,
+            directory=sub_directory,
+        )
+        self._lock = threading.Lock()
+
+    def log_state_coverage(self, iteration: int, unique_states: int, timestamp: float):
+        """
+        Log a state coverage row to the CSV file.
+
+        Args:
+            iteration: Current iteration number
+            unique_states: Number of unique states
+        """
+        self.log_row([iteration, unique_states, timestamp])

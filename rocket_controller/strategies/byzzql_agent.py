@@ -25,7 +25,7 @@ class ByzzQLAgent:
         # Q-table: initial values are 0.0 for each state-action pair
         self.q_table = defaultdict(lambda: {action: 0.0 for action in self.action_space}) 
     
-    def choose_action(self, state_hash: str, available_action_space: List[str] = None) -> str:
+    def choose_action(self, state_hash: str, available_action_space: List[str] | None = None) -> str:
         # Use provided action space or fall back to default
         action_space_to_use = available_action_space if available_action_space else self.action_space
         
