@@ -1,0 +1,39 @@
+# The following options define the port numbers to start incrementing from.
+# E.g. for a network of 3 validator nodes, and a base_port_peer of 60000,
+# the resulting peer ports exposed on the network would be:
+# validator_0 -> 60000
+# validator_1 -> 60001
+# validator_2 -> 60002
+
+# base_port_peer -> the node's peer starting port
+base_port_peer: 60000
+# base_port_ws -> the node's Websocket API starting port
+base_port_ws: 61000
+# base_port_ws_admin -> the node's Websocket API (with admin methods) starting port
+base_port_ws_admin: 62000
+# base_port_rpc -> the node's JSON RPC starting port
+base_port_rpc: 63000
+
+
+
+# A 2-dimensional array containing the groups of node indices that should be connected
+# to each other. Some examples for 3 nodes:
+# [[0, 1, 2]] -> base config, all nodes in the same group and thus fully connected
+# [[0, 1], [1, 2]] -> 1 partition, node 0 <-> node 1 | node 1 <-> node 2 | node 0 <-X-> node 2
+# In the latter situation, all nodes have a direct connection except node 0 and node 2.
+#
+# Leaving this empty means all nodes in the network will be connected.
+network_partition: []
+
+# A 2-dimensional array containing directional groups of node indices that should trust each other.
+# These nodes will be placed in each others UNL (Unique Node List).
+# E.g. a group consisting of [0, 1, 2], means node 0 (first entry) will trust node 1 & 2, but
+# node 1 & 2 do not necessarily trust node 0. Some examples:
+# [[0, 1, 2], [1, 0, 2], [2, 0, 1]] -> All 3 nodes trust each other.
+# [[1, 0, 2], [2, 0, 1]] -> Node 1 and 2 trust all others, but node 0 trusts no one.
+#
+# Leaving this empty means all nodes in the network will trust each other.
+# The number of validator nodes to configure and start
+number_of_nodes: 9
+# unl_partition: [[0,0,1,2],[1,0,2],[2,0]]
+unl_partition: [[0, 0, 1, 2, 3, 4, 6, 7], [1, 0, 1, 2, 3, 4, 6, 7], [2, 0, 1, 2, 3, 4, 6, 7], [3, 0, 1, 2, 3, 4, 6, 7], [4, 0, 1, 2, 3, 4, 6, 7], [5, 0, 1, 2, 3, 4, 6, 7], [6, 0, 1, 2, 3, 4, 6, 7], [7, 0, 1, 2, 3, 4, 6, 7], [8, 0, 1, 2, 3, 4, 6, 7]]
