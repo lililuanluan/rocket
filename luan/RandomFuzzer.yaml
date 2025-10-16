@@ -1,0 +1,6 @@
+drop_probability: 0.00
+delay_probability: 0.04
+min_delay_ms: 1
+max_delay_ms: 150
+seed: 2025
+max_ledger_seq: 10
