@@ -7,4 +7,6 @@
 
 [-] 在python脚本中运行rocket，管理log文件，指定ledger sequence的长度，iteration的次数
 
-[] 对一次execution写一个hash函数，可以将所有 `<sender, receiver, msgType>` 事件进行排序，然后求哈希。测试reproducability。
+[] 实现transaction
+
+[] 对一次execution写一个hash函数，可以将所有 `<sender, receiver, msgType>` 事件进行排序，然后求哈希。测试reproducability。（现在是不可复现的，即使指定了种子）。

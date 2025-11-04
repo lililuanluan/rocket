@@ -77,9 +77,13 @@ class Strategy(ABC):
                 ]
         if strategy_overrides:
             for parameter_name in strategy_overrides:
-                self.params[parameter_name] = type(self.params[parameter_name])(
-                    strategy_overrides[parameter_name]
-                )
+                # Special case for seed parameter (can be None in config)
+                if parameter_name == "seed":
+                    self.params[parameter_name] = int(strategy_overrides[parameter_name])
+                else:
+                    self.params[parameter_name] = type(self.params[parameter_name])(
+                        strategy_overrides[parameter_name]
+                    )
 
         logger.debug(f"Initialized final strategy parameters:" f"\n\t{self.params}")
         logger.debug(
