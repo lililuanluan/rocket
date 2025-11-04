@@ -4,3 +4,8 @@ seed: 98
 
 max-generation: 10
 population-size: 1
+
+encoding:
+  # Delay
+  min_value: 0 # Minimum delay value in milliseconds
+  max_value: 4000 # Maximum delay value in milliseconds

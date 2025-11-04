@@ -7,6 +7,7 @@ import shutil
 from rebuild_interceptor import rebuild_interceptor_with
 from datetime import datetime
 from evaluate import evaluate_log
+import random
 
 
 # dirs
@@ -14,6 +15,14 @@ CUR_DIR = Path(__file__).parent
 ROCKET_DIR = CUR_DIR.parent
 INTERCEPTOR_DIR = ROCKET_DIR / "rocket_interceptor"
 LOGS_DIR = ROCKET_DIR / "logs"
+
+with open(CUR_DIR / "network.yaml", "r") as f:
+    network_config = yaml.safe_load(f)
+    NUMBER_OF_NODES = network_config["number_of_nodes"]
+
+
+def gen_random_encoding(length, encoding_min, encoding_max):
+    return [random.randint(encoding_min, encoding_max) for _ in range(length)]
 
 
 def setup_interceptor(config):
@@ -43,23 +52,40 @@ def setup_interceptor(config):
     print(f"Copied {image_bin} to {target_path}")
 
 
-def run_rocket(log_dir, max_iteration, max_ledger_seq, seed):
-    # cd ..
+def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, config):
+
     os.chdir(ROCKET_DIR)
     py = sys.executable
+
+    # 生成随机 encoding
+    encoding = gen_random_encoding(
+        NUMBER_OF_NODES * (NUMBER_OF_NODES - 1) * 7,
+        config["encoding"]["min_value"],
+        config["encoding"]["max_value"],
+    )
+
+    print(f"Generated encoding: {encoding}")
+
+    # 创建临时配置文件，包含 seed 和 encoding
+    strategy_yaml = CUR_DIR / "EvoDelayStrategy.yaml"
+    with open(strategy_yaml, "w") as f:
+        yaml.dump({"seed": seed, "encoding": encoding}, f)
+
     cmd = [
         py,
         "-m",
         "rocket_controller",
-        "RandomFuzzer",
+        "EvoDelayStrategy",
+        "--config",
+        str(strategy_yaml),  # 使用临时配置文件
+        "--network_config",
+        str(CUR_DIR / "network.yaml"),
         "--log-dir",
         log_dir,
         "--max-iteration",
         str(max_iteration),
         "--max-ledger-seq",
         str(max_ledger_seq),
-        "--overrides",
-        f"seed={seed}",
     ]
     print(f"running command: {' '.join(cmd)}")
     # 用subprocess运行rocket_controller，实时打印输出
@@ -95,6 +121,7 @@ def main(config):
             max_iteration=1,
             max_ledger_seq=5,
             seed=seed,
+            config=config,
         )
 
         evaluate_log(LOGS_DIR / log_dir)
