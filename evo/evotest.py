@@ -6,36 +6,37 @@ import subprocess
 import shutil
 from rebuild_interceptor import rebuild_interceptor_with
 from datetime import datetime
+from evaluate import evaluate_log
 
 
 # dirs
 CUR_DIR = Path(__file__).parent
 ROCKET_DIR = CUR_DIR.parent
 INTERCEPTOR_DIR = ROCKET_DIR / "rocket_interceptor"
+LOGS_DIR = ROCKET_DIR / "logs"
+
 
 def setup_interceptor(config):
-    (CUR_DIR/"bin").mkdir(parents=True, exist_ok=True)
+    (CUR_DIR / "bin").mkdir(parents=True, exist_ok=True)
     ripple_image = config["ripple-image"]
     print(f"config.ripple-image = {ripple_image}, type = {type(ripple_image)}")
     # docker pull 这个image，确保本地有缓存
     print(f"Pulling docker image {ripple_image}...")
     subprocess.run(["docker", "pull", ripple_image], check=True)
-    
+
     image_bin = CUR_DIR / "bin" / ripple_image.replace("/", "-")
 
     if not image_bin.exists():
         print(f"{image_bin} not built, building...")
         success = rebuild_interceptor_with(
-            img=ripple_image,
-            interceptor_dir=INTERCEPTOR_DIR,
-            dest=image_bin
+            img=ripple_image, interceptor_dir=INTERCEPTOR_DIR, dest=image_bin
         )
         if not success:
             print("Rebuild interceptor failed")
             return
-    
+
     assert image_bin.exists(), f"{image_bin} not exists after rebuild"
-    
+
     # 将image_bin拷贝到INTERCEPTOR_DIR下以供使用
     target_path = INTERCEPTOR_DIR / "rocket-interceptor"
     shutil.copy2(image_bin, target_path)
@@ -64,29 +65,39 @@ def run_rocket(log_dir, max_iteration, max_ledger_seq, seed):
     # 用subprocess运行rocket_controller，实时打印输出
     # 不捕获输出，子进程直接继承父进程的 stdout/stderr（保留颜色）
     retcode = subprocess.call(cmd)
-    
+
     if retcode != 0:
         print(f"Rocket exited with code {retcode}")
     else:
-        print("Rocket finished successfully")   
-    
+        print("Rocket finished successfully")
+
     os.chdir(CUR_DIR)
 
 
 def main(config):
     setup_interceptor(config)
-    
+
     seed = config.get("seed", 42)
     start_datetime = datetime.now().strftime("%Y_%m_%d_%Hh%Mm")
-    run_rocket(
-        log_dir=start_datetime,
-        max_iteration=1,
-        max_ledger_seq=5,
-        seed=seed,
-    )
 
-    
+    max_generation = config["max-generation"]
+    # 确保generation为大于0的整数
+    if not isinstance(max_generation, int) or max_generation <= 0:
+        raise ValueError("max-generation must be a positive integer")
 
+    for g in range(max_generation):
+        print(f"=== Generation {g+1}/{max_generation} ===")
+
+        log_dir = f"{start_datetime}/G{g+1}/"
+
+        run_rocket(
+            log_dir=log_dir,
+            max_iteration=1,
+            max_ledger_seq=5,
+            seed=seed,
+        )
+
+        evaluate_log(LOGS_DIR / log_dir)
 
 
 if __name__ == "__main__":

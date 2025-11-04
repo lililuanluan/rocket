@@ -1,3 +1,6 @@
 ripple-image: "ghcr.io/amousavigourabi/docker-rippled/seeded-2.4.0-fully-lowered-threshold:latest"
 
 seed: 98
+
+max-generation: 10
+population-size: 1
