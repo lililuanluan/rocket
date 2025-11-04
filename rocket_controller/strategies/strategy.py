@@ -35,6 +35,7 @@ class Strategy(ABC):
         iteration_type: TimeBasedIteration | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
+        log_dir: str | None = None,
     ):
         """
         Initialize the Strategy interface with necessary fields.
@@ -90,7 +91,10 @@ class Strategy(ABC):
             if iteration_type is None
             else iteration_type
         )
-        self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
+        if log_dir is not None:
+            self.iteration_type.set_log_dir(log_dir)
+        else:
+            self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
 
     @staticmethod
     def init_configs(

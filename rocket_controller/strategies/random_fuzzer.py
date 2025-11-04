@@ -21,6 +21,7 @@ class RandomFuzzer(Strategy):
         iteration_type: TimeBasedIteration | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
+        log_dir: str | None = None,
     ):
         """
         Initializes the random fuzzer.
@@ -45,6 +46,7 @@ class RandomFuzzer(Strategy):
             iteration_type=iteration_type,
             network_overrides=network_overrides,
             strategy_overrides=strategy_overrides,
+            log_dir=log_dir,
         )
 
         if self.params["seed"] is not None:

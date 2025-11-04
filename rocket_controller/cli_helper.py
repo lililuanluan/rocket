@@ -76,6 +76,14 @@ def parse_args() -> argparse.Namespace:
         "Format: PARAM1=VALUE1,PARAM2=VALUE2...",
         metavar="VALUES",
     )
+    parser.add_argument(
+        "--log-dir",
+        type=str,
+        default=None,
+        help="Directory name for storing log files. "
+        "If not provided, a default directory with a timestamp will be created.",
+        metavar="DIRNAME",
+    )
 
     return parser.parse_args()
 
@@ -166,5 +174,7 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
         params_dict["network_overrides"] = network_overrides
     if args.overrides and len(args.overrides.keys()) > 0:
         params_dict["strategy_overrides"] = args.overrides
+    if args.log_dir:
+        params_dict["log_dir"] = args.log_dir
 
     return params_dict
