@@ -136,8 +136,9 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         self.strategy.update_network(validator_node_list)
 
         if self.strategy.keep_action_log:
+            log_dir = format_datetime(self.strategy.start_datetime) if self.strategy.log_dir is None else self.strategy.log_dir
             self.logger = ActionLogger(
-                f"{format_datetime(self.strategy.start_datetime)}/iteration-{self.strategy.iteration_type.cur_iteration}",
+                f"{log_dir}/iteration-{self.strategy.iteration_type.cur_iteration}",
                 validator_node_list,
                 f"action-{self.strategy.iteration_type.cur_iteration}",
                 f"node_info-{self.strategy.iteration_type.cur_iteration}",

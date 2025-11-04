@@ -86,15 +86,14 @@ class Strategy(ABC):
         )
 
         self.start_datetime: datetime = datetime.now()
+        self.log_dir = log_dir if log_dir is not None else self.start_datetime
         self.iteration_type = (
             LedgerBasedIteration(10, 4, 45)
             if iteration_type is None
             else iteration_type
         )
-        if log_dir is not None:
-            self.iteration_type.set_log_dir(log_dir)
-        else:
-            self.iteration_type.set_log_dir(format_datetime(self.start_datetime))
+        
+        self.iteration_type.set_log_dir(self.log_dir)
 
     @staticmethod
     def init_configs(
