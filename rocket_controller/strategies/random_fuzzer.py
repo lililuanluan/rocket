@@ -22,6 +22,8 @@ class RandomFuzzer(Strategy):
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
         log_dir: str | None = None,
+        max_iteration: int | None = None,
+        max_ledger_seq: int | None = None,
     ):
         """
         Initializes the random fuzzer.
@@ -47,6 +49,8 @@ class RandomFuzzer(Strategy):
             network_overrides=network_overrides,
             strategy_overrides=strategy_overrides,
             log_dir=log_dir,
+            max_iteration=max_iteration,
+            max_ledger_seq=max_ledger_seq,
         )
 
         if self.params["seed"] is not None:

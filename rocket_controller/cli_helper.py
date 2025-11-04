@@ -84,6 +84,20 @@ def parse_args() -> argparse.Namespace:
         "If not provided, a default directory with a timestamp will be created.",
         metavar="DIRNAME",
     )
+    parser.add_argument(
+        "--max-iteration",
+        type=int,
+        default=None,
+        help="Number of iterations to run (for LedgerBasedIteration).",
+        metavar="N",
+    )
+    parser.add_argument(
+        "--max-ledger-seq",
+        type=int,
+        default=None,
+        help="Maximum ledger sequence number (for LedgerBasedIteration).",
+        metavar="N",
+    )
 
     return parser.parse_args()
 
@@ -176,5 +190,9 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
         params_dict["strategy_overrides"] = args.overrides
     if args.log_dir:
         params_dict["log_dir"] = args.log_dir
+    if args.max_iteration:
+        params_dict["max_iteration"] = args.max_iteration
+    if args.max_ledger_seq:
+        params_dict["max_ledger_seq"] = args.max_ledger_seq
 
     return params_dict

@@ -36,6 +36,8 @@ class Strategy(ABC):
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
         log_dir: str | None = None,
+        max_iteration: int | None = None,
+        max_ledger_seq: int | None = None,
     ):
         """
         Initialize the Strategy interface with necessary fields.
@@ -88,7 +90,11 @@ class Strategy(ABC):
         self.start_datetime: datetime = datetime.now()
         self.log_dir = log_dir if log_dir is not None else self.start_datetime
         self.iteration_type = (
-            LedgerBasedIteration(10, 4, 45)
+            LedgerBasedIteration(
+                max_iterations=max_iteration if max_iteration is not None else 10,
+                max_ledger_seq=max_ledger_seq if max_ledger_seq is not None else 10,
+                ledger_timeout_seconds=45,
+            )
             if iteration_type is None
             else iteration_type
         )
