@@ -52,19 +52,12 @@ def setup_interceptor(config):
     print(f"Copied {image_bin} to {target_path}")
 
 
-def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, config):
+def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
 
     os.chdir(ROCKET_DIR)
     py = sys.executable
 
-    # 生成随机 encoding
-    encoding = gen_random_encoding(
-        NUMBER_OF_NODES * (NUMBER_OF_NODES - 1) * 7,
-        config["encoding"]["min_value"],
-        config["encoding"]["max_value"],
-    )
 
-    print(f"Generated encoding: {encoding}")
 
     # 创建临时配置文件，包含 seed 和 encoding
     strategy_yaml = CUR_DIR / "EvoDelayStrategy.yaml"
@@ -106,25 +99,38 @@ def main(config):
     seed = config.get("seed", 42)
     start_datetime = datetime.now().strftime("%Y_%m_%d_%Hh%Mm")
 
-    max_generation = config["max-generation"]
+    max_generation = config["max_generation"]
+    population_size = config["population_size"]
     # 确保generation为大于0的整数
     if not isinstance(max_generation, int) or max_generation <= 0:
-        raise ValueError("max-generation must be a positive integer")
+        raise ValueError("max_generation must be a positive integer")
 
     for g in range(max_generation):
         print(f"=== Generation {g+1}/{max_generation} ===")
+        
+        for p in range(population_size):
+            print(f"--- Individual {p+1}/{population_size} ---")
+            
+                # 生成随机 encoding
+            encoding = gen_random_encoding(
+                NUMBER_OF_NODES * (NUMBER_OF_NODES - 1) * 7,
+                config["encoding"]["min_value"],
+                config["encoding"]["max_value"],
+            )
 
-        log_dir = f"{start_datetime}/G{g+1}/"
+            print(f"Generated encoding: {encoding}")
 
-        run_rocket(
-            log_dir=log_dir,
-            max_iteration=1,
-            max_ledger_seq=5,
-            seed=seed,
-            config=config,
-        )
+            log_dir = f"{start_datetime}/G{g+1}T{p+1}/"
 
-        evaluate_log(LOGS_DIR / log_dir)
+            run_rocket(
+                log_dir=log_dir,
+                max_iteration=1,
+                max_ledger_seq=5,
+                seed=seed,
+                encoding=encoding,
+            )
+
+            evaluate_log(LOGS_DIR / log_dir)
 
 
 if __name__ == "__main__":
