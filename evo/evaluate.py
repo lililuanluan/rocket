@@ -3,9 +3,15 @@ import pandas as pd
 
 
 class EvaluationResult:
-    def __init__(self, propose_set_count: int, mean_validation_time: float = None):
+    def __init__(
+        self,
+        propose_set_count: int,
+        mean_validation_time: float = None,
+        total_failures: int = 0,
+    ):
         self.propose_set_count = propose_set_count
         self.mean_validation_time = mean_validation_time
+        self.total_failures = total_failures
 
 
 def get_prop_set_count(df: pd.DataFrame) -> int:
@@ -13,17 +19,17 @@ def get_prop_set_count(df: pd.DataFrame) -> int:
 
 
 def get_avg_validation_time(df: pd.DataFrame) -> float:
-    
+
     # 筛选 ledger_seq > 2 的行
     df_filtered = df[df["ledger_seq"] > 2]
-    
+
     # 获取这些行的验证时间（去除空值）
     validation_times = df_filtered["time_to_validation"].dropna()
-    
+
     if validation_times.empty:
         print("No validation times found.")
         return None
-    
+
     return validation_times.mean()
 
 
@@ -42,8 +48,18 @@ def evaluate_log(log_dir):
     if mean_validation_time is not None:
         print(f"Average validation time: {mean_validation_time} seconds")
 
+    df_agg_spec_check = pd.read_json(f"{log_dir}/aggregated_spec_check_log.json")
+
+    total_failures = (
+        df_agg_spec_check["failed_termination"] + df_agg_spec_check["failed_agreement"]
+    )
+
+    print(f"Total failures: {total_failures.sum()}")
+
     return EvaluationResult(
-        propose_set_count=propose_set_count, mean_validation_time=mean_validation_time
+        propose_set_count=propose_set_count,
+        mean_validation_time=mean_validation_time,
+        total_failures=total_failures,
     )
 
 
