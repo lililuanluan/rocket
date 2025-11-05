@@ -4,6 +4,22 @@ cd ..
 
 set -e
 
+export PATH="$HOME/.pyenv/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"
+
+PY_VERSION="3.12.0"
+
+# 检查 3.13.0 是否已安装
+if ! pyenv versions | grep -q "$PY_VERSION"; then
+  echo "Python $PY_VERSION 未安装，请先运行：pyenv install $PY_VERSION"
+  exit 1
+fi
+
+pyenv local $PY_VERSION
+
+PYENV_PYTHON="$(pyenv which python3)"
+
 # 如果不存在 .venv，则创建并激活一个新的 Python 虚拟环境；如果已存在则直接激活
 if [ ! -d ".venv" ]; then
 	python3 -m venv .venv
@@ -19,7 +35,19 @@ git submodule update --init --recursive
 
 cd rocket_interceptor
 
-sudo apt install openssl libssl-dev cargo
+# 检测操作系统并安装依赖
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    # Linux系统使用apt
+    sudo apt install openssl libssl-dev cargo
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS系统使用brew
+    brew install openssl rust
+else
+    echo "不支持的操作系统: $OSTYPE"
+    echo "请手动安装 openssl 和 rust/cargo"
+    exit 1
+fi
+
 ./build.sh
 
 
