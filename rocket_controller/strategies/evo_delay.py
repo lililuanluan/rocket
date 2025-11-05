@@ -25,6 +25,7 @@ class EvoDelayStrategy(Strategy):
 
         
         self.delays: list[int] = self.params['encoding']
+        self.byzz_nodes: list[int] = self.network.network_config.get('byzz_nodes', [])
 
 
     def setup(self):
@@ -32,6 +33,9 @@ class EvoDelayStrategy(Strategy):
 
         # Hardcoded on 7 message types we will consider, could be a parameter in the future
         assert len(self.delays) == 7 * self.network.node_amount * (self.network.node_amount-1)
+        
+    def handle_byzz_node_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
+        pass
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
@@ -63,6 +67,9 @@ class EvoDelayStrategy(Strategy):
         type_id = message_type - 30 if message_type != 41 else 6
         sender_node_id = self.network.port_to_id(packet.from_port)
         receiver_node_id = self.network.port_to_id(packet.to_port)
+        
+        if sender_node_id in self.byzz_nodes: # try also mutate receiver=byzznode
+            return self.handle_byzz_node_packet(packet=packet)
 
         # for n nodes
         # index = num(message_type) * (n * n-1)

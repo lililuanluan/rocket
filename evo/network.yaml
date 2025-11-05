@@ -35,3 +35,6 @@ network_partition: []
 #
 # Leaving this empty means all nodes in the network will trust each other.
 unl_partition: []
+
+# ids of byzantine nodes
+byzz_nodes: [1]
