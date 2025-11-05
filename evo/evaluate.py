@@ -52,9 +52,9 @@ def evaluate_log(log_dir):
 
     total_failures = (
         df_agg_spec_check["failed_termination"] + df_agg_spec_check["failed_agreement"]
-    )
+    ).sum()  # 求和得到总数
 
-    print(f"Total failures: {total_failures.sum()}")
+    print(f"Total failures: {total_failures}")
 
     return EvaluationResult(
         propose_set_count=propose_set_count,

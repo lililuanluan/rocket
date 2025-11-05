@@ -8,6 +8,7 @@ from rebuild_interceptor import rebuild_interceptor_with
 from datetime import datetime
 from evaluate import evaluate_log
 import random
+from deap import base, creator, tools
 
 
 # dirs
