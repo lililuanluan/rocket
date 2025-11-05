@@ -48,11 +48,13 @@ def evaluate_log(log_dir):
     if mean_validation_time is not None:
         print(f"Average validation time: {mean_validation_time} seconds")
 
-    df_agg_spec_check = pd.read_json(f"{log_dir}/aggregated_spec_check_log.json")
+    # 读取 aggregated_spec_check_log.json（注意：这是一个对象，不是数组）
+    import json
+    with open(f"{log_dir}/aggregated_spec_check_log.json", "r") as f:
+        agg_spec_check = json.load(f)
 
-    total_failures = (
-        df_agg_spec_check["failed_termination"] + df_agg_spec_check["failed_agreement"]
-    ).sum()  # 求和得到总数
+    # 直接从字典中提取失败计数
+    total_failures = agg_spec_check.get("failed_termination", 0) + agg_spec_check.get("failed_agreement", 0)
 
     print(f"Total failures: {total_failures}")
 
