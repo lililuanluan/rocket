@@ -168,8 +168,28 @@ pub fn parse(input: &[u8]) -> IResult<&[u8], JsonValue> {
 
 fn read_from_file() -> HashMap<FieldType, FieldInformation> {
     let mut data = String::new();
-    let mut file = File::open("serialize/src/deserialization/definitions.json")
-        .expect("Getting the file did not work.");
+    
+    // 尝试多个可能的路径
+    let possible_paths = [
+        "src/deserialization/definitions.json",
+        "serialize/src/deserialization/definitions.json",
+        "./src/deserialization/definitions.json",
+        // 当作为Python模块运行时，可能在不同的工作目录
+        concat!(env!("CARGO_MANIFEST_DIR"), "/src/deserialization/definitions.json"),
+    ];
+    
+    let mut file = None;
+    for path in &possible_paths {
+        if let Ok(f) = File::open(path) {
+            file = Some(f);
+            break;
+        }
+    }
+    
+    let mut file = file.expect(&format!(
+        "Could not find definitions.json in any expected location. Tried: {:?}",
+        possible_paths
+    ));
     file.read_to_string(&mut data)
         .expect("Reading from file did not work.");
 
@@ -184,9 +204,22 @@ fn read_from_file() -> HashMap<FieldType, FieldInformation> {
     for field in fields.as_array().unwrap() {
         // the array of each field in the JSON
         let current_field = field[1].as_object().unwrap();
+        
+        // Skip fields that are not serialized (they won't appear in actual messages)
+        let is_serialized = current_field["isSerialized"].as_bool().unwrap();
+        if !is_serialized {
+            continue;
+        }
+        
+        let nth = current_field["nth"].as_u64().unwrap();
+        // Skip fields with nth > 255 (can't fit in u8)
+        if nth > 255 {
+            continue;
+        }
+        
         // key: nth + type
         let current_key = FieldType {
-            nth: current_field["nth"].as_u64().unwrap() as u8,
+            nth: nth as u8,
             type_field: current_field["type"].to_string().replace('\"', ""),
         };
         let current_value = FieldInformation {
@@ -195,7 +228,7 @@ fn read_from_file() -> HashMap<FieldType, FieldInformation> {
             // isVLEncoded
             is_vl_encoded: current_field["isVLEncoded"].as_bool().unwrap(),
             // isSerialized
-            is_serialized: current_field["isSerialized"].as_bool().unwrap(),
+            is_serialized,
             // isSigningField
             is_signing_field: current_field["isSigningField"].as_bool().unwrap(),
         };
@@ -240,4 +273,215 @@ impl FieldInformation {
             is_signing_field,
         }
     }
+}
+
+// Serialization functions - reverse of parse functions
+
+fn encode_type_code(type_name: &str) -> Option<u8> {
+    match type_name {
+        "NotPresent" => Some(0),
+        "UInt16" => Some(1),
+        "UInt32" => Some(2),
+        "UInt64" => Some(3),
+        "Hash256" => Some(5),
+        "Amount" => Some(6),
+        "Blob" => Some(7),
+        "AccountID" => Some(8),
+        "STObject" => Some(14),
+        "Vector256" => Some(19),
+        _ => None,
+    }
+}
+
+fn encode_field_code(field_name: &str) -> Option<(u8, u8)> {
+    // Handle alias: "hash" maps to "LedgerHash" 
+    let actual_field_name = if field_name == "hash" {
+        "LedgerHash"
+    } else {
+        field_name
+    };
+    
+    let fields = &MAPPING;
+    
+    // Debug: print first few fields
+    if actual_field_name == "LedgerHash" {
+        // eprintln!("DEBUG: Looking for 'LedgerHash'");
+        
+        // Try to find it directly
+        let test_key = FieldType {
+            nth: 1,
+            type_field: "Hash256".to_string(),
+        };
+        if let Some(value) = fields.get(&test_key) {
+            // eprintln!("DEBUG: ✓ Direct lookup found: '{}'", value.field_name);
+        } else {
+            // eprintln!("DEBUG: ✗ Direct lookup for (Hash256, 1) failed!");
+        }
+        
+        // Sample some fields
+        let mut count = 0;
+        for (key, value) in fields.iter() {
+            if key.type_field == "Hash256" {
+                // eprintln!("DEBUG:   Hash256 field: '{}' (nth: {})", value.field_name, key.nth);
+                count += 1;
+                if count > 5 { break; }
+            }
+        }
+    }
+    
+    for (key, value) in fields.iter() {
+        if value.field_name == actual_field_name {
+            return Some((encode_type_code(&key.type_field)?, key.nth));
+        }
+    }
+    
+    // Special cases not in definitions.json
+    match actual_field_name {
+        "Cookie" => Some((3, 10)), // UInt64 = 3, field code 10
+        "ValidatedHash" => Some((5, 25)), // Hash256 = 5, field code 25
+        _ => {
+            // eprintln!("DEBUG: encode_field_code failed for '{}' (mapped to '{}')", field_name, actual_field_name);
+            None
+        }
+    }
+}
+
+fn encode_field_id(type_code: u8, field_code: u8) -> Vec<u8> {
+    match (type_code < 16, field_code < 16) {
+        (true, true) => {
+            // Both fit in 4 bits - encode in one byte
+            vec![(type_code << 4) | field_code]
+        }
+        (true, false) => {
+            // Type fits in 4 bits, field doesn't
+            vec![type_code << 4, field_code]
+        }
+        (false, true) => {
+            // Field fits in 4 bits, type doesn't
+            vec![field_code, type_code]
+        }
+        (false, false) => {
+            // Neither fits in 4 bits
+            vec![0, type_code, field_code]
+        }
+    }
+}
+
+fn encode_length(length: u32) -> Vec<u8> {
+    if length <= 192 {
+        vec![length as u8]
+    } else if length <= 12480 {
+        let adjusted = length - 193;
+        let high = (adjusted / 256) as u8 + 193;
+        let low = (adjusted % 256) as u8;
+        vec![high, low]
+    } else {
+        let adjusted = length - 12481;
+        let high = (adjusted / 65536) as u8 + 241;
+        let mid = ((adjusted % 65536) / 256) as u8;
+        let low = (adjusted % 256) as u8;
+        vec![high, mid, low]
+    }
+}
+
+pub fn serialize(json_value: &JsonValue) -> Result<Vec<u8>, String> {
+    let mut result = Vec::new();
+    
+    if !json_value.is_object() {
+        return Err("Input must be a JSON object".to_string());
+    }
+    
+    // Define field order for proper serialization
+    // Note: Parser may return "hash" or "LedgerHash" depending on version
+    let field_order = [
+        "Flags",
+        "LedgerSequence", 
+        "SigningTime",
+        "Cookie",
+        "LedgerHash",     // Try LedgerHash first, then fall back to "hash"
+        "ConsensusHash",
+        "ValidatedHash",
+        "SigningPubKey",
+        "Signature",
+    ];
+    
+    for field_name in &field_order {
+        // Check if field exists in the JSON object
+        // For LedgerHash, also try "hash" as fallback
+        let value = if json_value[*field_name].is_null() {
+            if *field_name == "LedgerHash" && !json_value["hash"].is_null() {
+                &json_value["hash"]
+            } else {
+                continue;
+            }
+        } else {
+            &json_value[*field_name]
+        };
+        
+        // Get type and field codes (encode_field_code handles the hash->LedgerHash mapping)
+        let (type_code, field_code) = encode_field_code(field_name)
+            .ok_or_else(|| format!("Unknown field: {}", field_name))?;
+        
+        // Encode field ID
+        result.extend(encode_field_id(type_code, field_code));
+        
+        // Encode value based on type
+        let type_str = decode_type_code(type_code);
+        match type_str {
+            "UInt16" => {
+                let num = value.as_u16()
+                    .ok_or_else(|| format!("Field {} must be UInt16", field_name))?;
+                result.extend(&num.to_be_bytes());
+            }
+            "UInt32" => {
+                let num = value.as_u32()
+                    .ok_or_else(|| format!("Field {} must be UInt32", field_name))?;
+                result.extend(&num.to_be_bytes());
+            }
+            "UInt64" => {
+                let num = value.as_u64()
+                    .ok_or_else(|| format!("Field {} must be UInt64", field_name))?;
+                result.extend(&num.to_be_bytes());
+            }
+            "Hash256" => {
+                let hash_str = value.as_str()
+                    .ok_or_else(|| format!("Field {} must be a string", field_name))?;
+                let hash_bytes = hex::decode(hash_str)
+                    .map_err(|e| format!("Invalid hex string for {}: {}", field_name, e))?;
+                if hash_bytes.len() != 32 {
+                    return Err(format!("Hash256 field {} must be 32 bytes", field_name));
+                }
+                result.extend(hash_bytes);
+            }
+            "Blob" => {
+                let blob_str = value.as_str()
+                    .ok_or_else(|| format!("Field {} must be a string", field_name))?;
+                let blob_bytes = hex::decode(blob_str)
+                    .map_err(|e| format!("Invalid hex string for {}: {}", field_name, e))?;
+                result.extend(encode_length(blob_bytes.len() as u32));
+                result.extend(blob_bytes);
+            }
+            "Amount" => {
+                let amount_str = value.as_str()
+                    .ok_or_else(|| format!("Field {} must be a string", field_name))?;
+                let amount: u64 = amount_str.parse()
+                    .map_err(|e| format!("Invalid amount for {}: {}", field_name, e))?;
+                let encoded_amount = amount ^ 0x4000000000000000;
+                result.extend(&encoded_amount.to_be_bytes());
+            }
+            "AccountID" => {
+                let account_str = value.as_str()
+                    .ok_or_else(|| format!("Field {} must be a string", field_name))?;
+                let decoded = ripple_address_codec::decode_account_id(account_str)
+                    .map_err(|e| format!("Invalid account ID for {}: {}", field_name, e))?;
+                result.push(20); // Length prefix
+                result.extend(&decoded);
+            }
+            _ => {
+                return Err(format!("Unsupported type {} for field {}", type_str, field_name));
+            }
+        }
+    }
+    
+    Ok(result)
 }

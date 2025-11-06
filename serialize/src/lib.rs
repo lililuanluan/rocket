@@ -1,5 +1,8 @@
 use std::fmt::{Display, Formatter};
 
+use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
+
 use chrono::{DateTime, Utc};
 use openssl::sha::sha256;
 use parser::parse;
@@ -251,4 +254,74 @@ impl Display for RippleMessageObject {
         };
         write!(f, "{}: {}", name, string)
     }
+}
+
+/// Parse bytes into a Python dictionary object
+/// 
+/// # Arguments
+/// * `py` - Python interpreter token
+/// * `data` - A byte slice containing the serialized Ripple data
+/// 
+/// # Returns
+/// A Python dictionary object with the parsed data
+#[pyfunction]
+pub fn parse_bytes<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
+    match parse(data) {
+        Ok((_, json_value)) => {
+            // 将 json::JsonValue 转换为字符串，然后用 Python 的 json.loads 解析
+            let json_str = json_value.dump();
+            let json_module = py.import_bound("json")?;
+            let py_dict = json_module.call_method1("loads", (json_str,))?;
+            Ok(py_dict)
+        }
+        Err(e) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "Failed to parse bytes: {:?}",
+            e
+        ))),
+    }
+}
+
+/// Serialize a Python dictionary into Ripple's internal serialization format
+/// 
+/// # Arguments
+/// * `py` - Python interpreter token
+/// * `data_dict` - A Python dictionary containing Ripple fields
+/// 
+/// # Returns
+/// A Python bytes object containing the serialized data
+#[pyfunction]
+pub fn serialize_bytes<'py>(py: Python<'py>, data_dict: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    // Convert Python dict to JSON string
+    let json_module = py.import_bound("json")?;
+    let json_str: String = json_module
+        .call_method1("dumps", (data_dict,))?
+        .extract()?;
+    
+    // Parse JSON string to json::JsonValue
+    let json_value: json::JsonValue = json::parse(&json_str)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!(
+            "Failed to parse JSON: {:?}",
+            e
+        )))?;
+    
+    // Serialize to bytes
+    match parser::serialize(&json_value) {
+        Ok(bytes) => {
+            // Convert Vec<u8> to Python bytes
+            let py_bytes = pyo3::types::PyBytes::new_bound(py, &bytes);
+            Ok(py_bytes.into_any())
+        }
+        Err(e) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "Failed to serialize: {}",
+            e
+        ))),
+    }
+}
+
+/// Python module for Ripple data serialization and parsing
+#[pymodule]
+fn serialize(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(parse_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(serialize_bytes, m)?)?;
+    Ok(())
 }
