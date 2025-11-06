@@ -13,15 +13,7 @@ from rocket_controller.iteration_type import TimeBasedIteration, LedgerBasedIter
 from rocket_controller.strategies.strategy import Strategy
 from xrpl.core.keypairs.secp256k1 import SECP256K1, sha512_first_half
 
-try:
-    import serialize
-
-    SERIALIZE_AVAILABLE = True
-except ImportError:
-    SERIALIZE_AVAILABLE = False
-    print(
-        "Warning: serialize module not available. Validation parsing will be disabled."
-    )
+import serialize
 
 
 class EvoDelayStrategy(Strategy):
@@ -44,30 +36,6 @@ class EvoDelayStrategy(Strategy):
         assert len(self.delays) == 7 * self.network.node_amount * (
             self.network.node_amount - 1
         )
-
-    def parse_validation_content(self, validation_message) -> Dict[str, Any]:
-        """
-        Parse the content of a validation message using the Rust serialize library.
-
-        Args:
-            validation_message: The TMValidation protobuf message
-
-        Returns:
-            Dict with parsed validation fields, or empty dict if parsing fails
-        """
-        if not SERIALIZE_AVAILABLE:
-            return {"error": "serialize module not available"}
-
-        try:
-            # Get the validation data from the protobuf message
-            validation_data = validation_message.validation
-
-            # Use the Rust parse_bytes function to parse the validation data
-            parsed = serialize.parse_bytes(validation_data)
-
-            return parsed
-        except Exception as e:
-            return {"error": f"Failed to parse validation: {str(e)}"}
 
     def get_node_private_key(self, node_id: int) -> str:
         """
@@ -105,7 +73,7 @@ class EvoDelayStrategy(Strategy):
         }
 
         # Serialize the validation data without signature
-        serialized_data = serialize.serialize_bytes(validation_for_signing)
+        serialized_data = self.parse_validation_content(validation_for_signing)
 
         # Create the data to sign: "VAL\0" prefix + serialized validation
         bytes_to_sign = b"VAL\x00" + serialized_data
@@ -142,11 +110,6 @@ class EvoDelayStrategy(Strategy):
             else:
                 result[key] = value
         return result
-
-    def handle_byzz_node_packet(
-        self, packet: packet_pb2.Packet
-    ) -> Tuple[bytes, int, int]:
-        pass
 
     def modify_validation_message(
         self,
@@ -196,7 +159,7 @@ class EvoDelayStrategy(Strategy):
         parsed = self._ensure_hex_strings(parsed)
 
         # Serialize back to bytes
-        modified_validation_bytes = serialize.serialize_bytes(parsed)
+        modified_validation_bytes = self.parse_validation_content(parsed)
 
         # Create a new TMValidation message with modified data
 

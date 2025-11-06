@@ -8,6 +8,8 @@ from xrpl.core.keypairs.secp256k1 import SECP256K1
 
 from protos import packet_pb2, ripple_pb2
 from protos.ripple_pb2 import TMProposeSet
+from typing import Any, Dict, Tuple
+import serialize
 
 
 class DecodingNotSupportedError(Exception):
@@ -144,3 +146,26 @@ class PacketEncoderDecoder:
             + serialized
         )
         return final_message
+
+    @staticmethod
+    def decode_validation(validation_message) -> Dict[str, Any]:
+        """
+        Parse the content of a validation message using the Rust serialize library.
+
+        Args:
+            validation_message: The TMValidation protobuf message (= packet.data[6:] = PacketEncoderDecoder.decode_packet(packet)[0] )
+
+        Returns:
+            Dict with parsed validation fields, or empty dict if parsing fails
+        """
+
+        try:
+            # Get the validation data from the protobuf message
+            validation_data = validation_message.validation
+
+            # Use the Rust parse_bytes function to parse the validation data
+            parsed = serialize.parse_bytes(validation_data)
+
+            return parsed
+        except Exception as e:
+            return {"error": f"Failed to parse validation: {str(e)}"}
