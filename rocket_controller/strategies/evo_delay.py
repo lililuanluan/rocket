@@ -117,7 +117,7 @@ class EvoDelayStrategy(Strategy):
         modifications: Dict[str, Any],
         node_id: int = None,
         private_key: str = None,
-    ) -> bytes:
+    ) -> packet_pb2.Packet:
         """
         Modify a validation message and return the modified packet data.
 
@@ -128,10 +128,8 @@ class EvoDelayStrategy(Strategy):
             private_key: The validation private key in base58 format (if not provided, uses node_id)
 
         Returns:
-            Modified packet data as bytes
+            Modified packet
         """
-        if not SERIALIZE_AVAILABLE:
-            raise RuntimeError("serialize module not available")
 
         # Parse the original validation content
         parsed = self.parse_validation_content(message)
@@ -170,7 +168,13 @@ class EvoDelayStrategy(Strategy):
         # Re-encode to packet data
         new_packet_data = PacketEncoderDecoder.encode_message(new_message, 41)
 
-        return new_packet_data
+        temp_packet = packet_pb2.Packet()
+        temp_packet.data = new_packet_data
+
+        return temp_packet
+
+    def parse_validation_content(self, validation_message) -> Dict[str, Any]:
+        return PacketEncoderDecoder.decode_validation(validation_message)
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
@@ -220,38 +224,33 @@ class EvoDelayStrategy(Strategy):
         )
 
         # Byzantine节点修改validation消息
-        if message_type == 41 and SERIALIZE_AVAILABLE:
+        if message_type == 41:
             try:
                 # 1. 解析原始validation消息
                 parsed = self.parse_validation_content(message)
                 print(f"Original validation: {parsed}")
                 original_seq = parsed.get("LedgerSequence", 0)
 
-
                 # 2. 修改validation并重新签名
                 # 方式1: 使用modify_validation_message（推荐，一步完成）
-                modified_packet_data = self.modify_validation_message(
+                modified_packet = self.modify_validation_message(
                     message,
-                    modifications={
-                        "LedgerSequence": original_seq + 1
-                    },
+                    modifications={"LedgerSequence": original_seq + 1},
                     node_id=sender_node_id,  # 使用发送节点的私钥签名
                 )
 
-
                 print(
-                    f"Packet re-signed and serialized ({len(modified_packet_data)} bytes)"
+                    f"Packet re-signed and serialized ({len(modified_packet.data)} bytes)"
                 )
 
                 # 解码修改后的packet以验证
                 # 从bytes创建临时Packet对象
-                temp_packet = packet_pb2.Packet()
-                temp_packet.data = modified_packet_data
-                modified_message, _ = PacketEncoderDecoder.decode_packet(temp_packet)
-                parsed_modified = self.parse_validation_content(modified_message)
-                print(
-                    f"modified validation: {parsed_modified}"
+
+                modified_message, _ = PacketEncoderDecoder.decode_packet(
+                    modified_packet
                 )
+                parsed_modified = self.parse_validation_content(modified_message)
+                print(f"modified validation: {parsed_modified}")
 
             except Exception as e:
                 print(
