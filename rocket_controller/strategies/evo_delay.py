@@ -21,6 +21,30 @@ from pathlib import Path
 TMP_ERROR_FILE = Path(__file__).parent / "../../evo/out/error.log" # TODO add this as a param
 
 
+def _normalize_pubhex(val: Any) -> str:
+    """Normalize a SigningPubKey-like value to lowercase hex string.
+
+    Handles bytes, hex strings (with optional 0x prefix), and strings that
+    may be wrapped like "b'...'." Returns empty string for falsy inputs.
+    This central helper prevents duplicated logic across the module.
+    """
+    if not val:
+        return ""
+    if isinstance(val, (bytes, bytearray)):
+        return bytes(val).hex()
+    if isinstance(val, str):
+        s = val
+        if (s.startswith("b'") and s.endswith("'")) or (
+            s.startswith('b"') and s.endswith('"')
+        ):
+            s = s[2:-1]
+        if s.startswith("0x") or s.startswith("0X"):
+            s = s[2:]
+        s_sanitized = re.sub(r'[^0-9A-Fa-f]', '', s)
+        return s_sanitized.lower()
+    return str(val).lower()
+
+
 class EvoDelayStrategy(Strategy):
     """Class that implements an evolutionary delay-based strategy."""
 
@@ -33,6 +57,11 @@ class EvoDelayStrategy(Strategy):
 
         self.delays: list[int] = self.params["encoding"]
         self.byzz_nodes: list[int] = self.network.network_config.get("byzz_nodes", [])
+
+        self.dummy_proposal = bytes.fromhex(
+            "e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c"
+        )
+        self.old_proposals = [self.dummy_proposal,]
 
     def setup(self):
         """Setup method for EvoDelayStrategy."""
@@ -60,26 +89,6 @@ class EvoDelayStrategy(Strategy):
         return self.network.validator_node_list[
             node_id
         ].validator_key_data.validation_private_key
-
-
-
-    def _ensure_hex_strings(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Convert bytes fields to hex strings for JSON serialization.
-
-        Args:
-            data: Dictionary that may contain bytes values
-
-        Returns:
-            Dictionary with bytes converted to hex strings
-        """
-        result = {}
-        for key, value in data.items():
-            if isinstance(value, bytes):
-                result[key] = value.hex()
-            else:
-                result[key] = value
-        return result
 
     def modify_validation_message(
         self,
@@ -113,6 +122,13 @@ class EvoDelayStrategy(Strategy):
 
     def parse_validation_content(self, validation_message) :
         return PacketEncoderDecoder.decode_validation(validation_message)
+
+    # 拜占庭行为（byzzfuzz）：
+    # transaction消息：更改交易的amount
+    # proposeset：更改txs hash或者sequence number
+    # validation：更改id（pubkey？）或者sequence number
+    # 分为small scope和any scope
+    # small scope：对数值+1，对hash替换为网络中的前一个hash
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
@@ -160,57 +176,101 @@ class EvoDelayStrategy(Strategy):
                 else receiver_node_id - 1
             )
         )
+
+        # self.test_sign_message(packet)
+        is_sent_by_byzz = sender_node_id in self.byzz_nodes
+        if is_sent_by_byzz:
+            packet = self.byzz_mutate_message(packet, message, message_type, sender_node_id)
         
-        self.test_sign_message(packet)
-
-        # Byzantine节点修改validation消息
-        # if message_type == 41:
-        #     try:
-        #         # 1. 解析原始validation消息
-        #         parsed = self.parse_validation_content(message)
-        #         # print(f"Original validation: {parsed}")
-        #         original_seq = parsed.get("LedgerSequence", 0)
-
-        #         # 2. 修改validation并重新签名
-        #         # 方式1: 使用modify_validation_message（推荐，一步完成）
-        #         modified_packet = self.modify_validation_message(
-        #             message,
-        #             modifications={"LedgerSequence": original_seq + 1},
-        #             node_id=sender_node_id,  # 使用发送节点的私钥签名
-        #         )
-
-        #         print(
-        #             f"Packet re-signed and serialized ({len(modified_packet.data)} bytes)"
-        #         )
-
-        #         # 解码修改后的packet以验证
-        #         # 从bytes创建临时Packet对象
-
-        #         modified_message, _ = PacketEncoderDecoder.decode_packet(
-        #             modified_packet
-        #         )
-        #         parsed_modified = self.parse_validation_content(modified_message)
-        #         print(f"modified validation: {parsed_modified}")
-
-        #     except Exception as e:
-        #         print(
-        #             f"[Byzantine Node {sender_node_id}] Error modifying validation: {e}"
-        #         )
-
-        # Get index through a default function
-        # Return with delay=self.delays[index]
+        # cache old proposals or validation AFTER mutation
+        if isinstance(message, ripple_pb2.TMProposeSet) and is_sent_by_byzz:
+            self.old_proposals.append(message.currentTxHash)
 
         return packet.data, self.delays[index], 1
     
+    def _increment_propose_seq(self, message: ripple_pb2.TMProposeSet):
+        message.proposeSeq += 1
+        return message
+    
+    def _replace_txs_with_old_propose(self, message: ripple_pb2.TMProposeSet):
+        # 如果message.currentTxHash是全0，则设为self.dummy_proposal，否则设为上一个缓存的proposal
+        if _is_all_zero_hash(message.currentTxHash):
+            message.currentTxHash = self.dummy_proposal
+        else:
+            message.currentTxHash = self.old_proposals[-1] if self.old_proposals else message.currentTxHash
+        return message
+    
+    def _byzz_do_nothing(self, message):
+        return message
+    
+    def _increment_val_ledger_sequence(self, message: ripple_pb2.TMValidation):
+        pass
+    
+    def _get_private_key_from_validation(self, parsed: ValidationDict) -> str | None:
+        signing_pub = parsed.get("SigningPubKey", "") if isinstance(parsed, dict) else ""
+        signing_pub_hex = _normalize_pubhex(signing_pub)
+        private_key_hex = None
+        if signing_pub_hex:
+            private_key_hex = self.network.public_to_private_key_map.get(signing_pub_hex)
+
+        return private_key_hex
+
+    def byzz_mutate_message(self, packet, message, message_type, sender_node_id):
+        # proposeset
+        if isinstance(message, ripple_pb2.TMProposeSet):
+            message = self._replace_txs_with_old_propose(message)
+            signed_message = PacketEncoderDecoder.sign_message(
+                message,
+                self.network.public_to_private_key_map[message.nodePubKey.hex()],
+            )
+            # encode_message returns raw bytes; wrap into a Packet proto so
+            # callers (and packet_server) can safely access .data/from_port/etc.
+            encoded = PacketEncoderDecoder.encode_message(signed_message, message_type)
+            new_packet = packet_pb2.Packet(data=encoded, from_port=packet.from_port, to_port=packet.to_port)
+            return new_packet
+        # transaction
+        elif message_type == 30:
+            pass
+        # validation
+        elif message_type == 41 or isinstance(message, ripple_pb2.TMValidation):
+            parsed = self.parse_validation_content(message)
+            # increment ledger sequence (ensure numeric)
+            try:
+                parsed["LedgerSequence"] = int(parsed.get("LedgerSequence", 0)) + 1
+            except Exception:
+                parsed["LedgerSequence"] = parsed.get("LedgerSequence", 0)
+
+            private_key_hex = self._get_private_key_from_validation(parsed)
+            
+
+            if not private_key_hex:
+                msg = (
+                    f"Missing private key mapping for SigningPubKey {parsed["SigningPubKey"]} (node {sender_node_id}). Skipping byzz validation mutation."
+                )
+                print(msg)
+                with open(TMP_ERROR_FILE, "a") as f:
+                    f.write(msg + "\n")
+                return packet
+
+            signed_message = PacketEncoderDecoder.sign_message(
+                parsed,
+                private_key_hex,
+            )
+            encoded = PacketEncoderDecoder.encode_message(signed_message, message_type)
+            new_packet = packet_pb2.Packet(data=encoded, from_port=packet.from_port, to_port=packet.to_port)
+            return new_packet
+            
+        return packet
+
     def test_sign_message(self, packet: packet_pb2.Packet):
         message, message_type = PacketEncoderDecoder.decode_packet(packet)
         sender_node_id = self.network.port_to_id(packet.from_port)
-        
+
         message_class = PacketEncoderDecoder.message_type_map[message_type]
         message_copy = message_class()
         if message_type in [33, 41]:  # TMProposeSet or TMValidation    
             message_copy.CopyFrom(message) 
-        
+
         if message_type == 33:  # TMProposeSet
             signed_message = PacketEncoderDecoder.sign_message(
                 message_copy,
@@ -222,7 +282,7 @@ class EvoDelayStrategy(Strategy):
                     f.write(
                         f"Signature mismatch for node {sender_node_id} proposeSeq {message.proposeSeq}\n"
                     )
-                    
+
         if message_type == 41:
             parsed = self.parse_validation_content(message)
 
@@ -230,24 +290,9 @@ class EvoDelayStrategy(Strategy):
             # from the parsed validation (this mirrors how ProposeSet uses
             # message.nodePubKey). Fall back to node_id-based lookup if the
             # public key is missing or not mapped.
-            # TODO: fix this sh**t
-            def _normalize_pubhex(val: Any) -> str:
-                if not val:
-                    return ""
-                if isinstance(val, bytes):
-                    return val.hex()
-                if isinstance(val, str):
-                    s = val
-                    if (s.startswith("b'") and s.endswith("'")) or (
-                        s.startswith('b"') and s.endswith('"')
-                    ):
-                        s = s[2:-1]
-                    if s.startswith("0x") or s.startswith("0X"):
-                        s = s[2:]
-                    s_sanitized = re.sub(r'[^0-9A-Fa-f]', '', s)
-                    return s_sanitized.lower()
-                return str(val).lower()
-
+            # Prefer to lookup the private key via the SigningPubKey extracted
+            # from the parsed validation (this mirrors how ProposeSet uses
+            # message.nodePubKey).
             signing_pub = parsed.get("SigningPubKey", "") if isinstance(parsed, dict) else ""
             signing_pub_hex = _normalize_pubhex(signing_pub)
 
@@ -352,3 +397,49 @@ class EvoDelayStrategy(Strategy):
                     f.write(msg + "\n")
             else:
                 print(f"validation signature SUCCESS for node {sender_node_id} ledgerSeq {parsed.get('LedgerSequence', 'N/A')}")
+
+
+def _is_all_zero_hash(val) -> bool:
+    """Return True if `val` represents an all-zero 32-byte hash.
+
+    Handles:
+    - bytes (binary) -> checks all bytes == 0
+    - hex string (maybe with 0x, maybe mixed case) -> parses hex and checks == 0
+    - empty / None -> treated as all-zero (adjust if you prefer otherwise)
+    - returns False for non-hex strings
+    """
+    if val is None:
+        return True
+
+    # bytes-like
+    if isinstance(val, (bytes, bytearray)):
+        # if it looks like an ASCII hex string encoded as bytes (b'00...'), try decode
+        try:
+            s = val.decode('ascii')
+        except Exception:
+            # real binary bytes: check all bytes == 0
+            return all(b == 0 for b in val)
+        # if decoding succeeded and it's hex-like, fall through to string handling
+        val = s
+
+    # string-like (hex text)
+    if isinstance(val, str):
+        s = val.strip()
+        # remove leading "0x" if present
+        if s.startswith(("0x", "0X")):
+            s = s[2:]
+        # strip any non-hex characters (safe guard)
+        s = re.sub(r'[^0-9A-Fa-f]', '', s)
+        if s == '':
+            # empty after sanitizing -> treat as all-zero (change if you prefer)
+            return True
+        # ensure even length
+        if len(s) % 2 == 1:
+            s = '0' + s
+        try:
+            return int(s, 16) == 0
+        except ValueError:
+            return False
+
+    # anything else -> not all-zero
+    return False
