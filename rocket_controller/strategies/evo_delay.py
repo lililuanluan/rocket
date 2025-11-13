@@ -7,6 +7,7 @@ from protos import packet_pb2, ripple_pb2
 from rocket_controller.encoder_decoder import (
     DecodingNotSupportedError,
     PacketEncoderDecoder,
+    ValidationDict,
 )
 from rocket_controller.helper import MAX_U32
 from rocket_controller.iteration_type import TimeBasedIteration, LedgerBasedIteration
@@ -14,6 +15,10 @@ from rocket_controller.strategies.strategy import Strategy
 from xrpl.core.keypairs.secp256k1 import SECP256K1, sha512_first_half
 
 import serialize
+import re
+from pathlib import Path
+
+TMP_ERROR_FILE = Path(__file__).parent / "../../evo/out/error.log" # TODO add this as a param
 
 
 class EvoDelayStrategy(Strategy):
@@ -37,6 +42,8 @@ class EvoDelayStrategy(Strategy):
             self.network.node_amount - 1
         )
 
+        print(f"dumping errors to {TMP_ERROR_FILE}")
+
     def get_node_private_key(self, node_id: int) -> str:
         """
         Get the validation private key for a given node ID.
@@ -54,44 +61,7 @@ class EvoDelayStrategy(Strategy):
             node_id
         ].validator_key_data.validation_private_key
 
-    def sign_validation_message(
-        self, validation_dict: Dict[str, Any], private_key: str
-    ) -> bytes:
-        """
-        Sign a validation message and return the signature.
 
-        Args:
-            validation_dict: The validation message as a dictionary (without Signature field)
-            private_key: The validation private key in base58 format
-
-        Returns:
-            The signature as bytes
-        """
-        # Remove Signature field if present
-        validation_for_signing = {
-            k: v for k, v in validation_dict.items() if k != "Signature"
-        }
-
-        # Serialize the validation data without signature
-        serialized_data = self.parse_validation_content(validation_for_signing)
-
-        # Create the data to sign: "VAL\0" prefix + serialized validation
-        bytes_to_sign = b"VAL\x00" + serialized_data
-
-        # Compute SHA512 first half
-        hash_to_sign = sha512_first_half(bytes_to_sign)
-
-        # Decode the base58 private key to hex format for signing
-        # Extract bytes 1:33 (32 bytes) from the decoded key, matching network_manager.py
-        decoded_key = base58.b58decode(private_key, alphabet=base58.RIPPLE_ALPHABET)[
-            1:33
-        ]
-        private_key_hex = decoded_key.hex()
-
-        # Sign the hash
-        signature = SECP256K1.sign(hash_to_sign, private_key_hex)
-
-        return signature
 
     def _ensure_hex_strings(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -115,65 +85,33 @@ class EvoDelayStrategy(Strategy):
         self,
         message,
         modifications: Dict[str, Any],
-        node_id: int = None,
-        private_key: str = None,
-    ) -> packet_pb2.Packet:
+    ) -> ValidationDict:
         """
-        Modify a validation message and return the modified packet data.
+        Parse a validation message, apply in-place modifications, and return
+        the parsed ValidationDict. Signing and serialization are left to
+        `PacketEncoderDecoder.sign_message(parsed, private_key)`.
 
         Args:
             message: The TMValidation protobuf message
             modifications: Dictionary of fields to modify (e.g., {'LedgerSequence': 4})
-            node_id: The node ID to get the private key from (if private_key not provided)
-            private_key: The validation private key in base58 format (if not provided, uses node_id)
 
         Returns:
-            Modified packet
+            ValidationDict: The modified parsed validation dictionary.
         """
 
         # Parse the original validation content
         parsed = self.parse_validation_content(message)
 
-        if "error" in parsed:
+        if isinstance(parsed, dict) and parsed.get("error"):
             raise ValueError(f"Cannot parse validation: {parsed['error']}")
 
-        # Apply modifications
+        # Apply modifications in-place
         for key, value in modifications.items():
             parsed[key] = value
 
-        # Get private key if not provided
-        if private_key is None:
-            if node_id is None:
-                raise ValueError("Either node_id or private_key must be provided")
-            private_key = self.get_node_private_key(node_id)
+        return parsed
 
-        # Sign the modified validation message
-        signature = self.sign_validation_message(parsed, private_key)
-
-        # Add the signature to the parsed data (as hex string for JSON serialization)
-        parsed["Signature"] = signature.hex()
-
-        # Ensure all bytes fields are hex strings for JSON serialization
-        parsed = self._ensure_hex_strings(parsed)
-
-        # Serialize back to bytes
-        modified_validation_bytes = self.parse_validation_content(parsed)
-
-        # Create a new TMValidation message with modified data
-
-        new_message = ripple_pb2.TMValidation()
-        new_message.CopyFrom(message)
-        new_message.validation = modified_validation_bytes
-
-        # Re-encode to packet data
-        new_packet_data = PacketEncoderDecoder.encode_message(new_message, 41)
-
-        temp_packet = packet_pb2.Packet()
-        temp_packet.data = new_packet_data
-
-        return temp_packet
-
-    def parse_validation_content(self, validation_message) -> Dict[str, Any]:
+    def parse_validation_content(self, validation_message) :
         return PacketEncoderDecoder.decode_validation(validation_message)
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
@@ -222,42 +160,195 @@ class EvoDelayStrategy(Strategy):
                 else receiver_node_id - 1
             )
         )
+        
+        self.test_sign_message(packet)
 
         # Byzantine节点修改validation消息
-        if message_type == 41:
-            try:
-                # 1. 解析原始validation消息
-                parsed = self.parse_validation_content(message)
-                print(f"Original validation: {parsed}")
-                original_seq = parsed.get("LedgerSequence", 0)
+        # if message_type == 41:
+        #     try:
+        #         # 1. 解析原始validation消息
+        #         parsed = self.parse_validation_content(message)
+        #         # print(f"Original validation: {parsed}")
+        #         original_seq = parsed.get("LedgerSequence", 0)
 
-                # 2. 修改validation并重新签名
-                # 方式1: 使用modify_validation_message（推荐，一步完成）
-                modified_packet = self.modify_validation_message(
-                    message,
-                    modifications={"LedgerSequence": original_seq + 1},
-                    node_id=sender_node_id,  # 使用发送节点的私钥签名
-                )
+        #         # 2. 修改validation并重新签名
+        #         # 方式1: 使用modify_validation_message（推荐，一步完成）
+        #         modified_packet = self.modify_validation_message(
+        #             message,
+        #             modifications={"LedgerSequence": original_seq + 1},
+        #             node_id=sender_node_id,  # 使用发送节点的私钥签名
+        #         )
 
-                print(
-                    f"Packet re-signed and serialized ({len(modified_packet.data)} bytes)"
-                )
+        #         print(
+        #             f"Packet re-signed and serialized ({len(modified_packet.data)} bytes)"
+        #         )
 
-                # 解码修改后的packet以验证
-                # 从bytes创建临时Packet对象
+        #         # 解码修改后的packet以验证
+        #         # 从bytes创建临时Packet对象
 
-                modified_message, _ = PacketEncoderDecoder.decode_packet(
-                    modified_packet
-                )
-                parsed_modified = self.parse_validation_content(modified_message)
-                print(f"modified validation: {parsed_modified}")
+        #         modified_message, _ = PacketEncoderDecoder.decode_packet(
+        #             modified_packet
+        #         )
+        #         parsed_modified = self.parse_validation_content(modified_message)
+        #         print(f"modified validation: {parsed_modified}")
 
-            except Exception as e:
-                print(
-                    f"[Byzantine Node {sender_node_id}] Error modifying validation: {e}"
-                )
+        #     except Exception as e:
+        #         print(
+        #             f"[Byzantine Node {sender_node_id}] Error modifying validation: {e}"
+        #         )
 
         # Get index through a default function
         # Return with delay=self.delays[index]
 
         return packet.data, self.delays[index], 1
+    
+    def test_sign_message(self, packet: packet_pb2.Packet):
+        message, message_type = PacketEncoderDecoder.decode_packet(packet)
+        sender_node_id = self.network.port_to_id(packet.from_port)
+        
+        message_class = PacketEncoderDecoder.message_type_map[message_type]
+        message_copy = message_class()
+        if message_type in [33, 41]:  # TMProposeSet or TMValidation    
+            message_copy.CopyFrom(message) 
+        
+        if message_type == 33:  # TMProposeSet
+            signed_message = PacketEncoderDecoder.sign_message(
+                message_copy,
+                self.network.public_to_private_key_map[message.nodePubKey.hex()],
+            )
+            if signed_message.signature.hex() != message.signature.hex():
+                # 将不匹配写入tmp文件
+                with open(TMP_ERROR_FILE, "a") as f:
+                    f.write(
+                        f"Signature mismatch for node {sender_node_id} proposeSeq {message.proposeSeq}\n"
+                    )
+                    
+        if message_type == 41:
+            parsed = self.parse_validation_content(message)
+
+            # Prefer to lookup the private key via the SigningPubKey extracted
+            # from the parsed validation (this mirrors how ProposeSet uses
+            # message.nodePubKey). Fall back to node_id-based lookup if the
+            # public key is missing or not mapped.
+            # TODO: fix this sh**t
+            def _normalize_pubhex(val: Any) -> str:
+                if not val:
+                    return ""
+                if isinstance(val, bytes):
+                    return val.hex()
+                if isinstance(val, str):
+                    s = val
+                    if (s.startswith("b'") and s.endswith("'")) or (
+                        s.startswith('b"') and s.endswith('"')
+                    ):
+                        s = s[2:-1]
+                    if s.startswith("0x") or s.startswith("0X"):
+                        s = s[2:]
+                    s_sanitized = re.sub(r'[^0-9A-Fa-f]', '', s)
+                    return s_sanitized.lower()
+                return str(val).lower()
+
+            signing_pub = parsed.get("SigningPubKey", "") if isinstance(parsed, dict) else ""
+            signing_pub_hex = _normalize_pubhex(signing_pub)
+
+            private_key_candidate = None
+            if signing_pub_hex:
+                # lookup map keys are stored as lowercase hex
+                private_key_candidate = self.network.public_to_private_key_map.get(signing_pub_hex)
+
+            # IMPORTANT: do NOT fallback to sender node_id — this is a gossip network
+            # and the authoritative private key for a validation must be looked up
+            # from the message's SigningPubKey. If the mapping is missing, skip
+            # signing/verification checks for this packet and log the issue.
+            if not private_key_candidate:
+                msg = (
+                    f"Missing private key mapping for SigningPubKey {signing_pub_hex} (node {sender_node_id}). Skipping validation signing checks."
+                )
+                print(msg)
+                with open(TMP_ERROR_FILE, "a") as f:
+                    f.write(msg + "\n")
+                # skip further checks for this packet
+                return
+
+            # map stores decoded private key as hex (see NetworkManager)
+            private_key_for_signing = private_key_candidate
+
+            # PacketEncoderDecoder.sign_message now accepts a parsed
+            # ValidationDict and returns a signed TMValidation.
+            signed_message = PacketEncoderDecoder.sign_message(
+                parsed,
+                private_key_for_signing,
+            )
+
+            parsed_signed = self.parse_validation_content(signed_message)
+            # If parsing failed for either original or signed message, log that
+            if isinstance(parsed, dict) and parsed.get("error"):
+                print(f"[parse error] original validation parse failed: {parsed.get('error')}")
+            if isinstance(parsed_signed, dict) and parsed_signed.get("error"):
+                print(f"[parse error] signed validation parse failed: {parsed_signed.get('error')}")
+
+            orig_sig = parsed.get("Signature", "") if isinstance(parsed, dict) else ""
+            new_sig = parsed_signed.get("Signature", "") if isinstance(parsed_signed, dict) else ""
+
+            if new_sig != orig_sig:
+                # Rebuild canonical signing payload once and run compact diagnostics.
+                try:
+                    signing_dict = {k: v for k, v in parsed.items() if k != "Signature"}
+                    payload = bytes(serialize.serialize_bytes(signing_dict))
+                    bytes_to_sign = b"VAL\x00" + payload
+                except Exception as e:
+                    raise RuntimeError(f"Failed to rebuild signing payload: {e}")
+
+                def _hex_to_bytes_loose(s: str) -> bytes:
+                    if not s:
+                        return b""
+                    ss = s
+                    if (ss.startswith("b'") and ss.endswith("'")) or (ss.startswith('b"') and ss.endswith('"')):
+                        ss = ss[2:-1]
+                    if ss.startswith("0x") or ss.startswith("0X"):
+                        ss = ss[2:]
+                    ss = re.sub(r'[^0-9A-Fa-f]', '', ss)
+                    if len(ss) % 2 == 1:
+                        ss = '0' + ss
+                    try:
+                        return bytes.fromhex(ss)
+                    except Exception:
+                        return b""
+
+                orig_sig_b = _hex_to_bytes_loose(orig_sig)
+                new_sig_b = _hex_to_bytes_loose(new_sig)
+                signing_pub = parsed.get("SigningPubKey", "")
+
+                valid_orig = bool(orig_sig_b and bytes_to_sign and signing_pub and SECP256K1.is_valid_message(bytes_to_sign, orig_sig_b, signing_pub))
+                valid_new = bool(new_sig_b and bytes_to_sign and signing_pub and SECP256K1.is_valid_message(bytes_to_sign, new_sig_b, signing_pub))
+
+                priv_fingerprint = ""
+                pub_hex = ""
+                pub_match = False
+                try:
+                    priv_hex = private_key_for_signing
+                    priv_fingerprint = f"{priv_hex[:8]}..{priv_hex[-8:]}"
+                    # derive compressed public key
+                    from ecpy.keys import ECPrivateKey
+                    from ecpy.curves import Curve
+
+                    curve = Curve.get_curve("secp256k1")
+                    priv_int = int(priv_hex, 16)
+                    wrapped_priv = ECPrivateKey(priv_int, curve)
+                    pub_point = wrapped_priv.get_public_key()
+                    pub_bytes = bytes(curve.encode_point(pub_point.W, compressed=True))
+                    pub_hex = pub_bytes.hex()
+                    signing_pub_norm = re.sub(r'[^0-9A-Fa-f]', '', str(signing_pub or ''))
+                    pub_match = (signing_pub_norm.lower() == pub_hex.lower())
+                except Exception:
+                    pass
+
+                msg = (
+                    f"Signature mismatch node={sender_node_id} ledger={parsed.get('LedgerSequence','N/A')} "
+                    f"orig_ok={valid_orig} new_ok={valid_new} priv_fp={priv_fingerprint} pub_match={pub_match} payload_hex={bytes_to_sign[:32].hex()}.."
+                )
+                print(msg)
+                with open(TMP_ERROR_FILE, "a") as f:
+                    f.write(msg + "\n")
+            else:
+                print(f"validation signature SUCCESS for node {sender_node_id} ledgerSeq {parsed.get('LedgerSequence', 'N/A')}")

@@ -7,14 +7,36 @@ from google.protobuf.message import Message
 from xrpl.core.keypairs.secp256k1 import SECP256K1
 
 from protos import packet_pb2, ripple_pb2
-from protos.ripple_pb2 import TMProposeSet
+from protos.ripple_pb2 import TMProposeSet, TMValidation
 from typing import Any, Dict, Tuple
 import serialize
+import hashlib
+import base58  # or bs58, depending on your environment
+import re
+
+
+def sha512_first_half(data: bytes) -> bytes:
+    """Return the first 32 bytes of SHA-512(data).
+
+    This reproduces XRPL's sha512Half behaviour (also called sha512_first_half
+    elsewhere). The project dependency you tried to import it from may not
+    expose this helper, so define it locally to avoid the missing import.
+    """
+    return hashlib.sha512(data).digest()[:32]
 
 
 class DecodingNotSupportedError(Exception):
     """Signals that decoding a certain message is not supported."""
 
+    pass
+
+
+class ValidationDict(dict):
+    """A thin wrapper around dict used to represent a parsed validation.
+
+    This type exists so `PacketEncoderDecoder.sign_message` can be
+    singledispatchable on the parsed validation representation.
+    """
     pass
 
 
@@ -67,6 +89,52 @@ class PacketEncoderDecoder:
         """
         raise NotImplementedError(f"No signing method implemented for {type(message)}.")
 
+
+
+    # New API: accept a parsed ValidationDict and a private key, and return
+    # a signed TMValidation. This avoids callers needing to re-parse the
+    # serialized bytes and centralizes canonical serialization in one place.
+    @sign_message.register(ValidationDict)
+    @staticmethod
+    def _(parsed: ValidationDict, private_key: str) -> TMValidation:
+        # Build signing dict (exclude Signature)
+        try:
+            signing_dict = {k: v for k, v in parsed.items() if k != "Signature"}
+            serialized = serialize.serialize_bytes(signing_dict)
+            mutated_validation = bytes(serialized)
+        except Exception as e:
+            raise ValueError(f"serialize.serialize_bytes failed for parsed validation: {e}")
+
+        # Prepare payload to sign
+        bytes_to_sign = b"VAL\x00" + mutated_validation
+
+        # Enforce single private-key format: hex string. Do not accept base58
+        # here to avoid multiple decoding schemes. The network mapping stores
+        # private keys as hex (see NetworkManager.update_network).
+        if not all(c in "0123456789abcdefABCDEF" for c in private_key):
+            raise ValueError("private_key must be a hex string; base58 is not supported here")
+        private_key_hex = private_key
+
+        try:
+            der_sig = SECP256K1.sign(bytes_to_sign, private_key_hex)
+            if isinstance(der_sig, str):
+                der_sig_bytes = bytes.fromhex(der_sig)
+            else:
+                der_sig_bytes = der_sig
+        except Exception as e:
+            raise ValueError(f"Failed to sign validation from parsed dict: {e}")
+
+        final_validation = (
+            mutated_validation
+            + bytes.fromhex("76")
+            + len(der_sig_bytes).to_bytes(1, "big")
+            + der_sig_bytes
+        )
+
+        tm = TMValidation()
+        tm.validation = final_validation
+        return tm
+
     @sign_message.register
     @staticmethod
     def _(message: TMProposeSet, private_key: str) -> TMProposeSet:
@@ -88,6 +156,10 @@ class PacketEncoderDecoder:
             + message.previousledger
             + message.currentTxHash
         )
+
+        # Enforce private_key is hex-only (no base58 fallback)
+        if not all(c in "0123456789abcdefABCDEF" for c in private_key):
+            raise ValueError("private_key must be a hex string for ProposeSet signing")
 
         # Sign the message using the private key
         signature = SECP256K1.sign(bytes_to_sign, private_key)
@@ -166,6 +238,8 @@ class PacketEncoderDecoder:
             # Use the Rust parse_bytes function to parse the validation data
             parsed = serialize.parse_bytes(validation_data)
 
-            return parsed
+            # Return a ValidationDict so callers can mutably modify it and
+            # PacketEncoderDecoder.sign_message can dispatch on the type.
+            return ValidationDict(parsed)
         except Exception as e:
-            return {"error": f"Failed to parse validation: {str(e)}"}
+            return ValidationDict({"error": f"Failed to parse validation: {str(e)}"})
