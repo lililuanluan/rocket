@@ -17,6 +17,7 @@ action_log_columns = [
     "message_type",
     "original_data",
     "possibly_mutated_data",
+    "packet_data"
 ]
 
 result_log_columns = [
@@ -140,7 +141,8 @@ class ActionLogger(CSVLogger):
         to_node_id: int,
         message_type: str,
         original_data: str,
-        possibly_mutated_data: str,
+        possibly_mutated_data: str,        
+        packet_data: str,
         custom_timestamp: int | None = None,
     ):
         """
@@ -169,6 +171,7 @@ class ActionLogger(CSVLogger):
                 message_type,
                 original_data,
                 possibly_mutated_data,
+                packet_data,
             ]
         )
 
