@@ -45,19 +45,19 @@ class LedgerResult:
         Returns:
             A dictionary containing the node info if available, None otherwise.
         """
-        with WebsocketClient(f"ws://localhost:{ws_port}") as client:
-            ledger_info = Ledger(ledger_index=ledger_seq)
-            ledger_response = client.request(ledger_info)
-            if not ledger_response.is_successful():
-                if retries > 0:
-                    sleep(5)
-                    return LedgerResult._fetch_ledger(ws_port, ledger_seq, retries - 1)
-                logger.error(
-                    f"Could not fetch ledger {ledger_seq} from port {ws_port}."
-                )
-                logger.debug(f"Response from {ws_port}:\n{ledger_response}")
-                return None
-            return ledger_response.result.get("ledger")
+        for _ in range(retries):
+            with WebsocketClient(f"ws://localhost:{ws_port}") as client:
+                ledger_info = Ledger(ledger_index=ledger_seq)
+                ledger_response = client.request(ledger_info)
+                if not ledger_response.is_successful():
+                        sleep(5)
+                        # logger.error(
+                        #     f"Could not fetch ledger {ledger_seq} from port {ws_port}."
+                        # )
+                        logger.debug(f"Response from {ws_port}:\n{ledger_response}")
+                else:
+                    return ledger_response.result.get("ledger")
+        return None
 
     def log_ledger_result(
         self,
