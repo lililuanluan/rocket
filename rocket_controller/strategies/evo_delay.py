@@ -251,43 +251,67 @@ class EvoDelayStrategy(Strategy):
 
     @byzz_mutate_message.register
     def _(self, message: ripple_pb2.TMValidation, packet: packet_pb2.Packet, message_type: int, sender_node_id: int):
-        method = random.choice(self.byzz_mutate_methods[ripple_pb2.TMValidation])
-        parsed = self.parse_validation_content(message)
-        # an ugly implemented exit callback
-        def go_with(packet):
-            if lh := parsed.get("LedgerHash") not in self.old_validation_hashes:
-                self.old_validation_hashes.append(lh)
+        try:
+            method = random.choice(self.byzz_mutate_methods[ripple_pb2.TMValidation])
+            parsed = self.parse_validation_content(message)
+
+            # small helper: record ledger-hash seen and return the packet
+            def go_with(p: packet_pb2.Packet):
+                try:
+                    lh = parsed.get("LedgerHash") if isinstance(parsed, dict) else None
+                    if lh and lh not in self.old_validation_hashes:
+                        self.old_validation_hashes.append(lh)
+                except Exception:
+                    # ensure this helper never raises
+                    print(f"caching {parsed.get('LedgerHash','N/A')} failed")
+                    pass
+                return p
+
+            if method == "do_nothing":
+                return go_with(packet)
+
+            original_sender = self.pubkey_to_node_id(parsed.get("SigningPubKey", ""))
+
+            if method == "increment_ledger_sequence":
+                try:
+                    parsed["LedgerSequence"] = int(parsed.get("LedgerSequence", 0)) + 1
+                except Exception:
+                    print(f"incrementing ledger sequence failed for {parsed.get('LedgerSequence','N/A')}")
+                    parsed["LedgerSequence"] = parsed.get("LedgerSequence", 0)
+            elif method == "replace_ledger_hash":
+                # 如果parsed["LedgerHash"]是全0，则设为self.dummy_validation，否则设为上一个缓存的validation hash
+                parsed["LedgerHash"] = (
+                    self.old_validation_hashes[-1]
+                    if self.old_validation_hashes
+                    else parsed.get("LedgerHash")
+                )
+
+            private_key_hex = self._get_private_key_from_validation(parsed)
+
+            if not private_key_hex:
+                logger.error("Missing private key")
+                return go_with(packet)
+
+            if sender_node_id == original_sender:
+                signed_message = PacketEncoderDecoder.sign_message(parsed, private_key_hex)
+            else:
+                tm = ripple_pb2.TMValidation()
+                tm.validation = bytes(serialize.serialize_bytes(parsed))
+                signed_message = tm
+
+            encoded = PacketEncoderDecoder.encode_message(signed_message, message_type)
+            new_packet = packet_pb2.Packet(data=encoded, from_port=packet.from_port, to_port=packet.to_port)
+            return go_with(new_packet)
+        except Exception as e:
+            # Log and fail-open: return original packet to avoid crashing the controller
+            msg = f"byzz validation handler error: {e}"
+            logger.exception(msg)
+            try:
+                with open(TMP_ERROR_FILE, "a") as f:
+                    f.write(msg + "\n")
+            except Exception:
+                pass
             return packet
-        if method == "do_nothing":
-            return go_with(packet)
-
-        original_sender = self.pubkey_to_node_id(parsed.get("SigningPubKey", ""))
-
-        if method == "increment_ledger_sequence":
-            parsed["LedgerSequence"] = int(parsed.get("LedgerSequence", 0)) + 1
-        elif method == "replace_ledger_hash":
-            # 如果parsed["LedgerHash"]是全0，则设为self.dummy_validation，否则设为上一个缓存的validation hash
-            parsed["LedgerHash"] = self.old_validation_hashes[-1] if self.  old_validation_hashes else parsed["LedgerHash"]
-                
-
-        private_key_hex = self._get_private_key_from_validation(parsed)
-
-        if not private_key_hex:
-            logger.error(f"Missing private key")
-            return go_with(packet)
-        if sender_node_id == original_sender:
-            signed_message = PacketEncoderDecoder.sign_message(
-                parsed,
-                private_key_hex,
-            )
-        else:
-            tm = ripple_pb2.TMValidation()
-            tm.validation = bytes(serialize.serialize_bytes(parsed))
-            signed_message = tm
-
-        encoded = PacketEncoderDecoder.encode_message(signed_message, message_type)
-        new_packet = packet_pb2.Packet(data=encoded, from_port=packet.from_port, to_port=packet.to_port)
-        return go_with(new_packet)
 
     def test_sign_message(self, packet: packet_pb2.Packet):
         message, message_type = PacketEncoderDecoder.decode_packet(packet)
