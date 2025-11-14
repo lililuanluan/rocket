@@ -231,6 +231,11 @@ class TimeBasedIteration:
             raise ValueError(f"Node {node_id} not found in ledger validation map.")
         return self.ledger_validation_map[node_id]["seq"]
 
+    def get_ledger_sequence_cur_max(self) -> int:
+        return max(
+            entry["seq"] for entry in self.ledger_validation_map.values()
+        ) if self.ledger_validation_map else 0
+
 
 class LedgerBasedIteration(TimeBasedIteration):
     """Ledger Based iteration type, able to keep track of validated ledgers."""

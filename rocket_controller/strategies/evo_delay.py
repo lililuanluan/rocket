@@ -159,12 +159,12 @@ class EvoDelayStrategy(Strategy):
         # DO NOT mutate messages in the beginning, otherwise the initial setup is messed up
         if is_sent_by_byzz:
             try:
-                if 3 <= self.iteration_type.get_ledger_sequence(sender_node_id):
+                if 3 <= self.iteration_type.get_ledger_sequence_cur_max():
                     packet = self.byzz_mutate_message(message, packet, message_type, sender_node_id)
             except ValueError:
                 # ledger_validation_map may not be initialized yet (e.g., during
                 # startup or right after _reset_values). Skip mutation in that case.
-                logger.debug(f"Skipping byzz mutation: ledger sequence for node {sender_node_id} not available yet")
+                logger.debug(f"Skipping byzz mutation: cur max ledger seq = {self.iteration_type.get_ledger_sequence_cur_max()}")
 
         # cache old proposals or validation AFTER mutation
         if is_sent_by_byzz:
