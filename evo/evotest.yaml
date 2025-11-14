@@ -4,7 +4,7 @@ ripple-image: "xrpllabsofficial/xrpld:2.3.0"
 
 seed: 98
 
-max_generation: 5
+max_generation: 7
 population_size: 3
 
 encoding:
