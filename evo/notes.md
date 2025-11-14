@@ -9,6 +9,11 @@
 
 [] 实现transaction
 
-[] 对一次execution写一个hash函数，可以将所有 `<sender, receiver, msgType>` 事件进行排序，然后求哈希。测试reproducability。（现在是不可复现的，即使指定了种子）。
+[-] 对一次execution写一个hash函数，可以将所有 `<sender, receiver, msgType>` 事件进行排序，然后求哈希。测试reproducability。（现在是不可复现的，即使指定了种子）。
 
-[] 实现byzantine node，从配置文件指定，
+[-] 实现byzantine node，从配置文件指定
+
+[-] 对validation消息进行解析，序列化，测试签名正确性以及round-trip
+
+
+[] 如果有多个byzz nodes，是否可以共享私钥？
