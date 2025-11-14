@@ -1,6 +1,7 @@
 import random
 import struct
 from typing import Any, Dict, Tuple
+from functools import singledispatchmethod
 import base58
 
 from protos import packet_pb2, ripple_pb2
@@ -62,7 +63,14 @@ class EvoDelayStrategy(Strategy):
         self.dummy_proposal = bytes.fromhex(
             "e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c"
         )
+        self.dummy_validation = "E803E1999369975AED1BFD2444A3552A73383C03A2004CB784CE07E13EBD7D7C"
+        # TODO support multiple byzantine nodes (separate history)
         self.old_proposals = [self.dummy_proposal,]
+        self.byzz_mutate_methods = {
+            ripple_pb2.TMProposeSet: ["do_nothing", "replace_tx_hash", "increment_propose_seq"],
+            ripple_pb2.TMValidation: ["do_nothing", "replace_ledger_hash", "increment_ledger_sequence"]
+        }
+        self.old_validation_hashes = [self.dummy_validation,]
 
     def setup(self):
         """Setup method for EvoDelayStrategy."""
@@ -71,8 +79,6 @@ class EvoDelayStrategy(Strategy):
         assert len(self.delays) == 7 * self.network.node_amount * (
             self.network.node_amount - 1
         )
-
-        print(f"dumping errors to {TMP_ERROR_FILE}")
 
     def get_node_private_key(self, node_id: int) -> str:
         """
@@ -90,36 +96,6 @@ class EvoDelayStrategy(Strategy):
         return self.network.validator_node_list[
             node_id
         ].validator_key_data.validation_private_key
-
-    def modify_validation_message(
-        self,
-        message,
-        modifications: Dict[str, Any],
-    ) -> ValidationDict:
-        """
-        Parse a validation message, apply in-place modifications, and return
-        the parsed ValidationDict. Signing and serialization are left to
-        `PacketEncoderDecoder.sign_message(parsed, private_key)`.
-
-        Args:
-            message: The TMValidation protobuf message
-            modifications: Dictionary of fields to modify (e.g., {'LedgerSequence': 4})
-
-        Returns:
-            ValidationDict: The modified parsed validation dictionary.
-        """
-
-        # Parse the original validation content
-        parsed = self.parse_validation_content(message)
-
-        if isinstance(parsed, dict) and parsed.get("error"):
-            raise ValueError(f"Cannot parse validation: {parsed['error']}")
-
-        # Apply modifications in-place
-        for key, value in modifications.items():
-            parsed[key] = value
-
-        return parsed
 
     def parse_validation_content(self, validation_message) :
         return PacketEncoderDecoder.decode_validation(validation_message)
@@ -180,19 +156,27 @@ class EvoDelayStrategy(Strategy):
 
         # self.test_sign_message(packet)
         is_sent_by_byzz = sender_node_id in self.byzz_nodes
+        # DO NOT mutate messages in the beginning, otherwise the initial setup is messed up
         if is_sent_by_byzz:
-            packet = self.byzz_mutate_message(packet, message, message_type, sender_node_id)
-        
+            try:
+                if 3 <= self.iteration_type.get_ledger_sequence(sender_node_id):
+                    packet = self.byzz_mutate_message(message, packet, message_type, sender_node_id)
+            except ValueError:
+                # ledger_validation_map may not be initialized yet (e.g., during
+                # startup or right after _reset_values). Skip mutation in that case.
+                logger.debug(f"Skipping byzz mutation: ledger sequence for node {sender_node_id} not available yet")
+
         # cache old proposals or validation AFTER mutation
-        if isinstance(message, ripple_pb2.TMProposeSet) and is_sent_by_byzz:
-            self.old_proposals.append(message.currentTxHash)
+        if is_sent_by_byzz:
+            if isinstance(message, ripple_pb2.TMProposeSet):
+                self.old_proposals.append(message.currentTxHash)
 
         return packet.data, self.delays[index], 1
-    
+
     def _increment_propose_seq(self, message: ripple_pb2.TMProposeSet):
         message.proposeSeq += 1
         return message
-    
+
     def _replace_txs_with_old_propose(self, message: ripple_pb2.TMProposeSet):
         # 如果message.currentTxHash是全0，则设为self.dummy_proposal，否则设为上一个缓存的proposal
         if _is_all_zero_hash(message.currentTxHash):
@@ -200,13 +184,10 @@ class EvoDelayStrategy(Strategy):
         else:
             message.currentTxHash = self.old_proposals[-1] if self.old_proposals else message.currentTxHash
         return message
-    
-    def _byzz_do_nothing(self, message):
-        return message
-    
+
     def _increment_val_ledger_sequence(self, message: ripple_pb2.TMValidation):
         pass
-    
+
     def _get_private_key_from_validation(self, parsed: ValidationDict) -> str | None:
         signing_pub = parsed.get("SigningPubKey", "") if isinstance(parsed, dict) else ""
         signing_pub_hex = _normalize_pubhex(signing_pub)
@@ -216,52 +197,97 @@ class EvoDelayStrategy(Strategy):
 
         return private_key_hex
 
-    def byzz_mutate_message(self, packet, message, message_type, sender_node_id):
-        # proposeset
-        if isinstance(message, ripple_pb2.TMProposeSet):
-            message = self._replace_txs_with_old_propose(message)
-            signed_message = PacketEncoderDecoder.sign_message(
-                message,
-                self.network.public_to_private_key_map[message.nodePubKey.hex()],
-            )
-            # encode_message returns raw bytes; wrap into a Packet proto so
-            # callers (and packet_server) can safely access .data/from_port/etc.
-            encoded = PacketEncoderDecoder.encode_message(signed_message, message_type)
-            new_packet = packet_pb2.Packet(data=encoded, from_port=packet.from_port, to_port=packet.to_port)
-            return new_packet
-        # transaction
-        elif message_type == 30:
-            pass
-        # validation
-        elif message_type == 41 or isinstance(message, ripple_pb2.TMValidation):
-            parsed = self.parse_validation_content(message)
-            # increment ledger sequence (ensure numeric)
+    def pubkey_to_node_id(self, signing_pub: Any) -> int | None:
+        """Return the node id for a given SigningPubKey (hex/base58/loose string).
+
+        Returns None if no matching node is found. This mirrors how
+        NetworkManager.update_network decodes base58 validator public keys.
+        """
+        signing_pub_hex = _normalize_pubhex(signing_pub)
+        if not signing_pub_hex:
+            return None
+
+        # Try to match against the configured validator list by decoding
+        # each node's base58 public key (as NetworkManager does) and
+        # comparing the raw hex.
+        for idx, node in enumerate(self.network.validator_node_list or []):
             try:
-                parsed["LedgerSequence"] = int(parsed.get("LedgerSequence", 0)) + 1
+                decoded_pub = base58.b58decode(
+                    node.validator_key_data.validation_public_key,
+                    alphabet=base58.XRP_ALPHABET,
+                )[1:34].hex()
             except Exception:
-                parsed["LedgerSequence"] = parsed.get("LedgerSequence", 0)
+                continue
+            if decoded_pub.lower() == signing_pub_hex.lower():
+                return idx
+        return None
 
-            private_key_hex = self._get_private_key_from_validation(parsed)
-            
+    @singledispatchmethod
+    def byzz_mutate_message(self, message, packet, message_type, sender_node_id):
+        return packet
 
-            if not private_key_hex:
-                msg = (
-                    f"Missing private key mapping for SigningPubKey {parsed["SigningPubKey"]} (node {sender_node_id}). Skipping byzz validation mutation."
-                )
-                print(msg)
-                with open(TMP_ERROR_FILE, "a") as f:
-                    f.write(msg + "\n")
-                return packet
+    @byzz_mutate_message.register
+    def _(self, message: ripple_pb2.TMProposeSet, packet: packet_pb2.Packet, message_type: int, sender_node_id: int):
+        # random select mutation method
+        method = random.choice(self.byzz_mutate_methods[ripple_pb2.TMProposeSet])
+        if method == "do_nothing":
+            return packet
 
+        original_sender = self.pubkey_to_node_id(message.nodePubKey.hex())
+        if method == "replace_tx_hash":
+            message = self._replace_txs_with_old_propose(message)
+        elif method == "increment_propose_seq":
+            message = self._increment_propose_seq(message)
+
+        signed_message = PacketEncoderDecoder.sign_message(
+            message,
+            self.network.public_to_private_key_map[message.nodePubKey.hex()],
+        ) if sender_node_id == original_sender else message
+        # encode_message returns raw bytes; wrap into a Packet proto so
+        # callers (and packet_server) can safely access .data/from_port/etc.
+        encoded = PacketEncoderDecoder.encode_message(signed_message, message_type)
+        new_packet = packet_pb2.Packet(data=encoded, from_port=packet.from_port, to_port=packet.to_port)
+        return new_packet
+
+    @byzz_mutate_message.register
+    def _(self, message: ripple_pb2.TMValidation, packet: packet_pb2.Packet, message_type: int, sender_node_id: int):
+        method = random.choice(self.byzz_mutate_methods[ripple_pb2.TMValidation])
+        parsed = self.parse_validation_content(message)
+        # an ugly implemented exit callback
+        def go_with(packet):
+            if lh := parsed.get("LedgerHash") not in self.old_validation_hashes:
+                self.old_validation_hashes.append(lh)
+            return packet
+        if method == "do_nothing":
+            return go_with(packet)
+
+        original_sender = self.pubkey_to_node_id(parsed.get("SigningPubKey", ""))
+
+        if method == "increment_ledger_sequence":
+            parsed["LedgerSequence"] = int(parsed.get("LedgerSequence", 0)) + 1
+        elif method == "replace_ledger_hash":
+            # 如果parsed["LedgerHash"]是全0，则设为self.dummy_validation，否则设为上一个缓存的validation hash
+            parsed["LedgerHash"] = self.old_validation_hashes[-1] if self.  old_validation_hashes else parsed["LedgerHash"]
+                
+
+        private_key_hex = self._get_private_key_from_validation(parsed)
+
+        if not private_key_hex:
+            logger.error(f"Missing private key")
+            return go_with(packet)
+        if sender_node_id == original_sender:
             signed_message = PacketEncoderDecoder.sign_message(
                 parsed,
                 private_key_hex,
             )
-            encoded = PacketEncoderDecoder.encode_message(signed_message, message_type)
-            new_packet = packet_pb2.Packet(data=encoded, from_port=packet.from_port, to_port=packet.to_port)
-            return new_packet
-            
-        return packet
+        else:
+            tm = ripple_pb2.TMValidation()
+            tm.validation = bytes(serialize.serialize_bytes(parsed))
+            signed_message = tm
+
+        encoded = PacketEncoderDecoder.encode_message(signed_message, message_type)
+        new_packet = packet_pb2.Packet(data=encoded, from_port=packet.from_port, to_port=packet.to_port)
+        return go_with(new_packet)
 
     def test_sign_message(self, packet: packet_pb2.Packet):
         message, message_type = PacketEncoderDecoder.decode_packet(packet)
