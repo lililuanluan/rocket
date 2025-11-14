@@ -17,6 +17,7 @@ from xrpl.core.keypairs.secp256k1 import SECP256K1, sha512_first_half
 import serialize
 import re
 from pathlib import Path
+from loguru import logger
 
 TMP_ERROR_FILE = Path(__file__).parent / "../../evo/out/error.log" # TODO add this as a param
 
@@ -278,13 +279,28 @@ class EvoDelayStrategy(Strategy):
             )
             if signed_message.signature.hex() != message.signature.hex():
                 # 将不匹配写入tmp文件
-                with open(TMP_ERROR_FILE, "a") as f:
-                    f.write(
-                        f"Signature mismatch for node {sender_node_id} proposeSeq {message.proposeSeq}\n"
-                    )
+                logger.error(f"Signature mismatch for node {sender_node_id} proposeSeq {message.proposeSeq}")
 
         if message_type == 41:
             parsed = self.parse_validation_content(message)
+            print(f"Testing signing and round-trip for node {sender_node_id} sequence {parsed.get('LedgerSequence','N/A')}")
+
+            # --- Round-trip serialization test ---
+            try:
+                # serialize the parsed dict (the serialize library handles the
+                # canonical form including the signature field), compare to raw bytes
+                reconstructed = bytes(serialize.serialize_bytes(parsed))
+                orig_validation_bytes = getattr(message, "validation", b"")
+
+                if orig_validation_bytes and reconstructed != orig_validation_bytes:
+                    logger.error(
+                        f"ROUNDTRIP_MISMATCH node={self.network.port_to_id(packet.from_port)} "
+                        f"ledger={parsed.get('LedgerSequence','N/A')} len_orig={len(orig_validation_bytes)} len_recon={len(reconstructed)}"
+                    )
+                else:
+                    print(f"\tround-trip\tSUCCESS")
+            except Exception as e:
+                print(f"roundtrip test failed: {e}")
 
             # Prefer to lookup the private key via the SigningPubKey extracted
             # from the parsed validation (this mirrors how ProposeSet uses
@@ -306,13 +322,9 @@ class EvoDelayStrategy(Strategy):
             # from the message's SigningPubKey. If the mapping is missing, skip
             # signing/verification checks for this packet and log the issue.
             if not private_key_candidate:
-                msg = (
+                logger.error(
                     f"Missing private key mapping for SigningPubKey {signing_pub_hex} (node {sender_node_id}). Skipping validation signing checks."
                 )
-                print(msg)
-                with open(TMP_ERROR_FILE, "a") as f:
-                    f.write(msg + "\n")
-                # skip further checks for this packet
                 return
 
             # map stores decoded private key as hex (see NetworkManager)
@@ -396,7 +408,7 @@ class EvoDelayStrategy(Strategy):
                 with open(TMP_ERROR_FILE, "a") as f:
                     f.write(msg + "\n")
             else:
-                print(f"validation signature SUCCESS for node {sender_node_id} ledgerSeq {parsed.get('LedgerSequence', 'N/A')}")
+                print(f"\tvalidation signature\tSUCCESS")
 
 
 def _is_all_zero_hash(val) -> bool:
