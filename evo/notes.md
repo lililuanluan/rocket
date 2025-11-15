@@ -15,5 +15,8 @@
 
 [-] 对validation消息进行解析，序列化，测试签名正确性以及round-trip
 
+[-] Skipping byzz mutation: ledger sequence for node 3 not available yet iterationtype的状态记录有问题
+
+[-] 更改spec checker，只检查correct nodes
 
 [] 如果有多个byzz nodes，是否可以共享私钥？

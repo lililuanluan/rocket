@@ -155,11 +155,11 @@ class EvoDelayStrategy(Strategy):
         )
 
         # self.test_sign_message(packet)
-        is_sent_by_byzz = sender_node_id in self.byzz_nodes
+        is_sent_recvd_by_byzz = sender_node_id in self.byzz_nodes or receiver_node_id in self.byzz_nodes
         # DO NOT mutate messages in the beginning, otherwise the initial setup is messed up
-        if is_sent_by_byzz:
+        if is_sent_recvd_by_byzz:
             try:
-                if 3 <= self.iteration_type.get_ledger_sequence_cur_max():
+                if 3 <= self.iteration_type.get_ledger_sequence_cur_max() <= self.max_ledger_seq - 3:
                     packet = self.byzz_mutate_message(message, packet, message_type, sender_node_id)
             except ValueError:
                 # ledger_validation_map may not be initialized yet (e.g., during
@@ -167,7 +167,7 @@ class EvoDelayStrategy(Strategy):
                 logger.debug(f"Skipping byzz mutation: cur max ledger seq = {self.iteration_type.get_ledger_sequence_cur_max()}")
 
         # cache old proposals or validation AFTER mutation
-        if is_sent_by_byzz:
+        if is_sent_recvd_by_byzz:
             if isinstance(message, ripple_pb2.TMProposeSet):
                 self.old_proposals.append(message.currentTxHash)
 

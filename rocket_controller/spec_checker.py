@@ -3,7 +3,8 @@
 import csv
 import json
 from collections import defaultdict
-from typing import Any, List
+from pathlib import Path
+from typing import Any, List, Iterable, Optional, Set
 
 from loguru import logger
 
@@ -38,7 +39,7 @@ class SpecChecker:
         self.spec_check_logger: SpecCheckLogger = SpecCheckLogger(log_dir)
         self.log_dir: str = log_dir
 
-    def spec_check(self, iteration: int):
+    def spec_check(self, iteration: int, exclude_node_ids: Optional[Iterable[int]] = None):
         """
         Do a specification check for the current iteration and log the results.
 
@@ -49,6 +50,11 @@ class SpecChecker:
             f"logs/{self.log_dir}/iteration-{iteration}/result-{iteration}.csv"
         )
 
+        byzantine_nodes: Set[int] = set(exclude_node_ids) if exclude_node_ids is not None else set()
+        honest_nodes: Set[int] = set()
+        
+        logger.info(f"spec checking iteration {iteration}, excluding nodes: {byzantine_nodes}")
+
         ledgers_data = defaultdict(list)
         try:
             with open(result_file_path) as csvfile:
@@ -57,6 +63,10 @@ class SpecChecker:
                     # Basic type conversion and validation
                     try:
                         node_id = int(row["node_id"])
+                        # Skip byzantine/excluded nodes
+                        if node_id in byzantine_nodes:
+                            continue
+                        honest_nodes.add(node_id)
                         ledger_seq = int(row["ledger_seq"])
                         goal_ledger_seq = int(row["goal_ledger_seq"])
                         ledger_hash = row["ledger_hash"]
@@ -95,9 +105,12 @@ class SpecChecker:
 
         all_hashes_pass = True
         all_indexes_pass = True
+        # goal_ledger_pass: only True if all honest nodes reached goal AND
+        # all ledger_hash values at goal_ledger_seq are identical.
+        goal_ledger_pass = (max_seq >= goal_ledger_seq and len([r for r in ledgers_data.get(goal_ledger_seq, []) if r['node_id'] in honest_nodes]) == len(honest_nodes) and all(x['ledger_hash'] == ledgers_data[goal_ledger_seq][0]['ledger_hash'] for x in ledgers_data.get(goal_ledger_seq, [])))
         all_ledger_goal_reached = (
-            len(ledgers_data[max_seq]) == len(ledgers_data[min_seq])
-            and max_seq == ledgers_data[min_seq][0]["goal_ledger_seq"]
+            max_seq >= goal_ledger_seq and
+            len([record for record in ledgers_data[goal_ledger_seq] if record['node_id'] in honest_nodes]) == len(honest_nodes)
         )
         for _, records in ledgers_data.items():
             ledger_hashes_same = all(
@@ -114,12 +127,13 @@ class SpecChecker:
             all_ledger_goal_reached,
             all_hashes_pass,
             all_indexes_pass,
+            goal_ledger_pass,
         )
 
         logger.info(
             f"Specification check for iteration {iteration}: "
             f"reached goal ledger: {all_ledger_goal_reached}, "
-            f"same ledger hashes: {all_hashes_pass}, same ledger indexes: {all_indexes_pass}"
+            f"same ledger hashes: {all_hashes_pass}, same ledger indexes: {all_indexes_pass}, same goal ledger hash: {goal_ledger_pass}"
         )
 
     def aggregate_spec_checks(self):
@@ -155,6 +169,11 @@ class SpecChecker:
                 if row["same_ledger_hashes"] == "False"
                 or row["same_ledger_indexes"] == "False"
             )
+            failed_final_agreement = sum(
+                1
+                for row in rows
+                if row["same_goal_ledger_hash"] == "False"
+            )
             failed_termination_iterations = [
                 row["iteration"]
                 for row in rows
@@ -176,9 +195,17 @@ class SpecChecker:
                 "failed_agreement": failed_agreement,
                 "failed_termination_iterations": failed_termination_iterations,
                 "failed_agreement_iterations": failed_agreement_iterations,
+                "failed_final_agreement": failed_final_agreement,
             }
 
             logger.info(f"Aggregated spec check results: {aggregated_data}")
+
+
+            with open(Path(__file__).parent / "../evo/out/error.log", "a") as error_log:
+                if aggregated_data["correct_runs"] != total_iterations:
+                    error_log.write(f"FAILED RUN, final agreement failed: {failed_final_agreement}\n")
+                else:
+                    error_log.write(f"CORRECT RUN\n")
 
             with open(agg_spec_check_file_path, mode="w") as file:
                 json.dump(aggregated_data, file, indent=4)

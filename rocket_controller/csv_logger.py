@@ -35,6 +35,7 @@ spec_check_columns = [
     "reached_goal_ledger",
     "same_ledger_hashes",
     "same_ledger_indexes",
+    "same_goal_ledger_hash",
 ]
 
 
@@ -261,6 +262,7 @@ class SpecCheckLogger(CSVLogger):
         reached_goal_ledger: bool | str,
         same_ledger_hashes: bool | str,
         same_ledger_indexes: bool | str,
+        same_goal_ledger_hash: bool | str
     ):
         """
         Log a spec check row to the CSV file.
@@ -279,5 +281,6 @@ class SpecCheckLogger(CSVLogger):
                     reached_goal_ledger,
                     same_ledger_hashes,
                     same_ledger_indexes,
+                    same_goal_ledger_hash,
                 ]
             )

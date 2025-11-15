@@ -93,17 +93,23 @@ class Strategy(ABC):
 
         self.start_datetime: datetime = datetime.now()
         self.log_dir = log_dir if log_dir is not None else self.start_datetime
+        self.max_ledger_seq = max_ledger_seq if max_ledger_seq is not None else 10
         self.iteration_type = (
             LedgerBasedIteration(
                 max_iterations=max_iteration if max_iteration is not None else 10,
-                max_ledger_seq=max_ledger_seq if max_ledger_seq is not None else 10,
+                max_ledger_seq=self.max_ledger_seq,
                 ledger_timeout_seconds=45,
             )
             if iteration_type is None
             else iteration_type
         )
         
-        self.iteration_type.set_log_dir(self.log_dir)
+        
+        # Pass configured byzantine nodes (if any) to the iteration type so
+        # spec checks can exclude them.
+        self.iteration_type.set_log_dir(
+            self.log_dir, byzantine_node_ids=self.network.network_config.get("byzz_nodes", [])
+        )
 
     @staticmethod
     def init_configs(

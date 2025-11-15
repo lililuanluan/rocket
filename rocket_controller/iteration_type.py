@@ -2,7 +2,7 @@
 
 import threading
 from datetime import datetime
-from typing import Dict, List, TypedDict
+from typing import Dict, List, TypedDict, Iterable
 
 from grpc import Server
 from loguru import logger
@@ -57,6 +57,8 @@ class TimeBasedIteration:
         self._max_ledger_seq = max_ledger_seq
         self.ledger_validation_map: Dict[int, LedgerValidationInfo] = {}
         self._lock = threading.Lock()
+        # Set of byzantine node ids to exclude from spec checks (populated via set_log_dir)
+        self._byzantine_nodes: set[int] = set()
 
     def _stop_all(self):
         """Stop the interceptor along with the docker containers."""
@@ -105,7 +107,7 @@ class TimeBasedIteration:
         }
         self._validator_nodes = validator_nodes
 
-    def set_log_dir(self, log_dir: str):
+    def set_log_dir(self, log_dir: str, byzantine_node_ids: Iterable[int] | None = None):
         """
         Setter for the log_dir variable and instantiate the SpecChecker.
 
@@ -113,6 +115,8 @@ class TimeBasedIteration:
             log_dir: New log directory.
         """
         self._log_dir = log_dir
+        # Record byzantine/excluded node ids for later spec checks
+        self._byzantine_nodes = set(byzantine_node_ids) if byzantine_node_ids is not None else set()
         self._spec_checker = SpecChecker(log_dir)
 
     def add_iteration(self):
@@ -130,7 +134,9 @@ class TimeBasedIteration:
                 t.join()
 
         if self.cur_iteration > 1:
-            self._spec_checker.spec_check(self.cur_iteration - 1)
+            # Pass the configured byzantine node ids (if any) so the spec checker
+            # can exclude them when computing agreement/termination.
+            self._spec_checker.spec_check(self.cur_iteration - 1, exclude_node_ids=self._byzantine_nodes)
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
@@ -206,10 +212,10 @@ class TimeBasedIteration:
                 return
 
             cur_ledger_infos = self.ledger_validation_map.values()
-            # Since all(x) returns True if x is empty, we have to check first whether cur_ledger_infos is
-            # not empty to avoid starting a new (faulty) iteration while the network is still initializing.
             if cur_ledger_infos and all(
-                entry["seq"] >= self._max_ledger_seq for entry in cur_ledger_infos
+                entry["seq"] >= self._max_ledger_seq
+                for node_id, entry in self.ledger_validation_map.items()
+                if node_id not in self._byzantine_nodes
             ):
                 self._reset_values()
                 self.add_iteration()
@@ -232,9 +238,14 @@ class TimeBasedIteration:
         return self.ledger_validation_map[node_id]["seq"]
 
     def get_ledger_sequence_cur_max(self) -> int:
-        return max(
-            entry["seq"] for entry in self.ledger_validation_map.values()
-        ) if self.ledger_validation_map else 0
+        # Return the maximum ledger sequence among non-byzantine nodes.
+        if not self.ledger_validation_map:
+            return 0
+        seqs = [
+            info["seq"] for node_id, info in self.ledger_validation_map.items()
+            if node_id not in self._byzantine_nodes
+        ]
+        return max(seqs) if seqs else 0
 
 
 class LedgerBasedIteration(TimeBasedIteration):
