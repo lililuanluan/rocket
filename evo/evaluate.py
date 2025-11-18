@@ -79,6 +79,7 @@ def evaluate_log(log_dir):
         "correct_runs": correct_runs,
         "failed_final_agreement": failed_final_agreement,
         "failed_agreement": failed_agreement,
+        "agg_spec_check": agg_spec_check,
     }
 
 

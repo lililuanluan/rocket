@@ -9,31 +9,38 @@
 \usepackage{float}
 \usepackage{caption}
 \usepackage{hyperref}
+\usepackage{currfile}
+\usepackage{amsmath}
 
 \geometry{margin=1in}
 
-\title{Evo Analysis Results}
-\author{}
-\date{\today}
+
 
 \begin{document}
-\maketitle
+
+\section{configuration}
+
+Use the network configuration described in \texttt{Security Analysis of Ripple Consensus}, with 7 nodes and node 3 as the byzantine node.
+
+All tests set a maximum ledger sequence of 15. Byzantine node (3) mutates messages in $3 \leq \text{seq} \leq 10$.
+
+specification checking:
+\begin{enumerate}
+    \item failed agreement: true if all node didn't agree on same ledger hashes in each ledger sequence
+    \item failed final agreement: true if ledger hashes are collected for all nodes in the last ledger sequence and these hashes are identical
+\end{enumerate}
+
+\textit{validation time}s are the time intervals between two consecutive statuschange messages with new-event = closing ledger. 
+
+\textit{proposset number} is the total number of TMProposeSet messages sent by a node in a test, averaged.
+
+byzantine nodes are excluded from violaiton checking.
 
 
-% \begin{table}[ht]
-% \centering
-% \begin{tabular}{lcccc}
-% \toprule
-%  & total & correct & failed agreement & failed final \\
-% \midrule
-% \#tests & 1 & 0 & 1 & 1 \\
-% validation times (s) & 17.712\(\pm\)0.000 & - & 17.712\(\pm\)0.000 & 17.712\(\pm\)0.000 \\
-% total time (s) & 271.711\(\pm\)0.000 & - & 271.711\(\pm\)0.000 & 271.711\(\pm\)0.000 \\
-% \bottomrule
-% \end{tabular}
-% \end{table}
+\section{data}
 
 \input{out/stats.tex}
+\input{out/val_time_tables.tex}
 
 \end{document}
 
