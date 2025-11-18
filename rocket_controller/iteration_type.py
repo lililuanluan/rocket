@@ -1,6 +1,7 @@
 """Module that defines certain Iteration Types."""
 
 import threading
+import os
 from datetime import datetime
 from typing import Dict, List, TypedDict, Iterable
 
@@ -134,6 +135,23 @@ class TimeBasedIteration:
                 t.join()
 
         if self.cur_iteration > 1:
+            # Before running spec checks for the previous iteration, attempt to
+            # resolve any pending ledger fetch failures so spec_check can see
+            # as much data as possible. This is best-effort and will not raise.
+            try:
+                prev_iter = self.cur_iteration - 1
+                # Prefer the ledger_result's configured logger directory if present
+                try:
+                    summary = self._ledger_results.retry_pending()
+                    logger.info(
+                        f"Retried pending ledgers for iteration {prev_iter}: {summary}"
+                    )
+                except Exception:
+                    logger.exception("Error while retrying pending ledgers before spec check")
+            except Exception:
+                # Ignore any issues here; spec_check should still run.
+                pass
+
             # Pass the configured byzantine node ids (if any) so the spec checker
             # can exclude them when computing agreement/termination.
             self._spec_checker.spec_check(self.cur_iteration - 1, exclude_node_ids=self._byzantine_nodes)
@@ -179,9 +197,12 @@ class TimeBasedIteration:
                 return
             # Check whether the event contains an accepted ledger which is exactly 1 sequence no. more than the prev ledger.
             if (
-                status.newEvent == 1
-                and status.ledgerSeq > self.ledger_validation_map[from_id]["seq"]
+                # status.newEvent == 1
+                status.newEvent == ripple_pb2.neCLOSING_LEDGER
+                and self._max_ledger_seq >= status.ledgerSeq > self.ledger_validation_map[from_id]["seq"]
             ):
+                if status.ledgerSeq != self.ledger_validation_map[from_id]["seq"] + 1:
+                    logger.warning(f"Node {from_id} validated non-consecutive ledger {status.ledgerSeq} (previous: {self.ledger_validation_map[from_id]['seq']})")
                 self.ledger_validation_map[from_id]["seq"] = status.ledgerSeq
                 _now = datetime.now()
                 _validation_time = _now - self.ledger_validation_map[from_id]["time"]
