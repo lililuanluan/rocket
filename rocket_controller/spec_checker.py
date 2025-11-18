@@ -172,7 +172,7 @@ class SpecChecker:
             failed_final_agreement = sum(
                 1
                 for row in rows
-                if row["same_goal_ledger_hash"] == "False"
+                if row["same_goal_ledger_hash"] == "False" and row["reached_goal_ledger"] == "True"
             )
             failed_termination_iterations = [
                 row["iteration"]
