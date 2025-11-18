@@ -159,12 +159,12 @@ class EvoDelayStrategy(Strategy):
         # DO NOT mutate messages in the beginning, otherwise the initial setup is messed up
         if is_sent_recvd_by_byzz:
             try:
-                if 3 <= self.iteration_type.get_ledger_sequence_cur_max() <= self.max_ledger_seq - 3:
+                if 3 <= self.iteration_type.get_ledger_sequence_cur_max() <= self.max_ledger_seq - 5:
                     packet = self.byzz_mutate_message(message, packet, message_type, sender_node_id)
-            except ValueError:
+            except Exception as e:
                 # ledger_validation_map may not be initialized yet (e.g., during
                 # startup or right after _reset_values). Skip mutation in that case.
-                logger.debug(f"Skipping byzz mutation: cur max ledger seq = {self.iteration_type.get_ledger_sequence_cur_max()}")
+                logger.debug(f"Skipping byzz mutation: cur max ledger seq = {self.iteration_type.get_ledger_sequence_cur_max()}, error: {e}")
 
         # cache old proposals or validation AFTER mutation
         if is_sent_recvd_by_byzz:
@@ -174,7 +174,8 @@ class EvoDelayStrategy(Strategy):
         return packet.data, self.delays[index], 1
 
     def _increment_propose_seq(self, message: ripple_pb2.TMProposeSet):
-        message.proposeSeq += 1
+        if message.proposeSeq < MAX_U32:
+            message.proposeSeq += 1
         return message
 
     def _replace_txs_with_old_propose(self, message: ripple_pb2.TMProposeSet):
