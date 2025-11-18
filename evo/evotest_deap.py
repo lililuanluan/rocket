@@ -69,8 +69,8 @@ def setup_interceptor(config):
             img=ripple_image, interceptor_dir=INTERCEPTOR_DIR, dest=image_bin
         )
         if not success:
-            print("Rebuild interceptor failed")
-            return
+            raise RuntimeError("Rebuild interceptor failed")
+            
 
     assert image_bin.exists(), f"{image_bin} not exists after rebuild"
 

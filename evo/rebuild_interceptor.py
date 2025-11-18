@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import subprocess
 import shutil
+import re
 
 
 def rebuild_interceptor_with(
@@ -62,13 +63,15 @@ def rebuild_interceptor_with(
             print(f"❌ 拷贝文件失败: {e}")
             return False
 
-    old_text = 'const IMAGE: &str = "xrpllabsofficial/xrpld:2.3.0";'
+    # Use a regex to replace the IMAGE line regardless of the current value.
+    pattern = r'const\s+IMAGE:\s*&str\s*=\s*".*?";'
     new_text = f'const IMAGE: &str = "{img}";'
 
-    if old_text in content:
-        new_content = content.replace(old_text, new_text)
+    # perform a regex substitution and count replacements
+    new_content, nsubs = re.subn(pattern, new_text, content, flags=re.DOTALL)
+    if nsubs > 0:
         file_to_change.write_text(new_content, encoding="utf-8")
-        print(f"✓ 镜像版本已更新: {old_text} -> {new_text}")
+        print(f"✓ 镜像版本已更新 (regex): {nsubs} occurrence(s) replaced")
 
         # 保存当前目录以便后续恢复
         original_cwd = os.getcwd()
@@ -103,7 +106,7 @@ def rebuild_interceptor_with(
             # 恢复原始工作目录
             os.chdir(original_cwd)
     else:
-        print(f"✗ 未找到目标文本: {old_text}")
+        print(f"✗ 未找到匹配行: {pattern}")
         return False
 
 

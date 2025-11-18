@@ -1,12 +1,12 @@
-ripple-image: "ghcr.io/amousavigourabi/docker-rippled/seeded-2.4.0-fully-lowered-threshold:latest"
-# ripple-image: "xrpllabsofficial/xrpld:2.3.0"
+# ripple-image: "ghcr.io/amousavigourabi/docker-rippled/seeded-2.4.0-fully-lowered-threshold:latest"
+ripple-image: "xrpllabsofficial/xrpld:2.6.0"
 
 
 seed: 98
 
 max_generation: 10
 population_size: 5
-max_ledger_seq: 10
+max_ledger_seq: 15
 
 encoding:
   # Delay
