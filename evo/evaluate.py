@@ -2,16 +2,7 @@ import os
 import pandas as pd
 
 
-class EvaluationResult:
-    def __init__(
-        self,
-        propose_set_count: int,
-        mean_validation_time: float = None,
-        total_failures: int = 0,
-    ):
-        self.propose_set_count = propose_set_count
-        self.mean_validation_time = mean_validation_time
-        self.total_failures = total_failures
+
 
 
 def get_prop_set_count(df: pd.DataFrame) -> int:
@@ -32,37 +23,65 @@ def get_avg_validation_time(df: pd.DataFrame) -> float:
 
     return validation_times.mean()
 
+def get_test_total_time(f):
+    if isinstance(f, pd.DataFrame):
+        df = f
+    else:
+        df = pd.read_csv(f)
+    
+    df = df["timestamp"]
+    if df.empty:
+        print("No timestamps found.")
+        return None
+    return (df.max() - df.min()) / 1000.0
+    
+
 
 def evaluate_log(log_dir):
     # 如果存在 log_dir/iteration-1/action-1.csv，则进行评估
     action_log_path = f"{log_dir}/iteration-1/action-1.csv"
     if not os.path.exists(action_log_path):
         print(f"Action log file {action_log_path} does not exist.")
-        return
+        return None
     df_action = pd.read_csv(action_log_path)
     # 计算 "message_type"为"TMProposeSet" 的行数
     propose_set_count = get_prop_set_count(df_action)
 
-    df_result = pd.read_csv(f"{log_dir}/iteration-1/result-1.csv")
+    result_log_path = f"{log_dir}/iteration-1/result-1.csv"
+    if not os.path.exists(result_log_path):
+        print(f"Result log file {result_log_path} does not exist.")
+        return None
+    df_result = pd.read_csv(result_log_path)
     mean_validation_time = get_avg_validation_time(df_result)
-    if mean_validation_time is not None:
-        print(f"Average validation time: {mean_validation_time} seconds")
 
     # 读取 aggregated_spec_check_log.json（注意：这是一个对象，不是数组）
+    aggregate_spec_check_path = f"{log_dir}/aggregated_spec_check_log.json"
+    if not os.path.exists(aggregate_spec_check_path):
+        print(f"Aggregated spec check log file {aggregate_spec_check_path} does not exist.")
+        return None
     import json
-    with open(f"{log_dir}/aggregated_spec_check_log.json", "r") as f:
+    with open(aggregate_spec_check_path, "r") as f:
         agg_spec_check = json.load(f)
 
     # 直接从字典中提取失败计数
     total_failures = agg_spec_check.get("failed_termination", 0) + agg_spec_check.get("failed_agreement", 0)
+    correct_runs = agg_spec_check.get("correct_runs", 0)
+    failed_final_agreement = agg_spec_check.get("failed_final_agreement", 0)
+    failed_agreement = agg_spec_check.get("failed_agreement", 0)
+    
+    test_duration = get_test_total_time(df_action)
 
-    print(f"Total failures: {total_failures}")
+    return {
+        "test_duration": test_duration,
+        "propose_set_count": propose_set_count,
+        "mean_validation_time": mean_validation_time,
+        "total_failures": total_failures,
+        "correct_runs": correct_runs,
+        "failed_final_agreement": failed_final_agreement,
+        "failed_agreement": failed_agreement,
+    }
 
-    return EvaluationResult(
-        propose_set_count=propose_set_count,
-        mean_validation_time=mean_validation_time,
-        total_failures=total_failures,
-    )
+
 
 
 if __name__ == "__main__":
