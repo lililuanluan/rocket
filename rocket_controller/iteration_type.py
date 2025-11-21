@@ -158,6 +158,20 @@ class TimeBasedIteration:
             # Pass the configured byzantine node ids (if any) so the spec checker
             # can exclude them when computing agreement/termination.
             self._spec_checker.spec_check(self.cur_iteration - 1, exclude_node_ids=self._byzantine_nodes)
+
+            # Pull logs from each validator node for the previous iteration
+            if self._validator_nodes:
+                for i, node in enumerate(self._validator_nodes):
+                    container_name = f"validator_{i}"
+                    log_file_path = os.path.join("./logs/" + self._log_dir, f"iteration-{self.cur_iteration - 1}", "validator_logs", f"validator_{i}_log.txt")
+                    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+                    try:
+                        with open(log_file_path, 'w') as f:
+                            subprocess.run(['docker', 'logs', container_name], stdout=f, stderr=f, check=True, text=True)
+                    except subprocess.CalledProcessError as e:
+                        logger.error(f"Failed to get logs for {container_name}: {e}")
+                    except Exception as e:
+                        logger.error(f"Error saving logs for {container_name}: {e}")
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
