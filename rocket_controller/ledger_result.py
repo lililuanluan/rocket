@@ -6,6 +6,8 @@ from typing import Any, List
 import json
 import os
 import time
+import subprocess
+import shutil
 
 from loguru import logger
 from xrpl.clients import WebsocketClient
@@ -40,7 +42,6 @@ class LedgerResult:
         ledger_seq: int,
         node_id: int | None = None,
         retries: int = 5,
-        write_pending: bool = True,
     ) -> dict[str, Any] | None:
         """
         Fetch the node info from the websocket server at a specific port.
@@ -54,117 +55,45 @@ class LedgerResult:
         Returns:
             A dictionary containing the node info if available, None otherwise.
         """
-        last_exc: str | None = None
-        # allow a short number of lgrNotFound skips that do not consume the main retry
-        lgr_not_found_skips = 0
-        max_lgr_not_found_skips = 3
-        attempt = 0
-        while attempt < retries:
+
+        # If node_id is provided and the docker CLI is available on this host,
+        # try a local `docker exec` into the validator container first. This is
+        # useful when the controller runs on the same host as the containers
+        # and avoids relying on network port mappings.
+
+        if node_id is None or shutil.which("docker") is None:
+            logger.warning("Skipping docker exec attempt: node_id is None or docker CLI not found")
+            return None
+        container = f"validator_{node_id}"
+        cmd = [
+            "docker",
+            "exec",
+            "-i",
+            container,
+            "rippled",
+            "ledger",
+            str(ledger_seq),
+        ]
+
+        for i in range(retries):        
             try:
-                with WebsocketClient(f"ws://localhost:{ws_port}") as client:
-                    ledger_info = Ledger(ledger_index=ledger_seq)
-                    ledger_response = client.request(ledger_info)
-                    if not ledger_response.is_successful():
-                        # try detect lgrNotFound (ledger not yet available)
-                        try:
-                            resp_result = ledger_response.result
-                            if isinstance(resp_result, dict) and (
-                                resp_result.get("error") == "lgrNotFound"
-                                or resp_result.get("error_code") == 21
-                                or "ledgerNotFound" in str(resp_result.get("error_message", ""))
-                            ):
-                                lgr_not_found_skips += 1
-                                last_exc = "lgrNotFound"
-                                if lgr_not_found_skips >= max_lgr_not_found_skips:
-                                    # treat as exhausted
-                                    break
-                                # small backoff for lgrNotFound and do not count against attempt budget
-                                backoff = min(30, 1 * (1.5 ** (lgr_not_found_skips - 1)))
-                                sleep(backoff)
-                                continue
-                            else:
-                                last_exc = f"unsuccessful_response: {ledger_response}"
-                        except Exception:
-                            last_exc = f"unsuccessful_response: {ledger_response}"
-                        attempt += 1
-                    else:
-                        ledger = ledger_response.result.get("ledger")
-                        if ledger is None:
-                            last_exc = "no_ledger_in_response"
-                            attempt += 1
-                        else:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                if proc.returncode == 0 and proc.stdout:
+                    try:
+                        data = json.loads(proc.stdout)
+                        # rippled CLI typically returns the payload under result.ledger
+                        ledger = None
+                        if isinstance(data, dict):
+                            ledger = data.get("result", {}).get("ledger")
+                        if ledger:
                             return ledger
-            except Exception as e:  # pragma: no cover - network / runtime errors
-                last_exc = f"exception: {e!r}"
-                attempt += 1
-
-            # Exponential backoff (1s, 1.5^n, ...), capped to 30s
-            backoff = min(30, 1 * (1.5 ** max(0, attempt - 1)))
-            sleep(backoff)
-
-        # Final failure - write a compact JSONL record near the result CSV if possible
-        # Only write when write_pending is True. Retry callers should pass
-        # write_pending=False to avoid appending duplicate pending entries.
-        if write_pending:
-            try:
-                payload = {
-                    "ts": int(time.time()),
-                    "ws_port": ws_port,
-                    "node_id": node_id,
-                    "ledger_seq": ledger_seq,
-                    "attempts": retries,
-                    "last_error": last_exc,
-                }
-                if self.result_logger:
-                    result_dir = os.path.dirname(self.result_logger.filepath)
-                    pending_file = os.path.join(result_dir, "pending_ledgers.jsonl")
+                    except Exception:
+                        logger.debug("Failed to parse rippled CLI JSON output")
                 else:
-                    # Fallback to logs root
-                    pending_file = os.path.join("./logs", "pending_ledgers.jsonl")
-
-                # Normalize to absolute path so logs show an unambiguous location
-                pending_file = os.path.abspath(pending_file)
-
-                # Deduplicate: read existing entries and only append if this key is new.
-                existing_keys: set[tuple[int | None, int | None]] = set()
-                try:
-                    if os.path.exists(pending_file):
-                        with open(pending_file, "r") as ef:
-                            for line in ef:
-                                try:
-                                    j = json.loads(line)
-                                    existing_keys.add((j.get("ws_port"), j.get("ledger_seq")))
-                                except Exception:
-                                    continue
-                except Exception:
-                    existing_keys = set()
-
-                appended = False
-                key = (ws_port, ledger_seq)
-                if key not in existing_keys:
-                    with open(pending_file, "a") as f:
-                        f.write(json.dumps(payload) + "\n")
-                    appended = True
-
-                # Only emit an ERROR when we actually appended a new pending record.
-                # If the pending file already contained this (ws_port, ledger_seq) pair,
-                # downgrade the message to DEBUG to avoid log spam from duplicate failures.
-                if appended:
-                    logger.error(
-                        "Could not retrieve ledger {ledger_seq} from ws_port={ws_port} after {retries} attempts. Wrote pending record to {pending_file}",
-                        ledger_seq=ledger_seq,
-                        ws_port=ws_port,
-                        retries=retries,
-                        pending_file=pending_file,
-                    )
-                else:
-                    logger.debug(
-                        "Pending entry already exists for ledger {ledger_seq} ws_port={ws_port}; not appending",
-                        ledger_seq=ledger_seq,
-                        ws_port=ws_port,
-                    )
-            except Exception:  # pragma: no cover - best-effort write
-                logger.exception("Failed to write pending ledger entry after repeated fetch failures")
+                    logger.debug(f"rippled CLI returned non-zero exit code {proc.returncode} or no output, {proc.stdout}, {proc.stderr}")
+            except Exception as e:  # pragma: no cover - environment/runtime
+                logger.debug("docker exec attempt failed: %r", e)
+            sleep(min(30, 2 ** i))
 
         return None
 
@@ -187,7 +116,7 @@ class LedgerResult:
             validator_nodes: The list of validator nodes to check on.
         """
         node = validator_nodes[node_id]
-        result = self._fetch_ledger(node.ws_private.port, ledger_seq)
+        result = self._fetch_ledger(node.ws_private.port, ledger_seq, node_id=node_id)
         if result is None:
             logger.error(f"Could not retrieve ledger {ledger_seq} from node {node_id}")
             return
@@ -277,9 +206,12 @@ class LedgerResult:
                 ws_port = entry.get("ws_port")
                 ledger_seq = entry.get("ledger_seq")
                 entry_attempts = int(entry.get("attempts") or 0)
+                entry_node_id = entry.get("node_id")
 
                 # try a short fetch; pass write_pending=False to avoid duplicate appends
-                res = self._fetch_ledger(ws_port, ledger_seq, retries=retries, write_pending=False)
+                res = self._fetch_ledger(
+                    ws_port, ledger_seq, node_id=entry_node_id, retries=retries, write_pending=False
+                )
                 if res is not None:
                     resolved += 1
                     # append resolved record
