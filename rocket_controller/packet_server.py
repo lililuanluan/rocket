@@ -209,7 +209,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
 def serve(strategy: Strategy):
     """This function starts the server and listens for incoming packets."""
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1000))
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
     server.add_insecure_port("[::]:50051")
     server.start()

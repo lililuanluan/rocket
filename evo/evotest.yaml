@@ -11,4 +11,4 @@ max_ledger_seq: 15
 encoding:
   # Delay
   min_value: 0 # Minimum delay value in milliseconds
-  max_value: 4000 # Maximum delay value in milliseconds
+  max_value: 1000 # Maximum delay value in milliseconds
