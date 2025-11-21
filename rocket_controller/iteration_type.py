@@ -3,7 +3,7 @@
 import threading
 import os
 from datetime import datetime
-from typing import Dict, List, TypedDict, Iterable
+from typing import Any, Dict, List, TypedDict, Iterable
 
 from grpc import Server
 from loguru import logger
@@ -57,6 +57,7 @@ class TimeBasedIteration:
 
         self._max_ledger_seq = max_ledger_seq
         self.ledger_validation_map: Dict[int, LedgerValidationInfo] = {}
+        self.ledger_validation_history: Dict[int, Dict[int, Dict]] = {} # node -> {seq -> {seq, time, deltatime}}
         self._lock = threading.Lock()
         # Set of byzantine node ids to exclude from spec checks (populated via set_log_dir)
         self._byzantine_nodes: set[int] = set()
@@ -106,6 +107,7 @@ class TimeBasedIteration:
         self.ledger_validation_map = {
             i: {"seq": 1, "time": _now} for i in range(len(validator_nodes))
         }
+        self.ledger_validation_history = {i: {} for i in range(len(validator_nodes))}
         self._validator_nodes = validator_nodes
 
     def set_log_dir(self, log_dir: str, byzantine_node_ids: Iterable[int] | None = None):
@@ -126,6 +128,7 @@ class TimeBasedIteration:
             raise ValueError("SpecChecker not initialized")
         if not self._log_dir:
             raise ValueError("Log directory not initialized")
+        logger.debug("Iteration complete, Adding iteration...")
 
         self.cur_iteration += 1
 
@@ -174,6 +177,43 @@ class TimeBasedIteration:
         self._timer = None
         self.ledger_validation_map = {}
 
+    def request_all_validated_ledgers(self):
+        logger.info("Requesting all validated ledgers from validator nodes...")
+        
+
+        # enumerate over validator nodes safely
+        if not self._validator_nodes:
+            return
+        for node_idx, _ in enumerate(self._validator_nodes):
+            for seq in range(1, self._max_ledger_seq + 1):
+                node_history = self.ledger_validation_history.get(node_idx, {})
+                entry = node_history.get(seq)
+                if entry and entry.get("deltatime"):
+                    # deltatime is expected to be a timedelta
+                    try:
+                        ttc = entry["deltatime"].total_seconds()
+                    except Exception:
+                        # Fallback if deltatime is present but not a timedelta
+                        try:
+                            ttc = float(entry["deltatime"])
+                        except Exception:
+                            ttc = 0.0
+                else:
+                    # No history available for this seq; use 0.0 as conservative default
+                    ttc = 0.0
+                t = threading.Thread(
+                    name=f"LogLedgerResult-{node_idx}-{seq}",
+                    target=self._ledger_results.log_ledger_result,
+                    args=(
+                        node_idx,
+                        seq,
+                        self._max_ledger_seq,
+                        ttc,
+                        self._validator_nodes,
+                    ),
+                )
+                t.start()            
+
     def on_status_change(
         self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
     ):
@@ -204,6 +244,7 @@ class TimeBasedIteration:
                 if status.ledgerSeq != self.ledger_validation_map[from_id]["seq"] + 1:
                     logger.warning(f"Node {from_id} validated non-consecutive ledger {status.ledgerSeq} (previous: {self.ledger_validation_map[from_id]['seq']})")
                 self.ledger_validation_map[from_id]["seq"] = status.ledgerSeq
+                
                 _now = datetime.now()
                 _validation_time = _now - self.ledger_validation_map[from_id]["time"]
                 self.ledger_validation_map[from_id]["time"] = _now
@@ -215,18 +256,25 @@ class TimeBasedIteration:
                 logger.info(
                     f"Node {from_id} validated ledger {self.ledger_validation_map[from_id]['seq']} in {_validation_time}"
                 )
-                t = threading.Thread(
-                    name=f"LogLedgerResult-{from_id}-{self.ledger_validation_map[from_id]['seq']}",
-                    target=self._ledger_results.log_ledger_result,
-                    args=(
-                        from_id,
-                        self.ledger_validation_map[from_id]["seq"],
-                        self._max_ledger_seq,
-                        _validation_time.total_seconds(),
-                        self._validator_nodes,
-                    ),
-                )
-                t.start()
+
+                self.ledger_validation_history.setdefault(from_id, {})
+                self.ledger_validation_history[from_id][status.ledgerSeq] = {
+                    "seq": self.ledger_validation_map[from_id]["seq"],
+                    "time": _now,
+                    "deltatime": _validation_time,
+                }
+                # t = threading.Thread(
+                #     name=f"LogLedgerResult-{from_id}-{self.ledger_validation_map[from_id]['seq']}",
+                #     target=self._ledger_results.log_ledger_result,
+                #     args=(
+                #         from_id,
+                #         self.ledger_validation_map[from_id]["seq"],
+                #         self._max_ledger_seq,
+                #         _validation_time.total_seconds(),
+                #         self._validator_nodes,
+                #     ),
+                # )
+                # t.start()
 
             if self._max_ledger_seq == -1:
                 # Return if the IterationType is time-based.
@@ -239,6 +287,8 @@ class TimeBasedIteration:
                 if node_id not in self._byzantine_nodes
             ):
                 self._reset_values()
+                # request after timers are reset
+                self.request_all_validated_ledgers() 
                 self.add_iteration()
 
     def get_ledger_sequence(self, node_id: int) -> int:
