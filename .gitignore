@@ -174,3 +174,5 @@ cython_debug/
 
 .vscode
 rippled
+*.DS_Store
+byzzfuzz
