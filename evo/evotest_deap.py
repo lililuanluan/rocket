@@ -266,9 +266,10 @@ def main(config):
 
     START_DATETIME = datetime.now().strftime("%Y_%m_%d_%Hh%Mm")
 
-    mu = config.get("mu", 4)
-    lambda_ = config.get("lambda", 4)
-    max_generations = config.get("max_generations", 10)
+    
+    lambda_ = config.get("population_size", 4)
+    mu = min(lambda_, config.get("mu", 4))
+    max_generation = config.get("max_generation", 10)
     FITNESS_FUNCTION = config.get("fitness_function", "time")
 
     ENCODING_LENGTH = NUMBER_OF_NODES * (NUMBER_OF_NODES - 1) * 7
@@ -279,7 +280,7 @@ def main(config):
     MAX_LEDGER_SEQ = config.get("max_ledger_seq", 5)
 
     print(f"=== Starting (μ+λ) EA with DEAP ===")
-    print(f"μ={mu}, λ={lambda_}, max_generations={max_generations}")
+    print(f"μ={mu}, λ={lambda_}, max_generations={max_generation}")
     print(f"Fitness function: {FITNESS_FUNCTION}")
     print(
         f"Encoding length: {ENCODING_LENGTH}, range: [{ENCODING_MIN}, {ENCODING_MAX}]"
@@ -364,7 +365,7 @@ def main(config):
     population = toolbox.select(population, mu)
 
     # 主进化循环
-    for gen in range(1, max_generations + 1):
+    for gen in range(1, max_generation + 1):
         # 生成子代
         offspring = algorithms.varOr(population, toolbox, lambda_, cxpb=0.7, mutpb=0.3)
 
@@ -397,9 +398,10 @@ def main(config):
 
     if hasattr(best_ind, "evaluation_result") and best_ind.evaluation_result:
         result = best_ind.evaluation_result
-        print(f"  Mean validation time: {result.mean_validation_time}")
-        print(f"  Propose set count: {result.propose_set_count}")
-        print(f"  Total failures: {result.total_failures}")
+        # evaluate_log returns a dict; use key access to avoid AttributeError
+        print(f"  Mean validation time: {result.get('mean_validation_time')}")
+        print(f"  Propose set count: {result.get('propose_set_count')}")
+        print(f"  Total failures: {result.get('total_failures')}")
 
     # 打印进化日志
     print("\n=== Evolution Statistics ===")
@@ -416,6 +418,11 @@ def main(config):
 
 
 if __name__ == "__main__":
-    with open("evotest.yaml", "r") as f:
-        config = yaml.safe_load(f)
-        main(config)
+    try:
+        with open("evotest.yaml", "r") as f:
+            config = yaml.safe_load(f)
+            main(config)
+    except Exception as e:
+        print(f"Error during evolution: {e}")
+        raise e
+    
