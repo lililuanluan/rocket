@@ -284,3 +284,50 @@ class SpecCheckLogger(CSVLogger):
                     same_goal_ledger_hash,
                 ]
             )
+
+subsribe_event_collumns = [
+    "timestamp",
+    "node_id",
+    "message"
+]
+
+class SubscribeEventLogger(CSVLogger):
+    def __init__(
+        self,
+        sub_directory: str,
+    ):
+        """
+        Initialize SubscribeEventLogger class.
+
+        Args:
+            sub_directory: The subdirectory to store the subscribe event logs in.
+        """
+        super().__init__(
+            filename="subscribe_event_log.csv",
+            columns=subsribe_event_collumns,
+            directory=sub_directory,
+        )
+    def log_subscribe_event(
+        self,
+        node_id: int,
+        message: str,
+        custom_timestamp: int | None = None,
+    ):
+        """
+        Log a subscribe event according to a specific column format.
+
+        Args:
+            node_id: ID of the node which received the message.
+            message: The message received.
+            custom_timestamp: A custom timestamp to log if desired.
+        """
+        # Note: timestamp is milliseconds since epoch (January 1, 1970)
+        self.log_row(
+            [
+                int(datetime.now().timestamp() * 1000)
+                if custom_timestamp is None
+                else custom_timestamp,
+                node_id,
+                message,
+            ]
+        )
