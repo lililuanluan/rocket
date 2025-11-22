@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from datetime import datetime
+import queue
 from typing import Any, Dict, List, Tuple
 
 from loguru import logger
@@ -19,6 +20,10 @@ from rocket_controller.helper import (
 from rocket_controller.iteration_type import LedgerBasedIteration, TimeBasedIteration
 from rocket_controller.network_manager import NetworkManager
 from rocket_controller.validator_node_info import ValidatorNode
+from rocket_controller.ws_subscriber import WSSubscriber
+import threading
+import socket
+import time
 
 
 class Strategy(ABC):
@@ -98,18 +103,27 @@ class Strategy(ABC):
             LedgerBasedIteration(
                 max_iterations=max_iteration if max_iteration is not None else 10,
                 max_ledger_seq=self.max_ledger_seq,
-                ledger_timeout_seconds=45,
+                ledger_timeout_seconds=60,
+                strategy_stopper=self.strategy_stopper,
+                
             )
             if iteration_type is None
             else iteration_type
         )
-        
-        
+
         # Pass configured byzantine nodes (if any) to the iteration type so
         # spec checks can exclude them.
         self.iteration_type.set_log_dir(
             self.log_dir, byzantine_node_ids=self.network.network_config.get("byzz_nodes", [])
         )
+        # a queue of subscriber pushed messages, producer-consumer pattern
+        self._ws_event_queue: queue.Queue = queue.Queue()
+        self._ws_consumer_stop = threading.Event()
+        self._ws_consumer_thread = threading.Thread(target=self._ws_consumer, name="WSConsumer", daemon=True)
+        self._ws_consumer_thread.start()
+
+    def _ws_consumer(self) -> None:
+        pass
 
     @staticmethod
     def init_configs(
@@ -129,6 +143,62 @@ class Strategy(ABC):
         network_config = yaml_to_dict(network_config_path)
         return network_config, params
 
+    def _subscriber_delayed_start(self, validator_nodes: List[ValidatorNode], max_wait: int = 30):
+        # Try to connect to any validator WS port (public then admin) for up to max_wait seconds
+        start_t = time.time()
+        connected = []
+        while time.time() - start_t < max_wait:
+            if len(connected) == len(validator_nodes):
+                logger.info(
+                    "WSSubscriber: all websockets reachable, starting subscriber"
+                )
+                return
+
+            connections = []
+            for node in validator_nodes:
+                wa = node.ws_private
+                if (wa.host, wa.port) not in connected:
+                    connections.append((wa.host, wa.port))
+
+            for host, port in connections:
+                try:
+                    with socket.create_connection((host, port), timeout=1):
+                        connected.append((host, port))
+                        continue
+                except Exception:
+                    continue
+            time.sleep(1)
+
+        logger.info(
+            "WSSubscriber: no websocket reachable within timeout. failed nodes: {} starting subscriber anyway".format(
+                [
+                    f"{n.ws_private.host}:{n.ws_private.port}"
+                    for n in validator_nodes
+                    if (n.ws_private.host, n.ws_private.port) not in connected
+                ]
+            )
+        )
+
+    def start_ws_subscriber(self, validator_node_list):
+        # Start a background detector thread that will probe validator WS ports
+        # and start the subscriber once detection completes (or times out).
+        def _detector():
+            try:
+                # probe for up to 30s (this call is blocking but runs in detector thread)
+                self._subscriber_delayed_start(validator_node_list, max_wait=30)
+            except Exception:
+                logger.exception("WS subscriber detector failed")
+            finally:
+                try:
+                    # start() is non-blocking
+                    self._ws_subscriber.start()
+                    logger.info("WSSubscriber started by detector thread")
+                except Exception:
+                    logger.exception("Failed to start WSSubscriber after detection")
+
+        t = threading.Thread(target=_detector, name="WSDetector", daemon=True)
+        t.start()
+
     def update_network(self, validator_node_list: List[ValidatorNode]):
         """
         Update the strategy's attributes.
@@ -140,6 +210,18 @@ class Strategy(ABC):
         self.network.update_network(validator_node_list)
         self.iteration_type.set_validator_nodes(validator_node_list)
         self.setup()
+
+        self._ws_subscriber = WSSubscriber(validator_node_list, log_dir=self.log_dir + f"iteration-{self.iteration_type.cur_iteration}", enqueue_func=self._ws_event_queue.put)
+        self.start_ws_subscriber(validator_node_list)
+
+    def strategy_stopper(self):
+        self.stop_ws_subscriber()
+
+    def stop_ws_subscriber(self):
+        if getattr(self, "_ws_subscriber", None):
+            logger.info("Stopping WSSubscriber")
+            self._ws_subscriber.stop()
+            self._ws_subscriber = None
 
     def update_status(self, packet: packet_pb2.Packet):
         """

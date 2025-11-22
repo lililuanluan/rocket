@@ -32,6 +32,7 @@ class TimeBasedIteration:
         timeout_seconds: int = 60,
         ledger_timeout: bool = False,
         max_ledger_seq: int = -1,
+        strategy_stopper = None # func in strategy to stop ws subscriber or other things
     ):
         """
         Init Iteration Type with an InterceptorManager attached.
@@ -62,12 +63,14 @@ class TimeBasedIteration:
         self._lock = threading.Lock()
         # Set of byzantine node ids to exclude from spec checks (populated via set_log_dir)
         self._byzantine_nodes: set[int] = set()
+        self.strategy_stopper = strategy_stopper
 
     def _stop_all(self):
         """Stop the interceptor along with the docker containers."""
         logger.info(
             f"Finished iteration {self.cur_iteration-1}, stopping test process..."
         )
+        self.strategy_stopper() if self.strategy_stopper else None
         self._interceptor_manager.stop()
         self._interceptor_manager.cleanup_docker_containers()
 
@@ -104,12 +107,14 @@ class TimeBasedIteration:
         Args:
             validator_nodes: New list of validator nodes.
         """
-        _now = datetime.now()
-        self.ledger_validation_map = {
-            i: {"seq": 1, "time": _now} for i in range(len(validator_nodes))
-        }
-        self.ledger_validation_history = {i: {} for i in range(len(validator_nodes))}
-        self._validator_nodes = validator_nodes
+        with self._lock:
+            # this may race with on_status_change; ensure consistent state
+            _now = datetime.now()
+            self.ledger_validation_map = {
+                i: {"seq": 1, "time": _now} for i in range(len(validator_nodes))
+            }
+            self.ledger_validation_history = {i: {} for i in range(len(validator_nodes))}
+            self._validator_nodes = validator_nodes
 
     def set_log_dir(self, log_dir: str, byzantine_node_ids: Iterable[int] | None = None):
         """
@@ -342,6 +347,7 @@ class LedgerBasedIteration(TimeBasedIteration):
         max_iterations: int,
         max_ledger_seq: int = 10,
         ledger_timeout_seconds: int = 60,
+        strategy_stopper = None # func in strategy to stop ws subscriber or other things
     ):
         """
         Init the TimeIteration class with a specified timeout in seconds.
@@ -356,6 +362,7 @@ class LedgerBasedIteration(TimeBasedIteration):
             timeout_seconds=ledger_timeout_seconds,
             ledger_timeout=True,
             max_ledger_seq=max_ledger_seq,
+            strategy_stopper=strategy_stopper
         )
 
 
