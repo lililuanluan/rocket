@@ -8,6 +8,8 @@
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{caption}
+% Needed for coloring table rows when a ledger seq has inconsistent hashes
+\usepackage[table]{xcolor}
 \usepackage{hyperref}
 \usepackage{currfile}
 \usepackage{amsmath}
@@ -30,17 +32,18 @@ specification checking:
     \item failed final agreement: true if ledger hashes are collected for all nodes in the last ledger sequence and these hashes are identical
 \end{enumerate}
 
-\textit{validation time}s are the time intervals between two consecutive statuschange messages with new-event = closing ledger. 
+\textit{validation time}s are the time intervals between two consecutive statuschange messages with new-event = accepted ledger. 
 
 \textit{proposset number} is the total number of TMProposeSet messages sent by a node in a test, averaged.
 
-byzantine nodes are excluded from violaiton checking.
+byzantine nodes are excluded from violation checking.
 
 
 \section{data}
 
 \input{out/stats.tex}
-\input{out/G0T1_validation_hash.tex}
+% \input{out/G0T1_validation_hash.tex}
+\input{out/val_time_tables.tex}
 
 \end{document}
 

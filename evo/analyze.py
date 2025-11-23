@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 
 
-def generate_node_seq_validation_time_table(result, outfile, caption=None):
+def generate_node_seq_table(result, outfile, key, caption=None):
     df = result if isinstance(result, pd.DataFrame) else pd.read_csv(result)
     print(f"Generating node-seq-validation-time table to {outfile} from {result}")
 
@@ -19,8 +19,8 @@ def generate_node_seq_validation_time_table(result, outfile, caption=None):
         for _, row in df.iterrows():
             node_id = row["node_id"]
             ledger_seq = row["ledger_seq"]
-            time_to_validation = row["time_to_validation"]
-            data_dict[(node_id, ledger_seq)] = time_to_validation
+            data_by_key = row[key]
+            data_dict[(node_id, ledger_seq)] = data_by_key
         node_ids = sorted(df["node_id"].unique())
         ledger_seqs = sorted(df["ledger_seq"].unique())
         with open(outfile, "w") as f:
@@ -38,18 +38,41 @@ def generate_node_seq_validation_time_table(result, outfile, caption=None):
 
             # 写每一行
             for ledger_seq in ledger_seqs:
+                # 如果是 ledger_hash 表格，检查当前行是否所有节点都有值且相同
+                row_inconsistent = False
+                if key == "ledger_hash":
+                    hashes = [
+                        data_dict.get((node_id, ledger_seq))
+                        for node_id in node_ids
+                    ]
+                    # 去掉缺失值（None）；只比较存在的 hash
+                    present_hashes = [h for h in hashes if h is not None]
+                    # 如果至少有一个实际 hash，且这些实际 hash 不全相同，则认为不一致
+                    if present_hashes and len(set(present_hashes)) != 1:
+                        row_inconsistent = True
+
+                # 在不一致时把整行标红（需要 xcolor 的 table 选项）
+                if row_inconsistent:
+                    print(r"\rowcolor{red!20}", file=f)
+
                 print(f"{ledger_seq}", end="", file=f)
                 for node_id in node_ids:
-                    time_to_validation = data_dict.get((node_id, ledger_seq), None)
-                    if time_to_validation is not None:
-                        print(f" & {time_to_validation:.3f}", end="", file=f)
+                    data_by_key = data_dict.get((node_id, ledger_seq), None)
+                    if data_by_key is not None:
+                        if key == "time_to_validation":
+                            print(f" & {data_by_key:.3f}", end="", file=f)
+                        elif key == "ledger_hash":
+                            # 只显示hash的前5位，小写字母
+                            print(f" & {data_by_key[:5].lower()}", end="", file=f)
                     else:
                         print(" & -", end="", file=f)
                 print(r" \\", file=f)
             print(r"\bottomrule", file=f)
             print(r"\end{tabular}", file=f)
             if caption:
-                print(r"\caption{" + caption + "}", file=f)
+                # Use an unnumbered caption so tables are anonymous (no "Table 1" labels)
+                # Requires the `caption` package (main.tex already loads it).
+                print(r"\caption*{" + caption + "}", file=f)
             print(r"\end{table}", file=f)
         print(f"Table written to {outfile}")
 
@@ -85,17 +108,30 @@ def generate_stat_table():
                 return json.dumps(res["agg_spec_check"]).replace("_", r"\_")
             # sub=/Users/lli21/rocket/logs/2025_11_18_20h16m/G0T1 -> G0T1
             res = evaluate_log(str(sub))
-            table_outfile = (
+            val_time_outfile = (
                 Path(__file__).resolve().parent
                 / "out"
                 / f"{sub.name}_validation_time.tex"
             )
-            generate_node_seq_validation_time_table(
+            generate_node_seq_table(
                 sub / "iteration-1" / "result-1.csv",
-                table_outfile,
-                caption=f"test {i+1}, res: {str_res(res) if res else ''} ",
+                val_time_outfile,
+                key="time_to_validation",
+                caption=f"[Validation Time] \\textbf{{Test {i+1}}}, res: {str_res(res) if res else ''} ",
             )
-            f.write(r"\input{out/" + table_outfile.name + "}\n")
+            f.write(r"\input{out/" + val_time_outfile.name + "}\n")
+            hash_outfile = (
+                Path(__file__).resolve().parent
+                / "out"
+                / f"{sub.name}_validation_hash.tex"
+            )
+            generate_node_seq_table(
+                sub / "iteration-1" / "result-1.csv",
+                hash_outfile,
+                key="ledger_hash",
+                caption=f"[Ledger Hash] \\textbf{{Test {i+1}}}, res: {str_res(res) if res else ''} ",
+            )
+            f.write(r"\input{out/" + hash_outfile.name + "}\n")
 
             
             if res:
