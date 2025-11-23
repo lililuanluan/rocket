@@ -214,7 +214,66 @@ class TimeBasedIteration:
                         self._validator_nodes,
                     ),
                 )
-                t.start()            
+                t.start()
+
+    def on_status_change_subscribe(self, from_id: int, message: dict, timestamp: datetime):
+        if not self._validator_nodes:
+            raise ValueError("Validator nodes not initialized.")
+        with self._lock:
+            if not self._validator_nodes:
+                return
+            if message.get("type") != "peerStatusChange":
+                return
+            if message["action"] == "ACCEPTED_LEDGER":
+                newseq = message["ledger_index"]
+                if (
+                    self._max_ledger_seq
+                    >= newseq
+                    > self.ledger_validation_map[from_id]["seq"]
+                ):
+                    if newseq != self.ledger_validation_map[from_id]["seq"] + 1:
+                        logger.warning(
+                            f"Node {from_id} accepted non-consecutive ledger {newseq} (previous: {self.ledger_validation_map[from_id]['seq']})"
+                        )
+                    self.ledger_validation_map[from_id]["seq"] = newseq
+
+                    _now = timestamp
+                    _validation_time = (
+                        _now - self.ledger_validation_map[from_id]["time"]
+                    )
+                    self.ledger_validation_map[from_id]["time"] = _now
+
+                    if self.ledger_timeout:
+                        self._start_timeout_timer()
+
+                    logger.info(
+                        f"Node {from_id} accepted ledger {self.ledger_validation_map[from_id]['seq']}"
+                    )
+                    t = threading.Thread(
+                        name=f"LogLedgerResult-{from_id}-{self.ledger_validation_map[from_id]['seq']}",
+                        target=self._ledger_results.result_logger.log_result,
+                        args=(
+                            from_id,
+                            newseq,
+                            self._max_ledger_seq,
+                            _validation_time.total_seconds(),
+                            -1,
+                            message["ledger_hash"],
+                            newseq,
+                        ),
+                    )
+                    t.start()
+
+            if self._max_ledger_seq == -1:
+                return
+            cur_ledger_infos = self.ledger_validation_map.values()
+            if cur_ledger_infos and all(
+                entry["seq"] >= self._max_ledger_seq
+                for node_id, entry in self.ledger_validation_map.items()
+                if node_id not in self._byzantine_nodes
+            ):
+                self._reset_values()
+                self.add_iteration()
 
     def on_status_change(
         self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
@@ -247,7 +306,6 @@ class TimeBasedIteration:
                 if status.ledgerSeq != self.ledger_validation_map[from_id]["seq"] + 1:
                     logger.warning(f"Node {from_id} validated non-consecutive ledger {status.ledgerSeq} (previous: {self.ledger_validation_map[from_id]['seq']})")
                 self.ledger_validation_map[from_id]["seq"] = status.ledgerSeq
-                
                 _now = datetime.now()
                 _validation_time = _now - self.ledger_validation_map[from_id]["time"]
                 self.ledger_validation_map[from_id]["time"] = _now

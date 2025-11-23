@@ -43,12 +43,11 @@ class WSSubscriber:
         """
         self.validator_nodes = validator_nodes
         self._thread: threading.Thread | None = None
-        self._stop_event = threading.Event()
+        self.stop_event = threading.Event()
         self._enqueue = enqueue_func
         # subscriber events CSV logger (best-effort; don't fail if import unavailable)
         self.log_dir = log_dir
         self._subscriber_logger = SubscribeEventLogger(sub_directory=self.log_dir)
-        self.ping_success = False
         self._msg_types = set()
         # Async loop and task tracking (set when thread starts)
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -65,7 +64,7 @@ class WSSubscriber:
         """
         if self._thread and self._thread.is_alive():
             return
-        self._stop_event.clear()
+        self.stop_event.clear()
         self._verbose.set()
         self._thread = threading.Thread(
             target=self._run, name="WSSubscriberThread", daemon=True
@@ -76,7 +75,7 @@ class WSSubscriber:
         """Signal the subscriber to stop and wait up to `timeout` seconds."""
         # signal stopping to background tasks
         logger.info("WSSubscriber: stopping")
-        self._stop_event.set()
+        self.stop_event.set()
         self._verbose.clear()
 
         # If the background thread has created an asyncio loop, schedule a
@@ -213,11 +212,11 @@ class WSSubscriber:
         def should_stop() -> bool:
             if self._async_stop is not None and self._async_stop.is_set():
                 return True
-            return self._stop_event.is_set()
+            return self.stop_event.is_set()
 
         while not should_stop():
             for url in urls:
-                if self._stop_event.is_set():
+                if self.stop_event.is_set():
                     break
                 try:
                     # Short TCP probe to avoid noisy websocket handshake errors
@@ -258,16 +257,19 @@ class WSSubscriber:
                             logger.info(f"WSSubscriber: subscribed to {url} streams for node {node_idx}")
 
                             async for raw in ws:
+                                _now = datetime.now()
                                 if should_stop():
                                     break
                                 try:
-                                    msg = json.loads(raw)
+                                    msg = json.loads(raw) # # {'peerStatusChange', 'validationReceived', 'ledgerClosed', 'response'}
+                                    # self._msg_types.add(msg["type"])
+                                    # print(self._msg_types)
                                 except Exception:
                                     logger.debug(f"WSSubscriber[{node_idx}] raw: {raw!r}")
                                     continue
 
                                 # include node_idx so consumer can attribute the event
-                                event = {"node_idx": node_idx, "msg": msg}
+                                event = {"node_idx": node_idx, "msg": msg, "time": _now}
                                 try:
                                     # self._enqueue may be a queue.put function or similar callable
                                     self._enqueue(event)
@@ -279,7 +281,7 @@ class WSSubscriber:
                                     if self._subscriber_logger is not None:
                                         # timestamp in ms, node index and JSON string of message
                                         self._subscriber_logger.log_row([
-                                            int(datetime.now().timestamp() * 1000),
+                                            int(_now.timestamp() * 1000),
                                             node_idx,
                                             json.dumps(msg),
                                         ])

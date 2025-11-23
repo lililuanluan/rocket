@@ -123,7 +123,20 @@ class Strategy(ABC):
         self._ws_consumer_thread.start()
 
     def _ws_consumer(self) -> None:
-        pass
+        while True:
+            if getattr(self, "_ws_subscriber", None) is None:
+                time.sleep(1)
+                continue
+            if self._ws_subscriber.stop_event.is_set():
+                break
+            try:
+                event = self._ws_event_queue.get(timeout=1)
+            except queue.Empty:
+                continue
+            try:
+                self.update_status_subscribe(event)
+            except Exception:
+                logger.exception("ws consumer failed on event {}", event)
 
     @staticmethod
     def init_configs(
@@ -240,6 +253,16 @@ class Strategy(ABC):
                 )
         except DecodingNotSupportedError:
             pass
+
+    def update_status_subscribe(self, event: Any) -> None:
+        """
+        Update the status based on a websocket event.
+
+        Args:
+            event: The websocket event to process.
+        """
+        node_id, ev, timestamp = event.get("node_idx"), event.get("msg", {}), event.get("time")
+        self.iteration_type.on_status_change_subscribe(from_id=node_id, message=ev, timestamp=timestamp)
 
     def process_packet(
         self,
