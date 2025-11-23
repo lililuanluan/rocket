@@ -144,22 +144,6 @@ class TimeBasedIteration:
                 t.join()
 
         if self.cur_iteration > 1:
-            # Before running spec checks for the previous iteration, attempt to
-            # resolve any pending ledger fetch failures so spec_check can see
-            # as much data as possible. This is best-effort and will not raise.
-            try:
-                prev_iter = self.cur_iteration - 1
-                # Prefer the ledger_result's configured logger directory if present
-                try:
-                    summary = self._ledger_results.retry_pending()
-                    logger.info(
-                        f"Retried pending ledgers for iteration {prev_iter}: {summary}"
-                    )
-                except Exception:
-                    logger.exception("Error while retrying pending ledgers before spec check")
-            except Exception:
-                # Ignore any issues here; spec_check should still run.
-                pass
 
             # Pass the configured byzantine node ids (if any) so the spec checker
             # can exclude them when computing agreement/termination.
@@ -199,8 +183,6 @@ class TimeBasedIteration:
 
     def request_all_validated_ledgers(self):
         logger.info("Requesting all validated ledgers from validator nodes...")
-        
-
         # enumerate over validator nodes safely
         if not self._validator_nodes:
             return
@@ -249,6 +231,7 @@ class TimeBasedIteration:
         """
         if not self._validator_nodes:
             raise ValueError("Validator nodes not initialized.")
+        return # use on_status_change_subscribe instead
 
         with self._lock:
             # Edge case: if the lock from a previous iteration gets released during a new iteration (when transitioning)
