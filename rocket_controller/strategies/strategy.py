@@ -103,7 +103,7 @@ class Strategy(ABC):
             LedgerBasedIteration(
                 max_iterations=max_iteration if max_iteration is not None else 10,
                 max_ledger_seq=self.max_ledger_seq,
-                ledger_timeout_seconds=60,
+                ledger_timeout_seconds=3600, # do not use this timeout
                 strategy_stopper=self.strategy_stopper,
                 
             )
@@ -118,7 +118,6 @@ class Strategy(ABC):
         )
         # a queue of subscriber pushed messages, producer-consumer pattern
         self._ws_event_queue: queue.Queue = queue.Queue()
-        self._ws_consumer_stop = threading.Event()
         self._ws_consumer_thread = threading.Thread(target=self._ws_consumer, name="WSConsumer", daemon=True)
         self._ws_consumer_thread.start()
 
