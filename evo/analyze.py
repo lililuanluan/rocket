@@ -54,6 +54,7 @@ def generate_node_seq_table(result, outfile, key, caption=None):
                 # 在不一致时把整行标红（需要 xcolor 的 table 选项）
                 if row_inconsistent:
                     print(r"\rowcolor{red!20}", file=f)
+                    pass
 
                 print(f"{ledger_seq}", end="", file=f)
                 for node_id in node_ids:
@@ -77,7 +78,7 @@ def generate_node_seq_table(result, outfile, key, caption=None):
         print(f"Table written to {outfile}")
 
 
-def generate_stat_table():
+def generate_stat_table(log_dir=None):
 
     # locate logs root relative to this file
     base_logs = Path(__file__).resolve().parent.parent / "logs"
@@ -90,13 +91,14 @@ def generate_stat_table():
     candidates = [p for p in base_logs.iterdir() if p.is_dir()]
     if not candidates:
         raise FileNotFoundError(f"no run directories found under {base_logs}")
-    latest = max(candidates, key=lambda p: p.stat().st_mtime)
+    latest = max(candidates, key=lambda p: p.stat().st_mtime) if log_dir is None else Path(log_dir)
 
     # for each immediate subdir (e.g., G0T1, G1T1, ...) check aggregated_spec_check_log.json
     correct_res = []
     all_res = []
     failed_aggreement_res = []
     failed_final_res = []
+
     with open(
         Path(__file__).resolve().parent / "out" / "val_time_tables.tex", "w"
     ) as f:
@@ -104,8 +106,17 @@ def generate_stat_table():
             if not sub.is_dir():
                 continue
 
+
             def str_res(res):
-                return json.dumps(res["agg_spec_check"]).replace("_", r"\_")
+                # Return a short JSON-like string containing only keys whose value == 1
+                try:
+                    agg = res["agg_spec_check"]
+                except Exception:
+                    return ""
+                filtered = {k: v for k, v in agg.items() if v == 1}
+                if not filtered:
+                    return ""
+                return json.dumps(filtered).replace("_", r"\_").replace('"', '').replace("{", "").replace("}", "")
             # sub=/Users/lli21/rocket/logs/2025_11_18_20h16m/G0T1 -> G0T1
             res = evaluate_log(str(sub))
             val_time_outfile = (
@@ -119,7 +130,7 @@ def generate_stat_table():
                 key="time_to_validation",
                 caption=f"[Validation Time] \\textbf{{Test {i+1}}}, res: {str_res(res) if res else ''} ",
             )
-            f.write(r"\input{out/" + val_time_outfile.name + "}\n")
+            f.write(r"\input{out/" + val_time_outfile.name + "}" + "\n")
             hash_outfile = (
                 Path(__file__).resolve().parent
                 / "out"
@@ -131,9 +142,12 @@ def generate_stat_table():
                 key="ledger_hash",
                 caption=f"[Ledger Hash] \\textbf{{Test {i+1}}}, res: {str_res(res) if res else ''} ",
             )
-            f.write(r"\input{out/" + hash_outfile.name + "}\n")
+            f.write(r"\input{out/" + hash_outfile.name + "}" + "\n")
 
-            
+            # 每5组插入一次 FloatBarrier，减少浮动体堆积
+            if (i + 1) % 5 == 0:
+                f.write("\FloatBarrier\n")
+
             if res:
                 all_res.append(res)
                 if res["correct_runs"]:
@@ -225,5 +239,9 @@ def build_latex():
 
 
 if __name__ == "__main__":
-    generate_stat_table()
+    import sys
+    log_dir = None
+    if len(sys.argv) > 1:
+        log_dir = sys.argv[1]
+    generate_stat_table(log_dir = log_dir)
     build_latex()

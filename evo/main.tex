@@ -13,9 +13,9 @@
 \usepackage{hyperref}
 \usepackage{currfile}
 \usepackage{amsmath}
+\usepackage{placeins}
 
 \geometry{margin=1in}
-
 
 
 \begin{document}
@@ -38,8 +38,11 @@ specification checking:
 
 byzantine nodes are excluded from violation checking.
 
+In each test, the ledger sequences (rows) with disagreement are marked in \textcolor{red}{red} in the ledger hash tables.
+
 
 \section{data}
+\FloatBarrier
 
 \input{out/stats.tex}
 % \input{out/G0T1_validation_hash.tex}
