@@ -1,7 +1,7 @@
+# 笔记～
 
 
-
-# TODOs
+## TODOs
 
 [-] 创建一个bin文件夹，存储编译好的interceptor二进制。如果如果配置的ripple镜像有对应的二进制，则直接拷贝到interceptor文件夹下。否则使用rebuild_interceptor.py将二进制拷贝过来。
 
@@ -20,3 +20,13 @@
 [-] 更改spec checker，只检查correct nodes
 
 [] 如果有多个byzz nodes，是否可以共享私钥？
+
+## 提交jpynb文件
+```bash
+
+pip install nbstripout nbdime
+# 在仓库安装 nbstripout 钩子（会自动在 git add 前清理 notebook 输出）
+nbstripout --install
+# 启用 nbdime 的 git 支持（更友好的 notebook diff/merge）
+nbdime install --enable --global
+```
