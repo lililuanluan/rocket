@@ -222,47 +222,47 @@ class TimeBasedIteration:
         with self._lock:
             if not self._validator_nodes:
                 return
-            if message.get("type") != "peerStatusChange":
+            if message.get("type") != "ledgerClosed":
                 return
-            if message["action"] == "ACCEPTED_LEDGER":
-                newseq = message["ledger_index"]
-                if (
-                    self._max_ledger_seq
-                    >= newseq
-                    > self.ledger_validation_map[from_id]["seq"]
-                ):
-                    if newseq != self.ledger_validation_map[from_id]["seq"] + 1:
-                        logger.warning(
-                            f"Node {from_id} accepted non-consecutive ledger {newseq} (previous: {self.ledger_validation_map[from_id]['seq']})"
-                        )
-                    self.ledger_validation_map[from_id]["seq"] = newseq
 
-                    _now = timestamp
-                    _validation_time = (
-                        _now - self.ledger_validation_map[from_id]["time"]
+            newseq = message["ledger_index"]
+            if (
+                self._max_ledger_seq
+                >= newseq
+                > self.ledger_validation_map[from_id]["seq"]
+            ):
+                if newseq != self.ledger_validation_map[from_id]["seq"] + 1:
+                    logger.warning(
+                        f"Node {from_id} accepted non-consecutive ledger {newseq} (previous: {self.ledger_validation_map[from_id]['seq']})"
                     )
-                    self.ledger_validation_map[from_id]["time"] = _now
+                self.ledger_validation_map[from_id]["seq"] = newseq
 
-                    if self.ledger_timeout:
-                        self._start_timeout_timer()
+                _now = timestamp
+                _validation_time = (
+                    _now - self.ledger_validation_map[from_id]["time"]
+                )
+                self.ledger_validation_map[from_id]["time"] = _now
 
-                    logger.info(
-                        f"Node {from_id} accepted ledger {self.ledger_validation_map[from_id]['seq']}"
-                    )
-                    t = threading.Thread(
-                        name=f"LogLedgerResult-{from_id}-{self.ledger_validation_map[from_id]['seq']}",
-                        target=self._ledger_results.result_logger.log_result,
-                        args=(
-                            from_id,
-                            newseq,
-                            self._max_ledger_seq,
-                            _validation_time.total_seconds(),
-                            -1,
-                            message["ledger_hash"],
-                            newseq,
-                        ),
-                    )
-                    t.start()
+                if self.ledger_timeout:
+                    self._start_timeout_timer()
+
+                logger.info(
+                    f"Node {from_id} accepted ledger {self.ledger_validation_map[from_id]['seq']}"
+                )
+                t = threading.Thread(
+                    name=f"LogLedgerResult-{from_id}-{self.ledger_validation_map[from_id]['seq']}",
+                    target=self._ledger_results.result_logger.log_result,
+                    args=(
+                        from_id,
+                        newseq,
+                        self._max_ledger_seq,
+                        _validation_time.total_seconds(),
+                        -1,
+                        message["ledger_hash"],
+                        newseq,
+                    ),
+                )
+                t.start()
 
             if self._max_ledger_seq == -1:
                 return
