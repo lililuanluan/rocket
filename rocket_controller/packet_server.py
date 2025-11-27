@@ -83,7 +83,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             original_data=original_packet_decoded[0].__str__().replace("\n", "; "),
             possibly_mutated_data=new_packet_decoded[0].__str__().replace("\n", "; "),
             custom_timestamp=timestamp,
-            packet_data=request.data.hex()
+            packet_data=request.data.hex(),
+            possibly_mutated_packet_data=new_data.hex(),
         )
 
         return packet_pb2.PacketAck(
