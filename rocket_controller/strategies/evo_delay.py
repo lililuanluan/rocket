@@ -66,10 +66,20 @@ class EvoDelayStrategy(Strategy):
         self.dummy_validation = "E803E1999369975AED1BFD2444A3552A73383C03A2004CB784CE07E13EBD7D7C"
         # TODO support multiple byzantine nodes (separate history)
         self.old_proposals = [self.dummy_proposal,]
-        self.byzz_mutate_methods = {
-            ripple_pb2.TMProposeSet: ["do_nothing", "replace_tx_hash", "increment_propose_seq"],
-            ripple_pb2.TMValidation: ["do_nothing", "replace_ledger_hash", "increment_ledger_sequence"]
-        }
+        self.byzz_mutate_methods = (
+            {  # TODO: add mutation for TMGetLedger and TMLedgerData
+                ripple_pb2.TMProposeSet: [
+                    "do_nothing",
+                    "replace_tx_hash",
+                    "increment_propose_seq",
+                ],
+                ripple_pb2.TMValidation: [
+                    "do_nothing",
+                    "replace_ledger_hash",
+                    "increment_ledger_sequence",
+                ],
+            }
+        )
         self.old_validation_hashes = [self.dummy_validation,]
 
     def setup(self):
