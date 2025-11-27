@@ -124,11 +124,12 @@ def generate_stat_table(log_dir=None):
                 / "out"
                 / f"{sub.name}_validation_time.tex"
             )
+            caption = f"\\textbf{{Test {i+1}}} {sub.name}, res: {str_res(res) if res else ''} "
             generate_node_seq_table(
                 sub / "iteration-1" / "result-1.csv",
                 val_time_outfile,
                 key="time_to_validation",
-                caption=f"[Validation Time] \\textbf{{Test {i+1}}}, res: {str_res(res) if res else ''} ",
+                caption=f"[Validation Time] {caption}",
             )
             f.write(r"\input{out/" + val_time_outfile.name + "}" + "\n")
             hash_outfile = (
@@ -140,7 +141,7 @@ def generate_stat_table(log_dir=None):
                 sub / "iteration-1" / "result-1.csv",
                 hash_outfile,
                 key="ledger_hash",
-                caption=f"[Ledger Hash] \\textbf{{Test {i+1}}}, res: {str_res(res) if res else ''} ",
+                caption=f"[Ledger Hash] {caption}",
             )
             f.write(r"\input{out/" + hash_outfile.name + "}" + "\n")
 
