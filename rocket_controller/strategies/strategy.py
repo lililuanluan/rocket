@@ -120,6 +120,7 @@ class Strategy(ABC):
         self._ws_event_queue: queue.Queue = queue.Queue()
         self._ws_consumer_thread = threading.Thread(target=self._ws_consumer, name="WSConsumer", daemon=True)
         self._ws_consumer_thread.start()
+        self._save_validator_log_flag = threading.Event()
 
     def _ws_consumer(self) -> None:
         while True:
@@ -225,9 +226,39 @@ class Strategy(ABC):
 
         self._ws_subscriber = WSSubscriber(validator_node_list, log_dir=self.log_dir + f"iteration-{self.iteration_type.cur_iteration}", enqueue_func=self._ws_event_queue.put)
         self.start_ws_subscriber(validator_node_list)
+        self._save_validator_log_flag.set()
+        self._save_validator_log_background(validator_node_list)
+
+    def _save_validator_log_background(self, validator_node_list: List[ValidatorNode]):
+        import os
+        import subprocess
+        
+        def _worker(node_idx):
+            out_dir = os.path.join("./logs/" + self.log_dir, f"iteration-{self.iteration_type.cur_iteration}", "validator_live_logs")
+            container_name = f"validator_{node_idx}"
+            os.makedirs(out_dir, exist_ok=True)
+            fname = f"validator_{node_idx}_log"
+            log_file_path = os.path.join(out_dir, fname + ".txt")
+                
+            while self._save_validator_log_flag.is_set():
+                try:
+                    with open(log_file_path, "w") as f:
+                        try:
+                            subprocess.run(['docker', 'logs', container_name], stdout=f, stderr=f, check=False, text=True)
+                        except Exception as e:
+                            logger.debug(f"_save_validator_log_async: docker logs failed for {container_name}: {e}")
+                except Exception:
+                    logger.exception(f"Failed to save validator log for node {node_idx}")
+                time.sleep(5)
+        for idx, _ in enumerate(validator_node_list):
+            t = threading.Thread(target=_worker, args=(idx,), name=f"ValidatorLogSaver-{idx}", daemon=True)
+            t.start()
+        
+
 
     def strategy_stopper(self):
         self.stop_ws_subscriber()
+        self._save_validator_log_flag.clear()
 
     def stop_ws_subscriber(self):
         if getattr(self, "_ws_subscriber", None):
