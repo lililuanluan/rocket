@@ -353,7 +353,7 @@ class TimeBasedIteration:
             ):
                 self._reset_values()
                 # request after timers are reset
-                self.request_all_validated_ledgers() 
+                # self.request_all_validated_ledgers() 
                 self.add_iteration()
 
     def get_ledger_sequence(self, node_id: int) -> int:
@@ -449,7 +449,7 @@ class NoneIteration(TimeBasedIteration):
         pass
 
     def on_status_change(
-        self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
+        self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int, timestamp: datetime
     ):
         """Override the method since none iteration does not need to keep track of ledgers."""
         pass
