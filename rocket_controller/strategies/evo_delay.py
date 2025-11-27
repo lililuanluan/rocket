@@ -163,11 +163,17 @@ class EvoDelayStrategy(Strategy):
                 else receiver_node_id - 1
             )
         )
+        
+        def could_mutate() -> bool:
+            is_sent_by_byzz = sender_node_id in self.byzz_nodes
+            is_recvd_by_byzz = receiver_node_id in self.byzz_nodes
+            
+            return is_sent_by_byzz or is_recvd_by_byzz
+            
 
         # self.test_sign_message(packet)
-        is_sent_recvd_by_byzz = sender_node_id in self.byzz_nodes or receiver_node_id in self.byzz_nodes
         # DO NOT mutate messages in the beginning, otherwise the initial setup is messed up
-        if is_sent_recvd_by_byzz:
+        if could_mutate():
             try:
                 if 3 <= self.iteration_type.get_ledger_sequence_cur_max() <= self.max_ledger_seq - 5:
                     packet = self.byzz_mutate_message(message, packet, message_type, sender_node_id)
@@ -177,7 +183,7 @@ class EvoDelayStrategy(Strategy):
                 logger.debug(f"Skipping byzz mutation: cur max ledger seq = {self.iteration_type.get_ledger_sequence_cur_max()}, error: {e}")
 
         # cache old proposals or validation AFTER mutation
-        if is_sent_recvd_by_byzz:
+        if could_mutate():
             if isinstance(message, ripple_pb2.TMProposeSet):
                 self.old_proposals.append(message.currentTxHash)
 
@@ -245,6 +251,9 @@ class EvoDelayStrategy(Strategy):
             return packet
 
         original_sender = self.pubkey_to_node_id(message.nodePubKey.hex())
+        if original_sender != sender_node_id:
+            # only mutate if sender is byzz node
+            return packet
         if method == "replace_tx_hash":
             message = self._replace_txs_with_old_propose(message)
         elif method == "increment_propose_seq":
@@ -282,6 +291,9 @@ class EvoDelayStrategy(Strategy):
                 return go_with(packet)
 
             original_sender = self.pubkey_to_node_id(parsed.get("SigningPubKey", ""))
+            if original_sender != sender_node_id:
+                # only mutate if sender is byzz node
+                return go_with(packet)
 
             if method == "increment_ledger_sequence":
                 try:
