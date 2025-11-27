@@ -248,6 +248,7 @@ class WSSubscriber:
                     # Try opening the websocket and process messages until stopped
                     try:
                         async with websockets.connect(url) as ws:
+                            # https://xrpl.org/docs/references/http-websocket-apis/public-api-methods/subscription-methods/subscribe
                             subscribe = {
                                 "id": f"ws_sub_{node_idx}",
                                 "command": "subscribe",
