@@ -276,7 +276,7 @@ class TimeBasedIteration:
                 self.add_iteration()
 
     def on_status_change(
-        self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int
+        self, status: ripple_pb2.TMStatusChange, from_id: int, to_id: int, timestamp: datetime
     ):
         """
         Update the iteration values, called when a TMStatusChange is received.
@@ -305,8 +305,10 @@ class TimeBasedIteration:
             ):
                 if status.ledgerSeq != self.ledger_validation_map[from_id]["seq"] + 1:
                     logger.warning(f"Node {from_id} validated non-consecutive ledger {status.ledgerSeq} (previous: {self.ledger_validation_map[from_id]['seq']})")
-                self.ledger_validation_map[from_id]["seq"] = status.ledgerSeq
-                _now = datetime.now()
+                newseq = status.ledgerSeq
+                self.ledger_validation_map[from_id]["seq"] = newseq
+                _now = timestamp
+                
                 _validation_time = _now - self.ledger_validation_map[from_id]["time"]
                 self.ledger_validation_map[from_id]["time"] = _now
 
@@ -326,13 +328,15 @@ class TimeBasedIteration:
                 }
                 # t = threading.Thread(
                 #     name=f"LogLedgerResult-{from_id}-{self.ledger_validation_map[from_id]['seq']}",
-                #     target=self._ledger_results.log_ledger_result,
+                #     target=self._ledger_results.result_logger.log_result,
                 #     args=(
                 #         from_id,
-                #         self.ledger_validation_map[from_id]["seq"],
+                #         newseq,
                 #         self._max_ledger_seq,
                 #         _validation_time.total_seconds(),
-                #         self._validator_nodes,
+                #         -1,
+                #         status.ledgerHash.hex(),
+                #         newseq,
                 #     ),
                 # )
                 # t.start()

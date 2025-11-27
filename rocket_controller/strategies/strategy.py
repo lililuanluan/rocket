@@ -249,6 +249,7 @@ class Strategy(ABC):
                     message,
                     self.network.port_to_id(packet.from_port),
                     self.network.port_to_id(packet.to_port),
+                    datetime.now() # TODO: use more acurate timestamp
                 )
         except DecodingNotSupportedError:
             pass
