@@ -39,6 +39,12 @@ spec_check_columns = [
     "same_goal_ledger_hash",
 ]
 
+node_info_columns = [
+    "node_id",
+    "private_key",
+    "public_key",
+]
+
 
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
@@ -124,10 +130,11 @@ class ActionLogger(CSVLogger):
             filename=node_log_filename
             if node_log_filename is not None
             else "node_info",
-            columns=["validator_node_info"],
+            columns=node_info_columns,
             directory=directory,
         )
-        node_logger.log_rows([[node] for node in validator_node_list])
+        for i, node in enumerate(validator_node_list):
+            node_logger.log_row([i, node.validator_key_data.validation_private_key, node.validator_key_data.validation_public_key])
 
         super().__init__(
             filename=final_filename,
