@@ -252,7 +252,7 @@ class WSSubscriber:
                             subscribe = {
                                 "id": f"ws_sub_{node_idx}",
                                 "command": "subscribe",
-                                "streams": ["ledger", "validations", "peer_status"],
+                                "streams": ["ledger" ]#, "validations", "peer_status"],
                             }
                             await ws.send(json.dumps(subscribe))
                             logger.info(f"WSSubscriber: subscribed to {url} streams for node {node_idx}")
