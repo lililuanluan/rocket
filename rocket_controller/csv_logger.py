@@ -43,6 +43,7 @@ node_info_columns = [
     "node_id",
     "private_key",
     "public_key",
+    "full_info",
 ]
 
 
@@ -134,7 +135,7 @@ class ActionLogger(CSVLogger):
             directory=directory,
         )
         for i, node in enumerate(validator_node_list):
-            node_logger.log_row([i, node.validator_key_data.validation_private_key, node.validator_key_data.validation_public_key])
+            node_logger.log_row([i, node.validator_key_data.validation_private_key, node.validator_key_data.validation_public_key, str(node)])
 
         super().__init__(
             filename=final_filename,
