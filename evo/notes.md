@@ -21,6 +21,10 @@
 
 [] 如果有多个byzz nodes，是否可以共享私钥？
 
+[] 增加transaction提交逻辑，目前是在on_status_change中实现的
+[] 把transaction提交用线程执行，在锁区只负责更新 transaction_sent这个集合
+[] 现在的提交逻辑是死循环，容易把程序阻塞，需要改。
+
 ## 提交jpynb文件
 ```bash
 

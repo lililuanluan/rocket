@@ -103,7 +103,7 @@ class Strategy(ABC):
             LedgerBasedIteration(
                 max_iterations=max_iteration if max_iteration is not None else 10,
                 max_ledger_seq=self.max_ledger_seq,
-                ledger_timeout_seconds=3600, # do not use this timeout
+                ledger_timeout_seconds=self.max_ledger_seq*10,
                 strategy_stopper=self.strategy_stopper,
                 
             )
@@ -228,6 +228,11 @@ class Strategy(ABC):
         self.start_ws_subscriber(validator_node_list)
         self._save_validator_log_flag.set()
         self._save_validator_log_background(validator_node_list)
+
+        # setup iteration type's network reference
+        self.iteration_type.set_network(self.network)
+
+        
 
     def _save_validator_log_background(self, validator_node_list: List[ValidatorNode]):
         import os
