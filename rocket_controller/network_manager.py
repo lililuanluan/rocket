@@ -10,6 +10,8 @@ from xrpl.core.keypairs import generate_seed
 from xrpl.transaction import autofill_and_sign, submit
 from xrpl.wallet import Wallet
 
+import xrpl.models.requests
+
 from rocket_controller.helper import (
     flatten,
     parse_to_2d_list_of_ints,
@@ -469,3 +471,69 @@ class NetworkManager:
         # logger.info(f"Sent a transaction submission to node {peer_id}, url: {rpc_address}")
         self.tx_builder.add_transaction(complete_tx)
         return response
+
+
+    def validate_transaction(self, tx_hash: str, peer_id: int):
+        validator = self.validator_node_list[peer_id]
+        rpc_address = f"http://{validator.rpc.as_url()}/"
+        client = JsonRpcClient(rpc_address)
+        tx_result = client.request(xrpl.models.requests.Tx(transaction=tx_hash))
+        # logger.info(f"Validating transaction {tx_hash} response: {tx_result}")
+        if tx_result.is_successful() and tx_result.result.get('validated', False):
+            return True
+        else:
+            return False
+
+    def get_transactions(self, ledger_seq: int | str, peer_id: int, clients: dict[int, JsonRpcClient] | None = None) -> (str | None, list[str] | None):
+        """
+        Get set of validated transactions for a certain peer and ledger sequence
+
+        Args:
+            ledger_seq: ledger sequence/index
+            peer_id: peer id
+            clients: dict of peer id's mapped to JsonRpcClient's or None
+
+        Returns:
+            list of transactions or None when an error occurred
+        """
+
+        if clients is None:
+            validator = self.validator_node_list[peer_id]
+            rpc_address = f"http://{validator.rpc.as_url()}/"
+            client = JsonRpcClient(rpc_address)
+        else:
+            client = clients[peer_id]
+
+        ledger_result = client.request(xrpl.models.requests.Ledger(ledger_index=ledger_seq, transactions=True))
+
+        # Handle null-pointers / empty values
+        ledger = ledger_result.result.get('ledger', {})
+        transactions = ledger.get('transactions', None)
+        ledger_hash = ledger_result.result.get('ledger_hash', None)
+        validated = ledger_result.result.get('validated', False)
+        ledger_index = ledger_result.result.get('ledger_index', None)
+
+        return ledger_hash, transactions, validated, ledger_index
+
+    def get_balances(self, peer_id: int, ledger_seq: int):
+        """
+        Get balances of all self-created accounts (self.accounts)
+
+        Returns:
+            Dict of all accounts (alias) with their balances
+        """
+
+        validator = self.validator_node_list[peer_id]
+        rpc_address = f"http://{validator.rpc.as_url()}/"
+        client = JsonRpcClient(rpc_address)
+
+        result = {}
+
+        for alias, account in self.accounts.items():
+            if alias is None or alias == 'None':
+                continue
+            address = account["address"]
+            acc_result = client.request(xrpl.models.requests.AccountInfo(account=address, ledger_index=ledger_seq))
+            result[alias] = {'address': address, 'balance': acc_result.result.get('account_data', {}).get('Balance', None)}
+
+        return result

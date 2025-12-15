@@ -16,6 +16,7 @@ from rocket_controller.network_manager import NetworkManager
 from rocket_controller.spec_checker import SpecChecker
 from rocket_controller.transaction_builder import TransactionBuilder
 from rocket_controller.validator_node_info import ValidatorNode
+from rocket_controller.csv_logger import TransactionLogger
 
 import time
 import random
@@ -73,10 +74,18 @@ class TimeBasedIteration:
         # transaction related
         self._network: NetworkManager | None = None
         self._transaction_timer: threading.Timer | None = None
-        self.transactions_sent = set()
+        self.transactions_attempted = set()
         self.genesis_transaction_done = False
-        self._transaction_lock = threading.Lock()  # Lock for genesis transaction execution
+        self._transaction_lock = threading.Lock()  # Lock for genesis and regular transaction execution
         self.transaction_threads = {}
+        self.to_be_validated_txs: List[(str, str, int, str)] = [] # sender_alias, receiver_alias, amount, tx_hash
+        self._validation_lock = threading.Lock() # lock for accessing to_be_validated_txs
+        self._tx_logger: TransactionLogger | None = None
+
+
+    def _record_tx_to_be_validated(self, sender_alias: str, destination_alias: str, amount: int, tx_hash: str):
+        with self._validation_lock:
+            self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
 
     def set_network(self, network: NetworkManager):
         self._network = network
@@ -93,7 +102,7 @@ class TimeBasedIteration:
             for tx in genesis_transactions:
                 # Convert dict to hashable tuple for set membership check
                 tx_key = f"genesis{tx}"
-                if tx_key in self.transactions_sent:
+                if tx_key in self.transactions_attempted:
                     continue
                 logger.info(f"Performing Genesis Transaction: {tx}")
                 peer_id = tx.get('peer_id')
@@ -101,7 +110,7 @@ class TimeBasedIteration:
                 sender_alias = tx.get('sender_account')
                 destination_alias = tx.get('destination_account')
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
-                self.transactions_sent.add(tx_key)
+                self.transactions_attempted.add(tx_key)
             
             self.genesis_transaction_done = True
 
@@ -120,10 +129,6 @@ class TimeBasedIteration:
 
     def perform_transaction(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None):
         try:
-            # Handle "None" string and actual None
-            sender_alias = None if sender_alias == "None" or sender_alias is None else sender_alias
-            destination_alias = None if destination_alias == "None" or destination_alias is None else destination_alias
-
             sender_account = self._network.get_account(sender_alias) if sender_alias else None
             destination_account = self._network.get_account(destination_alias) if destination_alias else None
             response = self._network.submit_transaction(peer_id=peer_id, amount=amount,
@@ -138,11 +143,11 @@ class TimeBasedIteration:
                 return
             elif response.result.get('engine_result') == 'tecUNFUNDED_PAYMENT' :
                 logger.info(f"Transaction {tx_hash} not submitted: {response.result.get('engine_result_message')}")
-                # self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
+                self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash)
                 return
             elif response.result.get('engine_result') != 'tesSUCCESS':
                 logger.error(f"Error while submitting transaction {tx_hash}: {response.result.get('engine_result')}; Message: {response.result.get('engine_result_message')}")
-                # self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
+                self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash)
                 return
         except Exception as e:
             if "Current ledger is unavailable" in str(e):
@@ -160,14 +165,45 @@ class TimeBasedIteration:
                 time.sleep(1)
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 return
+            # wait for account recognized
+            elif "actNotFound" in str(e):
+                logger.warning(f"Account not found (probably not yet activated), will retry: {e}")
+                time.sleep(2)  # Wait longer for account activation
+                self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
+                return
             else:
                 logger.error(f"Error while submitting transaction: {e}")
-                # self.to_be_validated_txs.append((sender_alias, destination_alias, amount, 'None'))
+                self._record_tx_to_be_validated(sender_alias, destination_alias, amount, 'None')
                 return
         logger.info(f"Transaction {tx_hash} submitted successfully")
-        # with self._validation_lock:
-        #     self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
+        self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash)
 
+    def validate_transactions(self):
+        logger.info("Only showing transactions for Node 0. For all nodes see the transaction log.")
+        for node_id in range(len(self._validator_nodes)):
+            for sender_alias, receiver_alias, amount, tx_hash in self.to_be_validated_txs:
+                self.validate_transaction(node_id, sender_alias, receiver_alias, amount, tx_hash)
+
+
+    def validate_transaction(
+            self,
+            node_id: int,
+            sender_alias: str,
+            receiver_alias:str,
+            amount: int,
+            tx_hash: str):
+        if tx_hash == 'None':
+            self._tx_logger.log_transaction_validation(node_id, sender_alias, receiver_alias, amount, 'None', False)
+            if node_id == 0:
+                logger.info(f"Transaction {tx_hash} not submitted, skipping validation.")
+        else:
+            try:
+                validated = self._network.validate_transaction(tx_hash, node_id)
+                if node_id == 0:
+                    logger.info(f"Transaction {tx_hash} validated: {validated}")
+                self._tx_logger.log_transaction_validation(node_id, sender_alias, receiver_alias, amount, tx_hash, validated)
+            except Exception as e:
+                logger.error(f"Error while validating transaction: {e}")
 
     def _stop_all(self):
         """Stop the interceptor along with the docker containers."""
@@ -193,6 +229,7 @@ class TimeBasedIteration:
     def _timeout_reached(self):
         """Function that is called when the timeout is reached."""
         logger.info("Timeout reached.")
+        self.validate_transactions()
         self.add_iteration()
 
     def set_server(self, server: Server):
@@ -276,6 +313,7 @@ class TimeBasedIteration:
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
+            self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
@@ -383,6 +421,7 @@ class TimeBasedIteration:
                 for node_id, entry in self.ledger_validation_map.items()
                 if node_id not in self._byzantine_nodes
             ):
+                self.validate_transactions()
                 self._reset_values()
                 self.add_iteration()
 
@@ -419,9 +458,9 @@ class TimeBasedIteration:
                     amount = tx.get('amount')
                     in_seq = tx.get('in_seq')
                     delay = tx.get('time')
-                    if tx_key not in self.transactions_sent and from_id == peer_id and status.ledgerSeq in in_seq and self.genesis_transaction_done:
+                    if tx_key not in self.transactions_attempted and from_id == peer_id and status.ledgerSeq in in_seq and self.genesis_transaction_done:
                         logger.info(f"Performing Regular Transaction: {tx}, cur seq = {status.ledgerSeq} ")
-                        self.transactions_sent.add(tx_key)
+                        self.transactions_attempted.add(tx_key)
                         sender_alias = tx.get('sender_account')
                         destination_alias = tx.get('destination_account')
                         self.perform_transaction_async(peer_id, amount, sender_alias, destination_alias, delay=delay)
