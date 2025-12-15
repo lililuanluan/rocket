@@ -76,6 +76,7 @@ class TimeBasedIteration:
         self.transactions_sent = set()
         self.genesis_transaction_done = False
         self._transaction_lock = threading.Lock()  # Lock for genesis transaction execution
+        self.transaction_threads = {}
 
     def set_network(self, network: NetworkManager):
         self._network = network
@@ -105,14 +106,18 @@ class TimeBasedIteration:
             self.genesis_transaction_done = True
 
 
-    def perform_transaction_async(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None): # not working...
+    def perform_transaction_async(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None, delay: float = 0): # not working...
         # start a thread named "SubmitTransaction{peer_id}-{amount}-{sender_alias}-{destination_alias}"
-        t = threading.Thread(
-            name=f"SubmitTransaction{peer_id}-{amount}-{sender_alias}-{destination_alias}",
-            target=self.perform_transaction,
-            args=(peer_id, amount, sender_alias, destination_alias)
+        t = threading.Timer(
+            interval=delay,
+            function=self.perform_transaction,
+            args=(peer_id, amount, sender_alias, destination_alias),
         )
         t.start()
+        logger.info(f"Started transaction thread SubmitTransaction{peer_id}-{amount}-{sender_alias}-{destination_alias}")
+        # do not acquire lock here to avoid deadlock
+        self.transaction_threads[f"SubmitTransaction{peer_id}-{amount}-{sender_alias}-{destination_alias}"] = t
+
     def perform_transaction(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None):
         try:
             # Handle "None" string and actual None
@@ -241,6 +246,13 @@ class TimeBasedIteration:
         for t in threading.enumerate():
             if "LogLedgerResult" in t.name:
                 t.join()
+        # kill all transaction threads
+        with self._transaction_lock:
+            for name, t in self.transaction_threads.items():
+                if t.is_alive():
+                    logger.info(f"Cancelling transaction thread {name}")
+                    t.cancel()
+            self.transaction_threads = {}
 
         if self.cur_iteration > 1:
 
@@ -406,12 +418,13 @@ class TimeBasedIteration:
                     peer_id = tx.get('peer_id')
                     amount = tx.get('amount')
                     in_seq = tx.get('in_seq')
+                    delay = tx.get('time')
                     if tx_key not in self.transactions_sent and from_id == peer_id and status.ledgerSeq in in_seq and self.genesis_transaction_done:
                         logger.info(f"Performing Regular Transaction: {tx}, cur seq = {status.ledgerSeq} ")
                         self.transactions_sent.add(tx_key)
                         sender_alias = tx.get('sender_account')
                         destination_alias = tx.get('destination_account')
-                        self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
+                        self.perform_transaction_async(peer_id, amount, sender_alias, destination_alias, delay=delay)
 
         return # use on_status_change_subscribe instead
 
