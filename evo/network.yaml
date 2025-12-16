@@ -30,13 +30,15 @@ network_partition: []
 #
 # Leaving this empty means all nodes in the network will be connected.
 unl_partition:
-  - [0, 1, 2, 3, 4]
-  - [1, 0, 2, 3, 4]
-  - [2, 0, 1, 3, 4]
-  - [3, 1, 2, 4, 5]
-  - [4, 2, 3, 5, 6]
-  - [5, 2, 3, 4, 6]
-  - [6, 2, 3, 4, 5]
+  - []
+  # - [0, 1, 2, 3, 4]
+  # - [1, 0, 2, 3, 4]
+  # - [2, 0, 1, 3, 4]
+  # - [3, 1, 2, 4, 5]
+  # - [4, 2, 3, 5, 6]
+  # - [5, 2, 3, 4, 6]
+  # - [6, 2, 3, 4, 5]
+
 
 # A 2-dimensional array containing directional groups of node indices that should trust each other.
 # These nodes will be placed in each others UNL (Unique Node List).
@@ -71,18 +73,18 @@ transactions:
 
   # Regular transactions are performed a set amount of time after the network has started.
   regular:
-    - peer_id: 1  # The node to submit the transaction to
-      amount: 1000000000 # Amount in XRP drops, minimum is 1.000.000.000.
-      sender_account: "Account1" # Account alias to send the transaction from.
-      destination_account: "Account2" # Account alias to send the transaction to.
-      time: 3 # Seconds after which the transaction is performed.
-      in_seq: [4,7,9] # consensus rounds (ledger seq) in which the transaction is performed, emtpy if perform in all rounds
-    - peer_id: 0  # The node to submit the transaction to
-      amount: 80000000000 # Amount in XRP drops, minimum is 1.000.000.000.
-      sender_account: "Account1" # Account alias to send the transaction from.
-      destination_account: "Account2" # Account alias to send the transaction to.
-      time: 2 # Seconds after which the transaction is performed.
-      in_seq: [5]
+    # - peer_id: 1  # The node to submit the transaction to
+    #   amount: 1000000000 # Amount in XRP drops, minimum is 1.000.000.000.
+    #   sender_account: "Account1" # Account alias to send the transaction from.
+    #   destination_account: "Account2" # Account alias to send the transaction to.
+    #   time: 3 # Seconds after which the transaction is performed.
+    #   in_seq: [4,7,9] # consensus rounds (ledger seq) in which the transaction is performed, emtpy if perform in all rounds
+    # - peer_id: 0  # The node to submit the transaction to
+    #   amount: 80000000000 # Amount in XRP drops, minimum is 1.000.000.000.
+    #   sender_account: "Account1" # Account alias to send the transaction from.
+    #   destination_account: "Account2" # Account alias to send the transaction to.
+    #   time: 2 # Seconds after which the transaction is performed.
+    #   in_seq: [5]
     - peer_id: 1  # The node to submit the transaction to
       amount: 81000000000 # Amount in XRP drops, minimum is 1.000.000.000.
       sender_account: "Account1" # Account alias to send the transaction from.

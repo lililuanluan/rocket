@@ -84,6 +84,8 @@ class TimeBasedIteration:
 
 
     def _record_tx_to_be_validated(self, sender_alias: str, destination_alias: str, amount: int, tx_hash: str):
+        # do not use when _validation_lock is held
+        logger.debug(f"Recording tx to be validated: sender={sender_alias}, destination={destination_alias}, amount={amount}, tx_hash={tx_hash}")
         with self._validation_lock:
             self.to_be_validated_txs.append((sender_alias, destination_alias, amount, tx_hash))
 
@@ -104,6 +106,8 @@ class TimeBasedIteration:
                 tx_key = f"genesis{tx}"
                 if tx_key in self.transactions_attempted:
                     continue
+                # set flag early to avoid keeping other threads waiting
+                self.genesis_transaction_done = True
                 logger.info(f"Performing Genesis Transaction: {tx}")
                 peer_id = tx.get('peer_id')
                 amount = tx.get('amount')
@@ -111,8 +115,9 @@ class TimeBasedIteration:
                 destination_alias = tx.get('destination_account')
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 self.transactions_attempted.add(tx_key)
+            logger.info(f"All genesis transactions performed.{self.transactions_attempted}")
             
-            self.genesis_transaction_done = True
+            
 
 
     def perform_transaction_async(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None, delay: float = 0): # not working...
@@ -143,11 +148,11 @@ class TimeBasedIteration:
                 return
             elif response.result.get('engine_result') == 'tecUNFUNDED_PAYMENT' :
                 logger.info(f"Transaction {tx_hash} not submitted: {response.result.get('engine_result_message')}")
-                self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash)
+                # self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash) # only validate successfully submitted txs
                 return
             elif response.result.get('engine_result') != 'tesSUCCESS':
                 logger.error(f"Error while submitting transaction {tx_hash}: {response.result.get('engine_result')}; Message: {response.result.get('engine_result_message')}")
-                self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash)
+                # self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash) # only validate successfully submitted txs
                 return
         except Exception as e:
             if "Current ledger is unavailable" in str(e):
@@ -173,7 +178,7 @@ class TimeBasedIteration:
                 return
             else:
                 logger.error(f"Error while submitting transaction: {e}")
-                self._record_tx_to_be_validated(sender_alias, destination_alias, amount, 'None')
+                # self._record_tx_to_be_validated(sender_alias, destination_alias, amount, 'None') # only validate successfully submitted txs
                 return
         logger.info(f"Transaction {tx_hash} submitted successfully")
         self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash)
@@ -181,6 +186,7 @@ class TimeBasedIteration:
     def validate_transactions(self):
         logger.info("Only showing transactions for Node 0. For all nodes see the transaction log.")
         for node_id in range(len(self._validator_nodes)):
+            # ask every node if each transaction is executed
             for sender_alias, receiver_alias, amount, tx_hash in self.to_be_validated_txs:
                 self.validate_transaction(node_id, sender_alias, receiver_alias, amount, tx_hash)
 
