@@ -467,7 +467,20 @@ class NetworkManager:
         )
         client = JsonRpcClient(rpc_address)
         complete_tx = autofill_and_sign(tx, client, self.tx_builder.wallet)
-        print(f"Submitting transaction to node {peer_id}, url: {rpc_address}, tx: {complete_tx}")
+        
+        # Extract and log key transaction details after autofill
+        tx_account = getattr(complete_tx, 'account', 'N/A')
+        tx_sequence = getattr(complete_tx, 'sequence', 'N/A')
+        tx_destination = getattr(complete_tx, 'destination', 'N/A')
+        tx_amount = getattr(complete_tx, 'amount', 'N/A')
+        tx_hash = getattr(complete_tx, 'get_hash', lambda: 'N/A')()
+        
+        logger.info(
+            f"[TX_SUBMIT] Node={peer_id} | Account={tx_account} | "
+            f"Sequence={tx_sequence} | Destination={tx_destination} | "
+            f"Amount={tx_amount} | Hash={tx_hash}"
+        )
+        
         response = submit(complete_tx, client)
         # logger.info(f"Sent a transaction submission to node {peer_id}, url: {rpc_address}")
         self.tx_builder.add_transaction(complete_tx)
@@ -485,7 +498,7 @@ class NetworkManager:
         else:
             return False
 
-    def get_transactions(self, ledger_seq: int | str, peer_id: int, clients: dict[int, JsonRpcClient] | None = None) -> (str | None, list[str] | None):
+    def get_transactions(self, ledger_seq: int | str, peer_id: int, clients: dict[int, JsonRpcClient] | None = None) -> tuple[str | None, list[str] | None, bool, int | None]:
         """
         Get set of validated transactions for a certain peer and ledger sequence
 

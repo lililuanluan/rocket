@@ -351,6 +351,7 @@ transaction_log_columns = [
     "receiver_account_alias",
     "amount",
     "tx_hash",
+    "sequence",
     "validated",
 ]
 class TransactionLogger(CSVLogger):
@@ -378,6 +379,7 @@ class TransactionLogger(CSVLogger):
         receiver_alias: str,
         amount: int,
         tx_hash: str,
+        sequence: int | str,
         validated: bool,
     ):
         """
@@ -389,11 +391,12 @@ class TransactionLogger(CSVLogger):
             receiver_alias: Receiver account alias.
             amount: Amount of XRP to transfer.
             tx_hash: Transaction hash.
+            sequence: Transaction sequence number.
             validated: Whether the transaction was validated.
         """
         with self._lock:
             with open(self.filepath, mode="a", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow(
-                    [node_id, sender_alias, receiver_alias, amount, tx_hash, validated]
+                    [node_id, sender_alias, receiver_alias, amount, tx_hash, sequence, validated]
                 )      
