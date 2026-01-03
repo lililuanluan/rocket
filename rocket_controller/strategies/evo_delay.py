@@ -170,9 +170,26 @@ class EvoDelayStrategy(Strategy):
         )
 
         # possibly mutate
+        current_ledger = self.iteration_type.get_ledger_sequence_cur_max()
+        
+        # # Debug logging for message routing
+        # if isinstance(message, ripple_pb2.TMProposeSet):
+        #     logger.debug(
+        #         f"[ProposeSet] type={message_type}, sender={sender_node_id}, "
+        #         f"receiver={receiver_node_id}, proposeSeq={message.proposeSeq}, "
+        #         f"delay_index={index}, delay={self.delays[index]}ms, "
+        #         f"current_ledger={current_ledger}, max_ledger={self.max_ledger_seq}"
+        #     )
+        # elif isinstance(message, ripple_pb2.TMValidation):
+        #     logger.debug(
+        #         f"[Validation] type={message_type}, sender={sender_node_id}, "
+        #         f"receiver={receiver_node_id}, delay_index={index}, delay={self.delays[index]}ms"
+        #     )
+        
+        # Apply mutation logic in window [3, max_ledger_seq - 5]
         if (
             3
-            <= self.iteration_type.get_ledger_sequence_cur_max()
+            <= current_ledger
             <= self.max_ledger_seq - 5
         ):
             if isinstance(message, ripple_pb2.TMProposeSet):
@@ -186,6 +203,7 @@ class EvoDelayStrategy(Strategy):
                 original_sender = self.pubkey_to_node_id(_pub_key)
                 if original_sender not in self.byzz_nodes:
                     # only mutate if sender is byzz node
+                    # logger.debug(f"[ProposeSet] Non-byzz node {original_sender}, returning with delay {self.delays[index]}ms")
                     return packet.data, self.delays[index], 1
 
                 # logger.debug(
@@ -209,6 +227,10 @@ class EvoDelayStrategy(Strategy):
                     is_mutated = True
                 elif method == "repeat_5":
                     return packet.data, self.delays[index], 5
+                else:
+                    logger.error(f"Unknown byzz mutate method for TMProposeSet: {method}")
+
+
                 if is_mutated:
                     # logger.debug(f"Signing mutated propose from node {original_sender}")
                     signed_message = PacketEncoderDecoder.sign_message(
@@ -217,6 +239,10 @@ class EvoDelayStrategy(Strategy):
                     )
                 else:
                     signed_message = message
+                    # logger.debug("No mutation applied to TMProposeSet")
+                    # logger.debug(f"[ProposeSet] Byzz node {original_sender}, no mutation (do_nothing), delay={self.delays[index]}ms")
+                    # Don't return early here - should still apply delay and send!
+                    # return packet.data, self.delays[index], 1 #?
 
                 encoded = PacketEncoderDecoder.encode_message(
                     signed_message, message_type
@@ -224,6 +250,7 @@ class EvoDelayStrategy(Strategy):
                 new_packet = packet_pb2.Packet(
                     data=encoded, from_port=packet.from_port, to_port=packet.to_port
                 )
+                # logger.debug(f"[ProposeSet] Byzz node {original_sender}, returning mutated/signed message with delay={self.delays[index]}ms")
                 return new_packet.data, self.delays[index], 1
 
             elif isinstance(message, ripple_pb2.TMValidation):
@@ -252,7 +279,7 @@ class EvoDelayStrategy(Strategy):
                 #     f"Mutating validation from non-byzz node {original_sender}, sender_node_id={sender_node_id}"
                 # )
                 method = random.choice(
-                    self.byzz_mutate_methods[ripple_pb2.TMProposeSet]
+                    self.byzz_mutate_methods[ripple_pb2.TMValidation]
                 )
                 is_mutated = False
                 if method == "do_nothing":
@@ -286,12 +313,18 @@ class EvoDelayStrategy(Strategy):
                     is_mutated = True
                 elif method == "repeat_5":
                     return packet.data, self.delays[index], 5
+                else:
+                    logger.error(f"Unknown byzz mutate method for TMValidation: {method}")
+
+
                 if is_mutated:
                     signed_message = PacketEncoderDecoder.sign_message(
                         parsed, self.network.public_to_private_key_map[_pub_key]
                     )
                 else:
                     signed_message = message
+                    # logger.debug("No mutation applied to TMValidation")
+                    # return packet.data, self.delays[index], 1 #?
 
                 encoded = PacketEncoderDecoder.encode_message(
                     signed_message, message_type
@@ -302,6 +335,7 @@ class EvoDelayStrategy(Strategy):
                 return new_packet.data, self.delays[index], 1
 
             else:
+                # logger.debug(f"[OtherMessage] type={message_type}, delay={self.delays[index]}ms")
                 return packet.data, self.delays[index], 1
 
         return packet.data, self.delays[index], 1
