@@ -10,6 +10,8 @@ from evaluate import evaluate_log
 import random
 import numpy as np
 import csv
+import signal
+import atexit
 
 # DEAP imports
 from deap import base, creator, tools, algorithms
@@ -41,6 +43,33 @@ GENERATION_DATA = []
 
 # CSV 文件路径（用于实时写入）
 CSV_FILE_PATH = None
+
+
+def cleanup_interceptor_processes():
+    """清理所有 rocket-interceptor 进程"""
+    try:
+        print("\n🧹 Cleaning up rocket-interceptor processes...")
+        subprocess.run(
+            ["killall", "-9", "rocket-interceptor"],
+            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL
+        )
+        print("✓ Cleanup complete")
+    except Exception as e:
+        print(f"Warning: Could not cleanup processes: {e}")
+
+
+def signal_handler(signum, frame):
+    """处理 Ctrl+C 信号"""
+    print("\n\n⚠️  Received interrupt signal (Ctrl+C)")
+    cleanup_interceptor_processes()
+    sys.exit(130)
+
+
+# 注册信号处理器和退出清理
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+atexit.register(cleanup_interceptor_processes)
 
 
 def setup_deap_types():
