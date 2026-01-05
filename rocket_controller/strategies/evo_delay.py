@@ -73,16 +73,16 @@ class EvoDelayStrategy(Strategy):
             {  # TODO: add mutation for TMGetLedger and TMLedgerData
                 ripple_pb2.TMProposeSet: [
                     "do_nothing",
-                    "replace_tx_hash",
-                    "increment_propose_seq",
-                    "repeat_5",
+                    # "replace_tx_hash",
+                    # "increment_propose_seq",
+                    # "repeat_5",
                 ],
                 ripple_pb2.TMValidation: [
                     "do_nothing",
-                    "replace_ledger_hash",
-                    "replace_ledger_hash_with_dummy",
-                    "increment_ledger_sequence",
-                    "repeat_5",
+                    # "replace_ledger_hash",
+                    # "replace_ledger_hash_with_dummy",
+                    # "increment_ledger_sequence",
+                    # "repeat_5",
                 ],
             }
         )
@@ -190,7 +190,7 @@ class EvoDelayStrategy(Strategy):
         if (
             3
             <= current_ledger
-            <= self.max_ledger_seq - 5
+            <= self.max_ledger_seq - 7
         ):
             if isinstance(message, ripple_pb2.TMProposeSet):
                 # cache old proposals
@@ -216,7 +216,7 @@ class EvoDelayStrategy(Strategy):
                 is_mutated = False
                 if method == "do_nothing":
                     # logger.debug("Byzz mutate method: do_nothing")
-                    pass
+                    return packet.data, self.delays[index], 1
                 elif method == "replace_tx_hash":
                     # logger.debug("Byzz mutate method: replace_tx_hash")
                     message = self._replace_txs_with_old_propose(message)
@@ -283,7 +283,7 @@ class EvoDelayStrategy(Strategy):
                 )
                 is_mutated = False
                 if method == "do_nothing":
-                    pass
+                    return packet.data, self.delays[index], 1
                 elif method == "increment_ledger_sequence":
                     try:
                         parsed["LedgerSequence"] = (
