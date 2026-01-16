@@ -156,7 +156,7 @@ class Strategy(ABC):
         network_config = yaml_to_dict(network_config_path)
         return network_config, params
 
-    def _subscriber_delayed_start(self, validator_nodes: List[ValidatorNode], max_wait: int = 30):
+    def _subscriber_delayed_start(self, validator_nodes: List[ValidatorNode], max_wait: int = 60):
         # Try to connect to any validator WS port (public then admin) for up to max_wait seconds
         start_t = time.time()
         connected = []
@@ -169,15 +169,22 @@ class Strategy(ABC):
 
             connections = []
             for node in validator_nodes:
-                wa = node.ws_private
+                wa = node.ws_public
+                print(f"DEBUG: using ws_public port {wa.port} for node", flush=True)
                 if (wa.host, wa.port) not in connected:
                     connections.append((wa.host, wa.port))
 
             for host, port in connections:
                 try:
-                    with socket.create_connection((host, port), timeout=1):
-                        connected.append((host, port))
-                        continue
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(5)
+                    sock.connect((host, port))
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+                    connected.append((host, port))
+                    continue
                 except Exception:
                     continue
             time.sleep(1)
@@ -185,9 +192,9 @@ class Strategy(ABC):
         logger.info(
             "WSSubscriber: no websocket reachable within timeout. failed nodes: {} starting subscriber anyway".format(
                 [
-                    f"{n.ws_private.host}:{n.ws_private.port}"
+                    f"{n.ws_public.host}:{n.ws_public.port}"
                     for n in validator_nodes
-                    if (n.ws_private.host, n.ws_private.port) not in connected
+                    if (n.ws_public.host, n.ws_public.port) not in connected
                 ]
             )
         )
