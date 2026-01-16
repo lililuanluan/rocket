@@ -1,0 +1,49 @@
+FROM ubuntu:20.04
+
+# 依赖（建议固定 protobuf 版本避免兼容问题）
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    git wget curl gcc g++ cmake ninja-build pkg-config \
+    protobuf-compiler libprotobuf-dev \
+    libssl-dev libboost-all-dev ccache \
+ && rm -rf /var/lib/apt/lists/*
+
+# 构建 rippled 1.4.0
+WORKDIR /opt
+COPY rippled ./rippled
+RUN cd rippled \
+ && git checkout 1.4.0 \
+ && cmake -S . -B build -G Ninja \
+     -DCMAKE_BUILD_TYPE=Release \
+     -DBoost_USE_STATIC_LIBS=OFF -DBoost_USE_STATIC_RUNTIME=OFF \
+     -DBoost_NO_BOOST_CMAKE=ON \
+     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+ && cmake --build build -- -j"$(nproc)" \
+ && cmake --install build --prefix /usr/local \
+ && rm -rf /opt/rippled build /root/.ccache /tmp/*   # 清理！重要
+
+# 非 root 用户（使用传入的 UID/GID）
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g $GID rippleduser && \
+    useradd -m -u $UID -g $GID rippleduser
+
+# 创建所有持久化目录（构建时用 root 创建，避免运行时权限问题）
+RUN mkdir -p /config/db /var/lib/rippled/db /var/log/rippled && \
+    chown -R rippleduser:rippleduser /config /var/lib/rippled /var/log/rippled
+
+# 复制 entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+WORKDIR /config
+USER rippleduser
+
+# 持久化目录（日志 + 数据）
+VOLUME ["/config/db", "/var/lib/rippled/db", "/var/log/rippled"]
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["rippled"]
+
+# 可选健康检查（如果开了 rpc）
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+  CMD curl -f http://localhost:5005 || exit 1 || true
