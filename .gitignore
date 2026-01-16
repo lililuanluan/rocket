@@ -1,8 +1,7 @@
 .temp-interceptor
 .gitlab-ci-local
 
-interceptor/**/*
-!interceptor/README.md
+
 
 logs
 
@@ -176,3 +175,5 @@ cython_debug/
 rippled
 *.DS_Store
 byzzfuzz
+1.4.0
+rocket_interceptor_back
