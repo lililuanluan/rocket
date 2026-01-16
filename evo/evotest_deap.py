@@ -12,6 +12,8 @@ import numpy as np
 import csv
 import signal
 import atexit
+import docker
+from pathlib import Path
 
 # DEAP imports
 from deap import base, creator, tools, algorithms
@@ -21,6 +23,8 @@ CUR_DIR = Path(__file__).parent
 ROCKET_DIR = CUR_DIR.parent
 INTERCEPTOR_DIR = ROCKET_DIR / "rocket_interceptor"
 LOGS_DIR = ROCKET_DIR / "logs"
+# network config path used at runtime (can be rewritten with adjusted ports)
+NETWORK_CONFIG_PATH = CUR_DIR / "network.yaml"
 
 with open(CUR_DIR / "network.yaml", "r") as f:
     network_config = yaml.safe_load(f)
@@ -45,6 +49,152 @@ GENERATION_DATA = []
 CSV_FILE_PATH = None
 
 
+def setup_local_images():
+    """使用 make 自动检测 Dockerfile/rippled 变更并构建镜像"""
+    original_cwd = os.getcwd()
+    os.chdir(ROCKET_DIR / "images")
+    try:
+        # 使用 Popen 实现实时输出 + 错误检查
+        process = subprocess.Popen(
+            ["make", "build"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # 将stderr合并到stdout
+            text=True,
+            bufsize=1,
+        )
+        
+        # 实时读取并打印输出
+        output_lines = []
+        for line in process.stdout:
+            print(line, end='')  # 实时打印
+            output_lines.append(line)
+        
+        # 等待进程结束
+        return_code = process.wait()
+        
+        if return_code != 0:
+            # 如果失败，可以重新打印所有输出或提取关键信息
+            print("\n=== Build failed with output ===")
+            print(''.join(output_lines[-20:]))  # 打印最后20行
+            raise RuntimeError("Make build failed")
+            
+    except Exception as e:
+        print(f"Warning: Could not setup local images: {e}")
+        raise RuntimeError("Local docker images setup failed")
+    finally:
+        print("docker image built.")
+        os.chdir(original_cwd)
+
+
+def cleanup_docker_containers():
+    """停止所有 validator 容器（包含已退出的容器）。"""
+    try:
+        print("\n🧹 Cleaning up Docker validator containers...")
+        docker_client = docker.from_env()
+        # all=True 以包含已退出的容器，避免命名冲突（如 key_generator 已退出但仍占用名字）
+        for c in docker_client.containers.list(all=True):
+            name = c.name
+            if "validator_" in name or name == "key_generator":
+                print(f"Stopping/removing container: {name}")
+                try:
+                    c.stop(timeout=3)
+                except Exception:
+                    # 容器可能已退出，忽略 stop 错误
+                    pass
+                # 强制删除，确保名字被释放
+                c.remove(force=True)
+        print("✓ Docker cleanup complete")
+    except Exception as e:
+        print(f"Warning: Could not cleanup Docker containers: {e}")
+
+
+def ensure_ports_free(
+    base_peer: int, base_ws: int, base_ws_admin: int, base_rpc: int, n: int
+):
+    """检查端口占用，如果有占用则尝试清理相关容器后再检查一次。"""
+    docker_client = docker.from_env()
+
+    def _ports_in_use() -> list[int]:
+        ports = set()
+        for i in range(n):
+            ports.update(
+                {
+                    base_peer + i,
+                    base_ws + i,
+                    base_ws_admin + i,
+                    base_rpc + i,
+                }
+            )
+        in_use = []
+        for p in sorted(ports):
+            if not socket_available(p):
+                in_use.append(p)
+        return in_use
+
+    def _kill_conflicting_containers():
+        try:
+            for c in docker_client.containers.list(all=True):
+                # 尝试匹配 validator_/key_generator，或端口绑定命中目标端口
+                name = c.name
+                binds_target = False
+                try:
+                    inspect = c.attrs
+                    host_config = inspect.get("HostConfig", {})
+                    port_bindings = host_config.get("PortBindings", {})
+                    for bindings in port_bindings.values():
+                        for b in bindings:
+                            hp = b.get("HostPort")
+                            if hp and hp.isdigit() and int(hp) in _ports_in_use():
+                                binds_target = True
+                                break
+                        if binds_target:
+                            break
+                except Exception:
+                    pass
+
+                if "validator_" in name or name == "key_generator" or binds_target:
+                    print(f"🔪 Removing container occupying target ports: {name}")
+                    try:
+                        c.stop(timeout=3)
+                    except Exception:
+                        pass
+                    try:
+                        c.remove(force=True)
+                    except Exception as e:
+                        print(f"Warning: failed to remove {name}: {e}")
+        except Exception as e:
+            print(f"Warning: failed to inspect containers for port conflicts: {e}")
+
+    first_conflicts = _ports_in_use()
+    if first_conflicts:
+        print(f"⚠️  Ports in use before start: {first_conflicts}, trying to clean up...")
+        _kill_conflicting_containers()
+        second_conflicts = _ports_in_use()
+        if second_conflicts:
+            print(
+                "⚠️  Ports still in use after cleanup: {0}. Will switch to an alternate base port block.".format(
+                    second_conflicts
+                )
+            )
+            return False
+    else:
+        print("✓ All required ports are available.")
+        # input()
+    return True
+
+
+def socket_available(port: int, host: str = "0.0.0.0") -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((host, port))
+            return True
+        except OSError:
+            return False
+
+
 def cleanup_interceptor_processes():
     """清理所有 rocket-interceptor 进程"""
     try:
@@ -52,24 +202,57 @@ def cleanup_interceptor_processes():
         subprocess.run(
             ["killall", "-9", "rocket-interceptor"],
             stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL
+            stdout=subprocess.DEVNULL,
         )
         print("✓ Cleanup complete")
     except Exception as e:
         print(f"Warning: Could not cleanup processes: {e}")
 
 
-def signal_handler(signum, frame):
-    """处理 Ctrl+C 信号"""
-    print("\n\n⚠️  Received interrupt signal (Ctrl+C)")
+def cleanup_fs():
+    # 自动清理脏数据，防止 rippled state db error
+    config_db = ROCKET_DIR / "rocket_interceptor" / "network" / "key_generator" / "config" / "db"
+    varlib_db = ROCKET_DIR / "rocket_interceptor" / "network" / "key_generator" / "var" / "lib" / "rippled" / "db"
+    # 清理 /config/db/state* 文件
+    try:
+        print("\n🧹 Cleaning up interceptor filesystem state...")
+        if config_db.exists():
+            for f in config_db.glob("state*"):
+                f.unlink()
+        # 清理 /var/lib/rippled/db/*
+        if varlib_db.exists():
+            for f in varlib_db.iterdir():
+                if f.is_file():
+                    f.unlink()
+                elif f.is_dir():
+                    shutil.rmtree(f)
+                    input(f"Warning: Could not delete {f}")
+                    pass
+    except Exception as e:
+        print(f"Warning: Could not cleanup filesystem: {e}")
+    finally:
+        print("✓ Filesystem cleanup complete")
+
+def cleanup_all():
+    """清理所有资源"""
+    cleanup_docker_containers()
     cleanup_interceptor_processes()
-    sys.exit(130)
+    cleanup_fs()
 
 
-# 注册信号处理器和退出清理
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-atexit.register(cleanup_interceptor_processes)
+
+
+
+
+
+def docker_image_exists(image: str) -> bool:
+    """Check if a docker image exists locally."""
+    res = subprocess.run(
+        ["docker", "image", "inspect", image],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return res.returncode == 0
 
 
 def setup_deap_types():
@@ -90,26 +273,114 @@ def setup_interceptor(config):
     """设置 interceptor（与原版相同）"""
     (CUR_DIR / "bin").mkdir(parents=True, exist_ok=True)
     ripple_image = config["ripple-image"]
+    # If using rippled 1.4.0, run a compatibility fix on configs before building
+    try:
+        maybe_fix_configs_for_1_4(ripple_image)
+    except Exception as e:
+        print(f"Warning: config fix step failed: {e}")
     print(f"config.ripple-image = {ripple_image}, type = {type(ripple_image)}")
 
-    print(f"Pulling docker image {ripple_image}...")
-    subprocess.run(["docker", "pull", ripple_image], check=True)
+    if docker_image_exists(ripple_image):
+        print(f"Docker image {ripple_image} already present locally, skip pull")
+    else:
+        print(f"Pulling docker image {ripple_image}...")
+        subprocess.run(["docker", "pull", ripple_image], check=True)
 
-    image_bin = CUR_DIR / "bin" / ripple_image.replace("/", "-")
+    image_bin = INTERCEPTOR_DIR / "rocket-interceptor"
 
-    if not image_bin.exists():
-        print(f"{image_bin} not built, building...")
-        success = rebuild_interceptor_with(
-            img=ripple_image, interceptor_dir=INTERCEPTOR_DIR, dest=image_bin
-        )
-        if not success:
-            raise RuntimeError("Rebuild interceptor failed")
+    success = rebuild_interceptor_with(
+        img=ripple_image, interceptor_dir=INTERCEPTOR_DIR
+    )
+
+    if not success:
+        raise RuntimeError("Rebuild interceptor failed")
 
     assert image_bin.exists(), f"{image_bin} not exists after rebuild"
 
-    target_path = INTERCEPTOR_DIR / "rocket-interceptor"
-    shutil.copy2(image_bin, target_path)
-    print(f"Copied {image_bin} to {target_path}")
+
+def preflight_create_validator_config_dirs(n_nodes: int):
+    """Ensure that network/validators/<validator_i>/config directories exist and are
+    owned/created by the current user so Docker won't auto-create them as root.
+    This function intentionally does NOT chown existing files; it only creates missing
+    directories and placeholder files where safe.
+    """
+    print(f"Preflight: ensuring validator config dirs exist for {n_nodes} nodes...")
+    base = INTERCEPTOR_DIR / "network" / "validators"
+    base.mkdir(parents=True, exist_ok=True)
+    for i in range(n_nodes):
+        cfg_dir = base / f"validator_{i}" / "config"
+        if not cfg_dir.exists():
+            print(f"Creating config dir for validator_{i}: {cfg_dir}")
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+        # Create lightweight placeholder files to avoid empty-mount surprises.
+        rippled_cfg = cfg_dir / "rippled.cfg"
+        if not rippled_cfg.exists():
+            # write a minimal placeholder that will be overwritten by the interceptor
+            rippled_cfg.write_text("# placeholder rippled.cfg\n")
+        ledger_json = cfg_dir / "ledger.json"
+        if not ledger_json.exists():
+            ledger_json.write_text("{}\n")
+        validators_txt = cfg_dir / "validators.txt"
+        if not validators_txt.exists():
+            validators_txt.write_text("[validators]\n")
+
+
+def maybe_fix_configs_for_1_4(ripple_image):
+    """If the provided ripple_image indicates rippled 1.4.0, run the
+    compatibility fixer script to normalize validator configs for v1.4.0.
+
+    This is intentionally conservative: only triggers when the image tag
+    contains the literal '1.4.0'.
+    """
+    try:
+        img = str(ripple_image)
+    except Exception:
+        img = ripple_image
+    scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
+    preflight = scripts_dir / "preflight_rippled_cfg.py"
+    fixer = scripts_dir / "fix_rippled_cfgs.py"
+
+    # Always run the preflight check first (report-only). This detects problems
+    # for any rippled version without changing files.
+    if preflight.exists():
+        print(f"Running rippled preflight check: {preflight}")
+        try:
+            res = subprocess.run([sys.executable, str(preflight)], check=False)
+            print(f"Preflight exit code: {res.returncode}")
+        except Exception as e:
+            print(f"Warning: failed to run preflight {preflight}: {e}")
+    else:
+        print(f"Preflight script not found at {preflight}; skipping preflight")
+
+    # Decide whether to run the in-place fixer. We want to be proactive for any
+    # 1.4.x image (contains "1.4") or when the operator explicitly requests it via
+    # FORCE_CONFIG_FIXER=1/true. The fixer creates .bak backups of modified files.
+    force_fixer = os.environ.get("FORCE_CONFIG_FIXER", "0").lower() in ("1", "true")
+    if "1.4" in img or force_fixer:
+        why = []
+        if "1.4" in img:
+            why.append("image indicates 1.4.x")
+        if force_fixer:
+            why.append("FORCE_CONFIG_FIXER set")
+        print(f"Detected rippled image {img} ({', '.join(why)}): running config fixer...")
+        if fixer.exists():
+            try:
+                res_fix = subprocess.run([sys.executable, str(fixer)], check=False)
+                print(f"Fixer exit code: {res_fix.returncode}")
+            except Exception as e:
+                print(f"Warning: failed to run fixer {fixer}: {e}")
+
+            # Re-run preflight to validate the fix (best-effort)
+            if preflight.exists():
+                try:
+                    res2 = subprocess.run([sys.executable, str(preflight)], check=False)
+                    print(f"Post-fix preflight exit code: {res2.returncode}")
+                except Exception as e:
+                    print(f"Warning: failed to re-run preflight {preflight}: {e}")
+        else:
+            print(f"Config fixer not found at {fixer}; skipping fix step")
+    else:
+        print(f"rippled image {img} does not appear to be 1.4.x and FORCE_CONFIG_FIXER not set; skipping config fixer")
 
 
 def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
@@ -129,7 +400,7 @@ def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
         "--config",
         str(strategy_yaml),
         "--network_config",
-        str(CUR_DIR / "network.yaml"),
+        str(NETWORK_CONFIG_PATH),
         "--log-dir",
         log_dir,
         "--max-iteration",
@@ -139,7 +410,9 @@ def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
     ]
 
     print(f"running command: {' '.join(cmd)}")
-    retcode = subprocess.call(cmd)
+    env = os.environ.copy()
+    env['RUST_BACKTRACE'] = '1'
+    retcode = subprocess.call(cmd, env=env)
 
     if retcode != 0:
         print(f"Rocket exited with code {retcode}")
@@ -285,6 +558,68 @@ def main(config):
     EVALUATION_COUNTER = 0
     CSV_FILE_PATH = None
 
+    cleanup_all()
+
+    
+
+    setup_local_images()
+    # 在启动前确保端口未被占用（包含遗留容器占用），否则自动切换到备用端口段
+    base_peer = network_config["base_port_peer"]
+    base_ws = network_config["base_port_ws"]
+    base_ws_admin = network_config["base_port_ws_admin"]
+    base_rpc = network_config["base_port_rpc"]
+
+    ok = ensure_ports_free(
+        base_peer=base_peer,
+        base_ws=base_ws,
+        base_ws_admin=base_ws_admin,
+        base_rpc=base_rpc,
+        n=NUMBER_OF_NODES,
+    )
+
+    # 如果端口冲突或使用了默认被占用的段，尝试一系列候选端口段，直到找到可用的
+    if not ok:# or base_peer == 60000:
+        # candidates = [
+        #     (50000, 51000, 52000, 53000),
+        #     (54000, 55000, 56000, 57000),
+        #     (58000, 59000, 60000, 61000),
+        # ]
+        # chosen = None
+        # for bp, bws, bwsadm, brpc in candidates:
+        #     print(f"🔀 Trying port block: {bp}/{bws}/{bwsadm}/{brpc}")
+        #     if ensure_ports_free(
+        #         base_peer=bp,
+        #         base_ws=bws,
+        #         base_ws_admin=bwsadm,
+        #         base_rpc=brpc,
+        #         n=NUMBER_OF_NODES,
+        #     ):
+        #         chosen = (bp, bws, bwsadm, brpc)
+        #         break
+
+        # if chosen is None:
+        #     raise RuntimeError(
+        #         "Ports are still in use or unavailable; please free them or adjust base ports manually."
+        #     )
+        # else:
+        #     base_peer, base_ws, base_ws_admin, base_rpc = chosen
+        #     print(f"🔀 Selected port block: {base_peer}/{base_ws}/{base_ws_admin}/{base_rpc}")
+        raise RuntimeError("Failed to find available port block.")
+
+    # 用运行时覆盖 network_config 中的端口（不改文件）
+    network_config["base_port_peer"] = base_peer
+    network_config["base_port_ws"] = base_ws
+    network_config["base_port_ws_admin"] = base_ws_admin
+    network_config["base_port_rpc"] = base_rpc
+
+    # 将运行时配置写到单独文件供 rocket_controller 使用，避免修改原 network.yaml
+    global NETWORK_CONFIG_PATH
+    runtime_network = CUR_DIR / "network.runtime.yaml"
+    with open(runtime_network, "w") as f:
+        yaml.safe_dump(network_config, f, sort_keys=False)
+    NETWORK_CONFIG_PATH = runtime_network
+    # Ensure validator config directories exist and are created by this user
+    preflight_create_validator_config_dirs(NUMBER_OF_NODES)
     setup_interceptor(config)
     setup_deap_types()
 
@@ -295,7 +630,6 @@ def main(config):
 
     START_DATETIME = datetime.now().strftime("%Y_%m_%d_%Hh%Mm")
 
-    
     lambda_ = config.get("population_size", 4)
     mu = min(lambda_, config.get("mu", 4))
     max_generation = config.get("max_generation", 10)
@@ -451,7 +785,9 @@ if __name__ == "__main__":
         with open("evotest.yaml", "r") as f:
             config = yaml.safe_load(f)
             main(config)
+    except KeyboardInterrupt:
+                cleanup_all()
+                sys.exit(130)
     except Exception as e:
         print(f"Error during evolution: {e}")
         raise e
-    
