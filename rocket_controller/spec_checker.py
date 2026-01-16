@@ -86,15 +86,17 @@ class SpecChecker:
                         continue
         except csv.Error as e:
             logger.critical(f"CSV Error: {e}")
+            # CSV 错误路径：补上 same_goal_ledger_hash 参数（使用 '-' 占位）
             self.spec_check_logger.log_spec_check(
-                iteration, f"CSV Error: {e}", "-", "-"
+                iteration, f"CSV Error: {e}", "-", "-", "-"
             )
             return
 
         if not ledgers_data:
             logger.critical("No valid ledger data found.")
+            # 无有效账本数据路径：补上 same_goal_ledger_hash 参数（使用 '-' 占位）
             self.spec_check_logger.log_spec_check(
-                iteration, "No valid ledger data found.", "-", "-"
+                iteration, "No valid ledger data found.", "-", "-", "-"
             )
             return
 
