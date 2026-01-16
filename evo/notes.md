@@ -34,3 +34,38 @@ nbstripout --install
 # 启用 nbdime 的 git 支持（更友好的 notebook diff/merge）
 nbdime install --enable --global
 ```
+
+## rocket interceptor更改
+
+```rust
+    /// Downloads the 'isvanloon/rippled-no-sig-check:latest' image from DockerHub.
+    ///
+    /// # Panics
+    /// * If an error occurred while downloading the image.
+    async fn download_image(&mut self) {
+        // If image already exists locally, skip pulling
+        match self.docker.inspect_image(IMAGE).await {
+            Ok(_) => {
+                info!("Docker image {} already present locally, skip pull", IMAGE);
+                return;
+            }
+            Err(_) => {
+                info!("Docker image {} not found locally, pulling...", IMAGE);
+            }
+        }
+
+        self.docker
+            .create_image(
+                Some(CreateImageOptions {
+                    from_image: IMAGE,
+                    ..Default::default()
+                }),
+                None,
+                None,
+            )
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap();
+    }
+
+```

@@ -20,8 +20,16 @@ use futures_util::stream::StreamExt;
 use futures_util::TryStreamExt;
 use serde::Deserialize;
 use serde_json::Value;
+use lazy_static::lazy_static;
+use serde_yaml;
 
-const IMAGE: &str = "xrpllabsofficial/xrpld:2.3.0";
+lazy_static! {
+    static ref IMAGE: String = {
+        let file = fs::File::open("config.yaml").expect("Could not open config.yaml");
+        let config: serde_yaml::Value = serde_yaml::from_reader(file).expect("Could not parse config.yaml");
+        config["image"].as_str().expect("image not found in config").to_string()
+    };
+}
 
 /// Struct that represents a response of a 'ValidationKeyCreate' request.
 #[derive(Debug, Deserialize)]
@@ -142,7 +150,7 @@ impl DockerNetwork {
     pub async fn initialize_network(&mut self, mut client: PacketClient) {
         // Stop all running validator nodes before starting new network
         self.stop_network().await;
-        self.download_image().await;
+        self.download_image().await.expect("Failed to download image");
 
         let validator_keys = self.generate_keys(self.config.number_of_nodes as u16).await;
         let names_with_keys = self.generate_validator_configs(&validator_keys);
@@ -254,19 +262,30 @@ impl DockerNetwork {
     ///
     /// # Panics
     /// * If an error occurred while downloading the image.
-    async fn download_image(&mut self) {
-        self.docker
-            .create_image(
-                Some(CreateImageOptions {
-                    from_image: IMAGE,
-                    ..Default::default()
-                }),
-                None,
-                None,
-            )
-            .try_collect::<Vec<_>>()
-            .await
-            .unwrap();
+    async fn download_image(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if IMAGE.contains("local") {
+            // Use local image, check if exists
+            if self.docker.inspect_image(IMAGE.as_str()).await.is_ok() {
+                info!("Local image {} exists, skipping pull", IMAGE.as_str());
+                Ok(())
+            } else {
+                Err("Local image not found".into())
+            }
+        } else {
+            // Pull from registry
+            self.docker
+                .create_image(
+                    Some(CreateImageOptions {
+                        from_image: IMAGE.as_str(),
+                        ..Default::default()
+                    }),
+                    None,
+                    None,
+                )
+                .try_collect::<Vec<_>>()
+                .await?;
+            Ok(())
+        }
     }
 
     /// Starts a validator node.
@@ -309,7 +328,7 @@ impl DockerNetwork {
         };
 
         let container_config = bollard::container::Config {
-            image: Some(IMAGE),
+            image: Some(IMAGE.as_str()),
             env: Some(vec!["ENV_ARGS=--start --ledgerfile /config/ledger.json"]),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
@@ -369,7 +388,7 @@ impl DockerNetwork {
         };
 
         let container_config = bollard::container::Config {
-            image: Some(IMAGE),
+            image: Some(IMAGE.as_str()),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
                 mounts: Some(vec![Mount {
