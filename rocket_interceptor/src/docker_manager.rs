@@ -258,6 +258,23 @@ impl DockerNetwork {
     /// * If an error occurred while downloading the image.
     async fn download_image(&mut self) {
         let image = self.get_image_from_local_config();
+        // Check whether the image already exists locally. If so, skip pulling.
+        match self.docker.list_images::<String>(None).await {
+            Ok(images) => {
+                for img in images.iter() {
+                    // `repo_tags` is a Vec<String> here; check tags directly
+                    if img.repo_tags.iter().any(|t| t == &image) {
+                        info!("Docker image '{}' found locally, skipping pull", image);
+                        return;
+                    }
+                }
+            }
+            Err(e) => {
+                debug!("Failed to list images: {}", e);
+            }
+        }
+
+        info!("Pulling docker image '{}'", image);
         self.docker
             .create_image(
                 Some(CreateImageOptions {
