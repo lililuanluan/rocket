@@ -1,0 +1,52 @@
+syntax = "proto3";
+package packet;
+
+service PacketService {
+    rpc send_packet(Packet) returns (PacketAck);
+    rpc send_validator_node_info(stream ValidatorNodeInfo) returns (ValidatorNodeInfoAck);
+    rpc get_config(GetConfig) returns (Config);
+}
+
+message Packet {
+    bytes data = 1;
+    uint32 from_port = 2;
+    uint32 to_port = 3;
+}
+
+message PacketAck {
+    bytes data = 1;
+    uint32 action = 2;
+    uint32 send_amount = 3;
+}
+
+message ValidatorNodeInfo {
+    uint32 peer_port = 1;
+    uint32 ws_public_port = 2;
+    uint32 ws_admin_port = 3;
+    uint32 rpc_port = 4;
+    string status = 5;
+    string validation_key = 6;
+    string validation_private_key = 7;
+    string validation_public_key = 8;
+    string validation_seed = 9;
+}
+
+message ValidatorNodeInfoAck {
+    string status = 1;
+}
+
+message GetConfig {}
+
+message Partition {
+    repeated uint32 nodes = 1;
+}
+
+message Config {
+    uint32 base_port_peer = 1;
+    uint32 base_port_ws = 2;
+    uint32 base_port_ws_admin = 3;
+    uint32 base_port_rpc = 4;
+    uint32 number_of_nodes = 5;
+    repeated Partition net_partitions = 6;
+    repeated Partition unl_partitions = 7;
+}
