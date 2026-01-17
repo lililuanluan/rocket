@@ -1,3 +1,0 @@
-[submodule "rocket-interceptor"]
-	path = rocket_interceptor
-	url = git@github.com:diseb-lab/rocket-interceptor.git
