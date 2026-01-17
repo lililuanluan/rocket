@@ -20,3 +20,5 @@ target/
 *.pdb
 
 .idea
+
+config.yaml

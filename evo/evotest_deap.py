@@ -52,7 +52,7 @@ def cleanup_interceptor_processes():
         subprocess.run(
             ["killall", "-9", "rocket-interceptor"],
             stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL
+            stdout=subprocess.DEVNULL,
         )
         print("✓ Cleanup complete")
     except Exception as e:
@@ -88,28 +88,20 @@ def setup_deap_types():
 
 def setup_interceptor(config):
     """设置 interceptor（与原版相同）"""
-    (CUR_DIR / "bin").mkdir(parents=True, exist_ok=True)
     ripple_image = config["ripple-image"]
     print(f"config.ripple-image = {ripple_image}, type = {type(ripple_image)}")
 
     print(f"Pulling docker image {ripple_image}...")
     subprocess.run(["docker", "pull", ripple_image], check=True)
 
-    image_bin = CUR_DIR / "bin" / ripple_image.replace("/", "-")
-
-    if not image_bin.exists():
-        print(f"{image_bin} not built, building...")
-        success = rebuild_interceptor_with(
-            img=ripple_image, interceptor_dir=INTERCEPTOR_DIR, dest=image_bin
-        )
-        if not success:
-            raise RuntimeError("Rebuild interceptor failed")
-
-    assert image_bin.exists(), f"{image_bin} not exists after rebuild"
+    success = rebuild_interceptor_with(
+        img=ripple_image, interceptor_dir=INTERCEPTOR_DIR
+    )
+    if not success:
+        raise RuntimeError("Rebuild interceptor failed")
 
     target_path = INTERCEPTOR_DIR / "rocket-interceptor"
-    shutil.copy2(image_bin, target_path)
-    print(f"Copied {image_bin} to {target_path}")
+    assert target_path.exists(), f"Interceptor binary not found at {target_path}"
 
 
 def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
@@ -295,7 +287,6 @@ def main(config):
 
     START_DATETIME = datetime.now().strftime("%Y_%m_%d_%Hh%Mm")
 
-    
     lambda_ = config.get("population_size", 4)
     mu = min(lambda_, config.get("mu", 4))
     max_generation = config.get("max_generation", 10)
@@ -454,4 +445,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error during evolution: {e}")
         raise e
-    
