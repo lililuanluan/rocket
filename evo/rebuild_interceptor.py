@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import shutil
 import re
+import yaml
 
 
 def rebuild_interceptor_with(
@@ -27,5 +28,6 @@ def rebuild_interceptor_with(
 
 
 if __name__ == "__main__":
-    img = "ghcr.io/amousavigourabi/docker-rippled/seeded-2.4.0-fully-lowered-threshold:latest"
-    rebuild_interceptor_with(img=img)
+    with open("evotest.yaml", "r") as f:
+        config = yaml.safe_load(f)
+    rebuild_interceptor_with(img=["ripple-image"])
