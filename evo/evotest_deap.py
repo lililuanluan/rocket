@@ -112,7 +112,7 @@ def setup_docker_images(config):
     print("✓ Local images built successfully")
     os.chdir(original_cwd)
 
-def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
+def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding, config):
     """运行 Rocket（与原版相同）"""
     os.chdir(ROCKET_DIR)
     py = sys.executable
@@ -141,6 +141,7 @@ def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
     print(f"running command: {' '.join(cmd)}")
     env = os.environ.copy()
     env['RUST_BACKTRACE'] = 'full'
+    env["RUST_LOG"] = config.get("rust_log_level", "")
     retcode = subprocess.call(cmd, env=env)
 
     if retcode != 0:
@@ -151,7 +152,7 @@ def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
     os.chdir(CUR_DIR)
 
 
-def evaluate_individual(individual, generation, individual_id):
+def evaluate_individual(individual, generation, individual_id, config):
     """
     评估函数 - DEAP 要求返回 tuple
     这是 DEAP 与手工实现的主要接口
@@ -163,7 +164,7 @@ def evaluate_individual(individual, generation, individual_id):
     log_dir = f"{START_DATETIME}/G{generation}T{individual_id}/"
 
     # 运行 Rocket
-    run_rocket(log_dir, MAX_ITERATION, MAX_LEDGER_SEQ, SEED, list(individual))
+    run_rocket(log_dir, MAX_ITERATION, MAX_LEDGER_SEQ, SEED, list(individual), config)
 
     # 评估结果
     eval_result = evaluate_log(LOGS_DIR / log_dir)
@@ -383,7 +384,7 @@ def main(config):
 
     # 评估初始种群 (Generation 0)
     for idx, ind in enumerate(population):
-        fitness = evaluate_individual(ind, generation=0, individual_id=idx + 1)
+        fitness = evaluate_individual(ind, generation=0, individual_id=idx + 1, config=config)
         ind.fitness.values = fitness
 
     # 更新 HallOfFame 和统计
@@ -403,7 +404,7 @@ def main(config):
         # 评估子代中未评估的个体
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
         for idx, ind in enumerate(invalid_ind):
-            fitness = evaluate_individual(ind, generation=gen, individual_id=idx + 1)
+            fitness = evaluate_individual(ind, generation=gen, individual_id=idx + 1, config=config)
             ind.fitness.values = fitness
 
         # (μ+λ) 选择：从父代+子代中选择最佳的 mu 个

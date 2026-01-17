@@ -13,3 +13,8 @@ encoding:
   # Delay
   min_value: 0 # Minimum delay value in milliseconds
   max_value: 1000 # Maximum delay value in milliseconds
+
+
+rust_log_level: "info"
+# rust_log_level: "debug"
+
