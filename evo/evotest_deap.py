@@ -139,7 +139,9 @@ def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
     ]
 
     print(f"running command: {' '.join(cmd)}")
-    retcode = subprocess.call(cmd)
+    env = os.environ.copy()
+    env['RUST_BACKTRACE'] = 'full'
+    retcode = subprocess.call(cmd, env=env)
 
     if retcode != 0:
         print(f"Rocket exited with code {retcode}")

@@ -4,6 +4,7 @@ import traceback
 from subprocess import PIPE, Popen, TimeoutExpired
 from sys import platform
 from threading import Thread
+import sys
 
 import docker
 from docker import DockerClient
@@ -18,13 +19,50 @@ class InterceptorManager:
         self.process: Popen | None = None
 
     @staticmethod
+    def __stream_reader(pipe, stream):
+        """Read a process stream line-by-line and log it immediately."""
+        if stream is None:
+            return
+        try:
+            for line in iter(stream.readline, ""):
+                if not line:
+                    break
+                # 如果是stdout，则输出黄色，如果是stderr，输出蓝色
+                try:
+                    if pipe == sys.stdout:
+                        pipe.write(f"\x1b[33m{line}\x1b[0m")
+                    else:
+                        pipe.write(f"\x1b[34m{line}\x1b[0m")
+                except TypeError:
+                    # Some pipes expect bytes (unlikely here), fall back to encode
+                    if pipe == sys.stdout:
+                        pipe.write(f"\x1b[33m{line}\x1b[0m".encode())
+                    else:
+                        pipe.write(f"\x1b[34m{line}\x1b[0m".encode())
+                pipe.flush()
+               
+        except Exception:
+            logger.exception("Failed to read interceptor stream")
+
+    @staticmethod
     def __check_output(proc: Popen):
-        """Log the stdout and stderr of the subprocess."""
-        stdout, stderr = proc.communicate()
-        if stdout:
-            logger.debug(f"\n{stdout}")
-        if stderr:
-            logger.debug(f"\n{stderr}")
+        """Log the stdout and stderr of the subprocess in real time."""
+        # Spawn two daemon threads to stream stdout and stderr line-by-line.
+        Thread(
+            target=InterceptorManager.__stream_reader,
+            args=(sys.stdout, proc.stdout),
+            daemon=True,
+        ).start()
+        Thread(
+            target=InterceptorManager.__stream_reader,
+            args=(sys.stderr, proc.stderr),
+            daemon=True,
+        ).start()
+        # Wait for process to exit so this thread doesn't return immediately.
+        try:
+            proc.wait()
+        except Exception:
+            logger.exception("Error while waiting for interceptor process")
 
     @staticmethod
     def cleanup_docker_containers():
