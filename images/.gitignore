@@ -1,0 +1,4 @@
+*-local
+*.tar.gz
+rippled
+boost_1_70_0

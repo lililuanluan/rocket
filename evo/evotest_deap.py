@@ -89,10 +89,6 @@ def setup_deap_types():
 def setup_interceptor(config):
     """设置 interceptor（与原版相同）"""
     ripple_image = config["ripple-image"]
-    print(f"config.ripple-image = {ripple_image}, type = {type(ripple_image)}")
-
-    print(f"Pulling docker image {ripple_image}...")
-    subprocess.run(["docker", "pull", ripple_image], check=True)
 
     success = rebuild_interceptor_with(
         img=ripple_image, interceptor_dir=INTERCEPTOR_DIR
@@ -103,6 +99,18 @@ def setup_interceptor(config):
     target_path = INTERCEPTOR_DIR / "rocket-interceptor"
     assert target_path.exists(), f"Interceptor binary not found at {target_path}"
 
+
+def setup_docker_images(config):
+    
+    ripple_image = config["ripple-image"]
+    if "local" not in ripple_image:
+        subprocess.run(["docker", "pull", ripple_image], check=True)
+    
+    original_cwd = os.getcwd()
+    os.chdir(ROCKET_DIR / "images")
+    subprocess.run(["make", "build"], check=True)
+    print("✓ Local images built successfully")
+    os.chdir(original_cwd)
 
 def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding):
     """运行 Rocket（与原版相同）"""
@@ -278,6 +286,7 @@ def main(config):
     CSV_FILE_PATH = None
 
     setup_interceptor(config)
+    setup_docker_images(config)
     setup_deap_types()
 
     # 读取配置
