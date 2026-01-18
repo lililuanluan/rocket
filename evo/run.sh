@@ -1,4 +1,5 @@
 #!/bin/bash
 
-cd ..
-python3 -m rocket_controller EvoDelayStrategy --config /Users/lli21/rocket/evo/EvoDelayStrategy.yaml --network_config /Users/lli21/rocket/evo/network.yaml --log-dir 2025_11_05_15h06m/G1T1/ --max-iteration 1 --max-ledger-seq 5
+source ../.venv/bin/activate
+# python3 evotest_deap.py 2>&1 | tee evotest.log
+python3 evotest_deap.py
