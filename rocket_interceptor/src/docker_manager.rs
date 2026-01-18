@@ -555,9 +555,6 @@ impl DockerNetwork {
         if path.exists() {
             if let Ok(s) = std::fs::read_to_string(path) {
                 if let Ok(doc) = serde_yaml::from_str::<serde_yaml::Value>(&s) {
-                    if let Some(img) = doc.get("ripple_image").and_then(|v| v.as_str()) {
-                        return img.to_string();
-                    }
                     if let Some(img) = doc.get("image").and_then(|v| v.as_str()) {
                         return img.to_string();
                     }
