@@ -211,14 +211,11 @@ impl Node {
         }
 
         for _ in 0..response.send_amount {
-            message_queue_sender
-                .send(Message::new(response.data.clone(), peer_to_port))
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "Could not write message from {} to {} to the queue.",
-                        peer_from_port, peer_to_port,
-                    )
-                });
+            if let Err(e) = message_queue_sender.send(Message::new(response.data.clone(), peer_to_port)) {
+                // If receiver has gone away, log and stop trying to send further messages.
+                error!("Dropping message from {} to {}: channel closed: {}", peer_from_port, peer_to_port, e);
+                return;
+            }
         }
     }
 
@@ -276,14 +273,26 @@ impl Node {
         mut peer_to_write_half: HashMap<u16, WriteHalf<SslStream<TcpStream>>>,
     ) {
         loop {
-            let message = message_queue_receiver.recv().unwrap();
+            let message = match message_queue_receiver.recv() {
+                Ok(m) => m,
+                Err(_) => {
+                    // All senders have been dropped; exit write loop gracefully.
+                    return;
+                }
+            };
 
-            let write_half = peer_to_write_half.get_mut(&message.peer_to_port).unwrap();
-
-            write_half
-                .write_all(&message.data)
-                .await
-                .expect("Could not write to SSL stream");
+            match peer_to_write_half.get_mut(&message.peer_to_port) {
+                Some(write_half) => {
+                    if let Err(e) = write_half.write_all(&message.data).await {
+                        error!("Could not write to SSL stream for port {}: {}", message.peer_to_port, e);
+                        // On write error, drop this write half to avoid spinning on it.
+                        peer_to_write_half.remove(&message.peer_to_port);
+                    }
+                }
+                None => {
+                    error!("No write half for destination port {}. Dropping message.", message.peer_to_port);
+                }
+            }
         }
     }
 }

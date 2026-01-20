@@ -3,12 +3,13 @@
 use base64::engine::general_purpose;
 use base64::Engine;
 use basex_rs::{BaseX, ALPHABET_RIPPLE};
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 use log::{debug, error};
 use openssl::sha::Sha512;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
 use secp256k1::{Message as CryptoMessage, Secp256k1, SecretKey};
 use std::net::{IpAddr, SocketAddr};
+use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -48,22 +49,24 @@ impl PeerConnector {
         pub_key_peer_2: &str,
         seed_peer_1: &str,
         seed_peer_2: &str,
-    ) -> (SslStream<TcpStream>, SslStream<TcpStream>) {
+    ) -> Result<(SslStream<TcpStream>, SslStream<TcpStream>), String> {
+        // Try to establish both halves and propagate errors to the caller so the caller
+        // can decide whether to skip this pair.
         let connection_half_1 = Self::setup_connection_half(
             self.ip_addr.as_str(),
             port_peer_1,
             pub_key_peer_2,
             seed_peer_2,
         )
-        .await;
+        .await?;
         let connection_half_2 = Self::setup_connection_half(
             self.ip_addr.as_str(),
             port_peer_2,
             pub_key_peer_1,
             seed_peer_1,
         )
-        .await;
-        (connection_half_1, connection_half_2)
+        .await?;
+        Ok((connection_half_1, connection_half_2))
     }
 
     /// Sets up a connection half from a peer to another peer.
@@ -86,28 +89,51 @@ impl PeerConnector {
         port: u16,
         initiator_public_key: &str,
         initiator_seed: &str,
-    ) -> SslStream<TcpStream> {
-        let mut ssl_stream =
-            Self::create_and_connect_ssl_stream(ip, port, initiator_public_key, initiator_seed)
-                .await;
+    ) -> Result<SslStream<TcpStream>, String> {
+        // Try default token selection first
+        let mut ssl_stream = Self::create_and_connect_ssl_stream(
+            ip,
+            port,
+            initiator_public_key,
+            initiator_seed,
+        )
+        .await
+        .map_err(|e| format!("Failed to create/connect SSL stream: {}", e))?;
 
+        // Read until we see end of HTTP headers ("\r\n\r\n") or hit limits. This avoids
+        // panics when the TCP stream returns a split header in the first read.
         let mut buf = BytesMut::new();
-        let mut vec = vec![0; 4096];
-        let size = ssl_stream
-            .read(&mut vec)
-            .await
-            .expect("Unable to read handshake response");
-        vec.resize(size, 0);
-        buf.extend_from_slice(&vec);
-
-        if size == 0 {
-            error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-            panic!("Socket closed");
+        let mut attempts = 0;
+        loop {
+            let mut vec = vec![0; 4096];
+            let size = ssl_stream
+                .read(&mut vec)
+                .await
+                .expect("Unable to read handshake response");
+            if size == 0 {
+                error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
+                panic!("Socket closed");
+            }
+            vec.resize(size, 0);
+            buf.extend_from_slice(&vec);
+            // Stop reading when we have the headers terminator
+            if buf.windows(4).position(|x| x == b"\r\n\r\n").is_some() {
+                break;
+            }
+            attempts += 1;
+            if attempts > 8 || buf.len() > 16 * 1024 {
+                // give up and try to parse what we have (will panic if invalid)
+                break;
+            }
         }
 
-        Self::check_upgrade_request_response(buf);
+        if let Err(e) = Self::check_upgrade_request_response(buf) {
+            // Log and return error so caller can skip this pair; avoid panicking.
+            error!("Handshake failed: {}", e);
+            return Err(e);
+        }
 
-        ssl_stream
+        Ok(ssl_stream)
     }
 
     /// This method checks given a buffered HTTP response, whether it is a valid 101 switching protocol response.
@@ -117,53 +143,25 @@ impl PeerConnector {
     /// * If it received a partial message.
     /// * If it could not separate the HTTP headers from the body.
     /// * If the response code is not '101' as expected to be.
-    fn check_upgrade_request_response(mut buffered_response: BytesMut) {
+    fn check_upgrade_request_response(buffered_response: BytesMut) -> Result<(), String> {
+        // Very small, robust check: ensure headers end exists and status code is 101
         if let Some(n) = buffered_response.windows(4).position(|x| x == b"\r\n\r\n") {
-            let mut headers = [httparse::EMPTY_HEADER; 32];
-            let mut response = httparse::Response::new(&mut headers);
-
-            let status = response
-                .parse(&buffered_response[0..n + 4])
-                .expect("Parsing response failed.");
-
-            if status.is_partial() {
-                panic!("Could not fully parse the response.");
+            let header_bytes = &buffered_response[0..n + 4];
+            if let Ok(headers) = std::str::from_utf8(header_bytes) {
+                if let Some(first_line) = headers.lines().next() {
+                    let parts: Vec<&str> = first_line.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if parts[1] == "101" {
+                            return Ok(());
+                        } else {
+                            return Err(format!("Expected 101 switching protocols, got {}", parts[1]));
+                        }
+                    }
+                }
             }
-
-            let response_status_code = response.code.unwrap();
-
-            debug!(
-                "Peer Handshake Response: version: {}, status: {}, reason: {}",
-                response.version.unwrap(),
-                &response_status_code,
-                response.reason.unwrap()
-            );
-
-            debug!("Response headers:");
-            for header in headers.iter().filter(|h| **h != httparse::EMPTY_HEADER) {
-                debug!("{}: {}", header.name, String::from_utf8_lossy(header.value));
-            }
-
-            buffered_response.advance(n + 4);
-
-            // HTTP code 101: Switching Protocols
-            if response_status_code != 101 {
-                panic!(
-                    "Response status code expected to be 101 but was: {}\n\
-                    Body of the response: {}",
-                    response_status_code,
-                    String::from_utf8_lossy(&buffered_response).trim()
-                );
-            }
-
-            if !buffered_response.is_empty() {
-                debug!(
-                    "Switching protocol response has an (unexpected) body: {}",
-                    String::from_utf8_lossy(&buffered_response).trim()
-                );
-            }
+            Err("Parsing response failed".to_string())
         } else {
-            panic!("Could not separate HTTP headers from body. Response is invalid.")
+            Err("Could not separate HTTP headers from body.".to_string())
         }
     }
 
@@ -183,19 +181,27 @@ impl PeerConnector {
         port: u16,
         public_key: &str,
         seed: &str,
-    ) -> SslStream<TcpStream> {
-        let socket_address = SocketAddr::new(IpAddr::from_str(ip).unwrap(), port);
-        let tcp_stream = TcpStream::connect(socket_address).await.unwrap();
+    ) -> Result<SslStream<TcpStream>, String> {
+        let socket_address = SocketAddr::new(
+            IpAddr::from_str(ip).map_err(|e| format!("Invalid IP: {}", e))?,
+            port,
+        );
+        let tcp_stream = TcpStream::connect(socket_address)
+            .await
+            .map_err(|e| format!("TCP connect failed: {}", e))?;
 
         tcp_stream
             .set_nodelay(true)
-            .expect("Enable TCP_NODELAY failed.");
-        let ssl_context = SslContext::builder(SslMethod::tls()).unwrap().build();
-        let ssl_session = Ssl::new(&ssl_context).unwrap();
-        let mut ssl_stream = SslStream::<TcpStream>::new(ssl_session, tcp_stream).unwrap();
+            .map_err(|e| format!("Enable TCP_NODELAY failed: {}", e))?;
+        let ssl_context = SslContext::builder(SslMethod::tls())
+            .map_err(|e| format!("Create SSL context failed: {}", e))?
+            .build();
+        let ssl_session = Ssl::new(&ssl_context).map_err(|e| format!("Create SSL session failed: {}", e))?;
+        let mut ssl_stream = SslStream::<TcpStream>::new(ssl_session, tcp_stream)
+            .map_err(|e| format!("Create SSL stream failed: {}", e))?;
         SslStream::connect(Pin::new(&mut ssl_stream))
             .await
-            .expect("SSL connection failed.");
+            .map_err(|e| format!("SSL connection failed: {}", e))?;
 
         // The following block of code is responsible for computing the Session-Signature
         // for the Handshake, which is required to establish a connection between two nodes.
@@ -264,33 +270,28 @@ impl PeerConnector {
         let sig = secp256k1_ctx.sign_ecdsa(&msg, &sk).serialize_der();
         let b64sig = general_purpose::STANDARD.encode(sig);
 
-        let content = Self::format_upgrade_request_content(public_key, b64sig.as_str());
+        // Determine which Upgrade token to send based on local config 'image' (1.4.0 -> RTXP/1.2, else XRPL/2.2)
+        let mut upgrade_token = "XRPL/2.2";
+        if let Some(image) = crate::docker_manager::get_image_from_config_file(Path::new("config.yaml")) {
+            if image.contains("1.4.0") {
+                upgrade_token = "RTXP/1.2";
+            }
+        }
+
+        let content = Self::format_upgrade_request_content(upgrade_token, public_key, b64sig.as_str());
         ssl_stream
             .write_all(content.as_bytes())
             .await
-            .expect("Could not send XRPL handshake request.");
+            .map_err(|e| format!("Could not send handshake request: {}", e))?;
 
-        ssl_stream
+        Ok(ssl_stream)
     }
 
-    /// Creates a request message which wil upgrade the connection between peer and interceptor
-    /// The content is trivial. The Session-Signature gets neglected (dummy value 'a')
-    /// since we removed the handshake verification check in the rippled source code.
-    ///
-    /// # Parameters
-    /// * 'public_key' - the public key to be filled in into the request.
-    /// * 'base64_sig' - the base64 encoded session signature to be filled in into the request.
-    fn format_upgrade_request_content(public_key: &str, base64_sig: &str) -> String {
+    /// Creates a request message which will upgrade the connection between peer and interceptor.
+    fn format_upgrade_request_content(upgrade_token: &str, public_key: &str, base64_sig: &str) -> String {
         format!(
-            "\
-            GET / HTTP/1.1\r\n\
-            Upgrade: XRPL/2.2\r\n\
-            Connection: Upgrade\r\n\
-            Connect-As: Peer\r\n\
-            Public-Key: {}\r\n\
-            Session-Signature: {}\r\n\
-            \r\n",
-            public_key, base64_sig
+            "GET / HTTP/1.1\r\nUser-Agent: rocket-interceptor\r\nUpgrade: {}\r\nConnection: Upgrade\r\nConnect-As: Peer\r\nPublic-Key: {}\r\nSession-Signature: {}\r\n\r\n",
+            upgrade_token, public_key, base64_sig
         )
     }
 }
@@ -310,20 +311,8 @@ mod unit_tests {
     #[test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
     fn upgrade_request_test() {
-        let expected = String::from(
-            "\
-            GET / HTTP/1.1\r\n\
-            Upgrade: XRPL/2.2\r\n\
-            Connection: Upgrade\r\n\
-            Connect-As: Peer\r\n\
-            Public-Key: 123456789abcdefg\r\n\
-            Session-Signature: 123456789abcdefg\r\n\
-            \r\n",
-        );
-        assert_eq!(
-            expected,
-            PeerConnector::format_upgrade_request_content("123456789abcdefg", "123456789abcdefg"),
-        )
+        let expected = String::from("GET / HTTP/1.1\r\nUser-Agent: rocket-interceptor\r\nUpgrade: XRPL/2.2\r\nConnection: Upgrade\r\nConnect-As: Peer\r\nPublic-Key: 123456789abcdefg\r\nSession-Signature: 123456789abcdefg\r\n\r\n");
+        assert_eq!(expected, PeerConnector::format_upgrade_request_content("XRPL/2.2", "123456789abcdefg", "123456789abcdefg"))
     }
 
     #[test]
@@ -347,37 +336,38 @@ mod unit_tests {
 
         let mut buffer = BytesMut::new();
         buffer.extend_from_slice(response);
-        PeerConnector::check_upgrade_request_response(buffer);
+        assert!(PeerConnector::check_upgrade_request_response(buffer).is_ok());
     }
 
     #[test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
-    #[should_panic(expected = "Parsing response failed.")]
     fn check_upgrade_request_response_invalid_request() {
         let mut buffer = BytesMut::new();
         buffer.extend_from_slice(b"garbage\r\n\r\n");
-        PeerConnector::check_upgrade_request_response(buffer);
+        let res = PeerConnector::check_upgrade_request_response(buffer);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err(), "Parsing response failed");
     }
 
     #[test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
-    #[should_panic(expected = "Could not separate HTTP headers from body. Response is invalid.")]
     fn check_upgrade_request_response_invalid_response() {
-        let mut buffer = BytesMut::new();
-        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-        buffer.extend_from_slice(&data);
-        PeerConnector::check_upgrade_request_response(buffer);
-    }
+         let mut buffer = BytesMut::new();
+         let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+         buffer.extend_from_slice(&data);
+         let res = PeerConnector::check_upgrade_request_response(buffer);
+         assert!(res.is_err());
+         assert_eq!(res.unwrap_err(), "Could not separate HTTP headers from body.");
+     }
 
     #[test]
     // #[coverage(off)]  // Only available in nightly build, don't forget to uncomment #![feature(coverage_attribute)] on line 1 of main
-    #[should_panic(
-        expected = "Response status code expected to be 101 but was: 404\nBody of the response: <body message>"
-    )]
     fn check_upgrade_request_response_wrong_status_code() {
-        let mut buf = BytesMut::new();
-        buf.extend_from_slice(b"HTTP/1.1 404 Not Found\r\n\r\n<body message>");
+         let mut buf = BytesMut::new();
+         buf.extend_from_slice(b"HTTP/1.1 404 Not Found\r\n\r\n<body message>");
 
-        PeerConnector::check_upgrade_request_response(buf);
-    }
-}
+         let res = PeerConnector::check_upgrade_request_response(buf);
+         assert!(res.is_err());
+         assert!(res.unwrap_err().starts_with("Expected 101 switching protocols, got 404"));
+     }
+ }

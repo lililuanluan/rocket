@@ -551,18 +551,23 @@ impl DockerNetwork {
     /// Read ripple image name from a local config.yaml in the interceptor working directory.
     /// Falls back to DEFAULT_IMAGE when missing or on error.
     fn get_image_from_local_config(&self) -> String {
-        let path = Path::new("config.yaml");
-        if path.exists() {
-            if let Ok(s) = std::fs::read_to_string(path) {
-                if let Ok(doc) = serde_yaml::from_str::<serde_yaml::Value>(&s) {
-                    if let Some(img) = doc.get("image").and_then(|v| v.as_str()) {
-                        return img.to_string();
-                    }
+        get_image_from_config_file(Path::new("config.yaml")).unwrap_or(DEFAULT_IMAGE.to_string())
+    }
+}
+
+/// Public helper to read 'image' from an arbitrary config file.
+/// Returns Some(image_str) when present, None otherwise.
+pub fn get_image_from_config_file(path: &Path) -> Option<String> {
+    if path.exists() {
+        if let Ok(s) = std::fs::read_to_string(path) {
+            if let Ok(doc) = serde_yaml::from_str::<serde_yaml::Value>(&s) {
+                if let Some(img) = doc.get("image").and_then(|v| v.as_str()) {
+                    return Some(img.to_string());
                 }
             }
         }
-        DEFAULT_IMAGE.to_string()
     }
+    None
 }
 
 #[cfg(test)]

@@ -7,6 +7,7 @@ use crate::connection_handler::{Node, Peer};
 use crate::docker_manager::DockerNetwork;
 use crate::packet_client::proto::Partition;
 use crate::peer_connector::PeerConnector;
+use log::error;
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -113,7 +114,7 @@ async fn main() -> io::Result<()> {
             if !is_valid_connection(i as u32, j as u32, network_config.net_partitions.as_ref()) {
                 continue;
             }
-            let (connection_half_1, connection_half_2) = peer_connector
+            let res = peer_connector
                 .connect_peers(
                     container1.port_peer as u16,
                     container2.port_peer as u16,
@@ -123,6 +124,13 @@ async fn main() -> io::Result<()> {
                     container2.key_data.validation_seed.as_str(),
                 )
                 .await;
+            let (connection_half_1, connection_half_2) = match res {
+                Ok((h1, h2)) => (h1, h2),
+                Err(e) => {
+                    error!("Could not establish connection between {} and {}: {}", i, j, e);
+                    continue; // skip this pair
+                }
+            };
             let (read_half_1, write_half_1) = tokio::io::split(connection_half_1);
             let (read_half_2, write_half_2) = tokio::io::split(connection_half_2);
 
