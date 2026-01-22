@@ -1,0 +1,58 @@
+FROM ubuntu:18.04
+SHELL ["/bin/bash","-eux","-o","pipefail","-c"]
+
+RUN export LANGUAGE=C.UTF-8; export LANG=C.UTF-8; export LC_ALL=C.UTF-8; export DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+	apt-get -y upgrade && \
+	apt-get -y install git pkg-config protobuf-compiler libprotobuf-dev libssl-dev wget build-essential && \
+	apt-get update && \
+	apt-get -y install g++-8 gcc-8 && \
+	update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 700 --slave /usr/bin/g++ g++ /usr/bin/g++-7 && \
+	update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 --slave /usr/bin/g++ g++ /usr/bin/g++-8
+	
+
+# 将当前目录的cmake-3.25.1.tar.gz拷贝过去
+COPY cmake-3.25.1.tar.gz /cmake-3.25.1.tar.gz
+
+# 将当前目录的boost_1_75_0.tar.gz拷贝过去
+COPY boost_1_75_0.tar.gz /boost_1_75_0.tar.gz
+
+# 将当前目录的rippled代码拷贝过去
+COPY rippled /rippled
+
+RUN tar xvzf cmake-3.25.1.tar.gz && \
+	cd cmake-3.25.1 && \
+	./bootstrap && \
+	make -j 16 && \
+	make install && \
+	cd .. && \
+	tar xvzf boost_1_75_0.tar.gz && \
+	cd boost_1_75_0 && \
+	./bootstrap.sh && \
+	./b2 -j 16 && \
+	export BOOST_ROOT=/boost_1_75_0
+
+RUN export BOOST_ROOT=/boost_1_75_0 && \
+	cd rippled && \
+	git checkout tags/1.7.2 && \
+	sed -i '319,321d' src/ripple/overlay/impl/Handshake.cpp && \
+	mkdir my_build && \
+	cd my_build && \
+	cmake .. && \
+	cmake --build . -- -j 16
+
+FROM ubuntu:18.04
+
+# Copy built binary into PATH and provide entrypoint script identical to other images
+COPY --from=0 /rippled/my_build/rippled /usr/local/bin/rippled
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /usr/local/bin/rippled /entrypoint.sh
+
+WORKDIR /config
+VOLUME ["/config/db", "/var/lib/rippled/db", "/var/log/rippled"]
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD []
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+  CMD curl -f http://localhost:5005 || exit 1 || true

@@ -273,7 +273,10 @@ impl PeerConnector {
         // Determine which Upgrade token to send based on local config 'image' (1.4.0 -> RTXP/1.2, else XRPL/2.2)
         let mut upgrade_token = "XRPL/2.2";
         if let Some(image) = crate::docker_manager::get_image_from_config_file(Path::new("config.yaml")) {
-            if image.contains("1.4.0") {
+            // Inspect the image tag (the part after the last ':'). If it starts with "1.",
+            // treat it as rippled 1.x and use the RTXP/1.2 token.
+            let tag = image.rsplit(':').next().unwrap_or(&image);
+            if tag.starts_with("1.") {
                 upgrade_token = "RTXP/1.2";
             }
         }
