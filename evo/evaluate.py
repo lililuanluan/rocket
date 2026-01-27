@@ -10,15 +10,24 @@ def get_prop_set_count(df: pd.DataFrame) -> int:
 
 
 def get_avg_validation_time(df: pd.DataFrame) -> float:
+    # 以相对的 ledger_index 确定起始点：从 min(ledger_index)+1 开始
+    if "ledger_index" not in df.columns:
+        print("ledger_index column not found in dataframe.")
+        return None
 
-    # 筛选 ledger_seq > 2 的行
-    df_filtered = df[df["ledger_seq"] > 2]
+    try:
+        min_idx = int(df["ledger_index"].min())
+    except Exception:
+        print("Could not determine min ledger_index.")
+        return None
 
-    # 获取这些行的验证时间（去除空值）
+    start_idx = min_idx + 1
+    df_filtered = df[df["ledger_index"] >= start_idx]
+
     validation_times = df_filtered["time_to_validation"].dropna()
 
     if validation_times.empty:
-        print("No validation times found.")
+        print("No validation times found after start index.")
         return None
 
     return validation_times.mean()
