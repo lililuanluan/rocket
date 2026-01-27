@@ -24,13 +24,13 @@ COPY rippled /rippled
 RUN tar xvzf cmake-3.25.1.tar.gz && \
 	cd cmake-3.25.1 && \
 	./bootstrap && \
-	make -j 16 && \
+	make -j"$(nproc)" && \
 	make install && \
 	cd .. && \
 	tar xvzf boost_1_75_0.tar.gz && \
 	cd boost_1_75_0 && \
 	./bootstrap.sh && \
-	./b2 -j 16 && \
+	./b2 -j"$(nproc)" && \
 	export BOOST_ROOT=/boost_1_75_0
 
 RUN export BOOST_ROOT=/boost_1_75_0 && \
@@ -40,7 +40,7 @@ RUN export BOOST_ROOT=/boost_1_75_0 && \
 	mkdir my_build && \
 	cd my_build && \
 	cmake .. && \
-	cmake --build . -- -j 16
+	cmake --build . -- -j"$(nproc)"
 
 FROM ubuntu:18.04
 

@@ -15,17 +15,15 @@ all: build
 build: build-1.4 build-1.7
 
 build-1.4: $(DOCKERFILE) $(RIPPLED_DIR)
-	@UID=$$(id -u); GID=$$(id -g); \
-	docker build -f $(DOCKERFILE) -t $(IMAGE_NAME) \
-	  --build-arg UID=$$UID \
-	  --build-arg GID=$$GID \
+	@docker build -f $(DOCKERFILE) -t $(IMAGE_NAME) \
+	  --build-arg UID=$$(id -u) \
+	  --build-arg GID=$$(id -g) \
 	  .
 
 build-1.7: $(DOCKERFILE_1_7) $(RIPPLED_DIR)
-	@UID=$$(id -u); GID=$$(id -g); \
-	docker build -f $(DOCKERFILE_1_7) -t $(IMAGE_NAME_1_7) \
-	  --build-arg UID=$$UID \
-	  --build-arg GID=$$GID \
+	@docker build -f $(DOCKERFILE_1_7) -t $(IMAGE_NAME_1_7) \
+	  --build-arg UID=$$(id -u) \
+	  --build-arg GID=$$(id -g) \
 	  .
 
 $(RIPPLED_DIR):
@@ -35,17 +33,15 @@ $(RIPPLED_DIR):
 force-build: force-build-1.4 force-build-1.7
 
 force-build-1.4:
-	@UID=$$(id -u); GID=$$(id -g); \
-	docker build --no-cache -f $(DOCKERFILE) -t $(IMAGE_NAME) \
-	  --build-arg UID=$$UID \
-	  --build-arg GID=$$GID \
+	@docker build --no-cache -f $(DOCKERFILE) -t $(IMAGE_NAME) \
+	  --build-arg UID=$$(id -u) \
+	  --build-arg GID=$$(id -g) \
 	  .
 
 force-build-1.7:
-	@UID=$$(id -u); GID=$$(id -g); \
-	docker build --no-cache -f $(DOCKERFILE_1_7) -t $(IMAGE_NAME_1_7) \
-	  --build-arg UID=$$UID \
-	  --build-arg GID=$$GID \
+	@docker build --no-cache -f $(DOCKERFILE_1_7) -t $(IMAGE_NAME_1_7) \
+	  --build-arg UID=$$(id -u) \
+	  --build-arg GID=$$(id -g) \
 	  .
 
 clean:
