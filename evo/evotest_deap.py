@@ -101,31 +101,76 @@ def setup_interceptor(config):
 
 
 def setup_docker_images(config):
-    
+
     ripple_image = config["ripple-image"]
     if "local" not in ripple_image:
         subprocess.run(["docker", "pull", ripple_image], check=True)
-    
+
     original_cwd = os.getcwd()
     os.chdir(ROCKET_DIR / "images")
     subprocess.run(["make", "build"], check=True)
     print("✓ Local images built successfully")
     os.chdir(original_cwd)
 
+
+def get_strategy_name(config):
+    strategy = config.get("strategy", "evo")
+    if strategy == "random":
+        return "RandomByzzStrategy"
+    elif strategy == "evo":
+        return "EvoDelayStrategy"
+    else:
+        raise ValueError(f"Unsupported strategy: {strategy}")
+
 def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding, config):
     """运行 Rocket（与原版相同）"""
     os.chdir(ROCKET_DIR)
     py = sys.executable
 
-    strategy_yaml = CUR_DIR / "EvoDelayStrategy.yaml"
+    # 清理可能残留的 validator_* 容器，避免端口/状态冲突
+    try:
+        out = subprocess.check_output(
+            ["docker", "ps", "-a", "--filter", "name=validator_", "--format", "{{.Names}}"],
+            text=True,
+        ).strip()
+        if out:
+            names = [n for n in out.splitlines() if n]
+            for name in names:
+                print(f"Stopping and removing existing container: {name}")
+                try:
+                    subprocess.run(["docker", "rm", "-f", name], check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Warning: failed to remove {name}: {e}")
+    except FileNotFoundError:
+        print("docker not found in PATH; skipping validator cleanup")
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: error while listing validator containers: {e}")
+
+    byzz_min_seq = config.get("byzz_min_seq", 5)
+    byzz_max_seq = config.get("byzz_max_seq", 10)
+    timeout_sec_per_seq = config.get("timeout_sec_per_seq", 30)
+
+    strategy_name = get_strategy_name(config)
+    strategy_yaml = CUR_DIR / f"{strategy_name}.yaml"
     with open(strategy_yaml, "w") as f:
-        yaml.dump({"seed": seed, "encoding": encoding}, f)
+        yaml.dump(
+            {
+                "seed": seed,
+                "encoding": encoding,
+                "byzz_min_seq": byzz_min_seq,
+                "byzz_max_seq": byzz_max_seq,
+                "min_delay_ms": ENCODING_MIN,
+                "max_delay_ms": ENCODING_MAX,
+                "timeout_sec_per_seq": timeout_sec_per_seq,
+            },
+            f,
+        )
 
     cmd = [
         py,
         "-m",
         "rocket_controller",
-        "EvoDelayStrategy",
+        strategy_name,
         "--config",
         str(strategy_yaml),
         "--network_config",
@@ -140,7 +185,7 @@ def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding, config):
 
     print(f"running command: {' '.join(cmd)}")
     env = os.environ.copy()
-    env['RUST_BACKTRACE'] = 'full'
+    env["RUST_BACKTRACE"] = "full"
     env["RUST_LOG"] = config.get("rust_log_level", "")
     retcode = subprocess.call(cmd, env=env)
 
@@ -384,7 +429,9 @@ def main(config):
 
     # 评估初始种群 (Generation 0)
     for idx, ind in enumerate(population):
-        fitness = evaluate_individual(ind, generation=0, individual_id=idx + 1, config=config)
+        fitness = evaluate_individual(
+            ind, generation=0, individual_id=idx + 1, config=config
+        )
         ind.fitness.values = fitness
 
     # 更新 HallOfFame 和统计
@@ -404,7 +451,9 @@ def main(config):
         # 评估子代中未评估的个体
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
         for idx, ind in enumerate(invalid_ind):
-            fitness = evaluate_individual(ind, generation=gen, individual_id=idx + 1, config=config)
+            fitness = evaluate_individual(
+                ind, generation=gen, individual_id=idx + 1, config=config
+            )
             ind.fitness.values = fitness
 
         # (μ+λ) 选择：从父代+子代中选择最佳的 mu 个

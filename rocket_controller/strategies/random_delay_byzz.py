@@ -12,7 +12,7 @@ from rocket_controller.encoder_decoder import (
 
 from rocket_controller.helper import MAX_U32
 from rocket_controller.iteration_type import TimeBasedIteration, LedgerBasedIteration
-from rocket_controller.strategies.strategy import Strategy
+from rocket_controller.strategies.evo_delay import EvoDelayStrategy
 from xrpl.core.keypairs.secp256k1 import SECP256K1, sha512_first_half
 
 import serialize
@@ -21,25 +21,17 @@ from pathlib import Path
 from loguru import logger
 
 
+class RandomByzzStrategy(EvoDelayStrategy):
 
-class RandomByzzStrategy(Strategy):
-    
     def __init__(
         self,
-        network_config_path: str = "./config/network/default_network.yaml",
         **kwargs,
     ):
-        super().__init__(network_config_path=network_config_path, **kwargs)
-        self.byzz_nodes: list[int] = self.network.network_config.get("byzz_nodes", [])
-        
-        
-    def setup(self):
-        """Setup method for EvoDelayStrategy."""
+        super().__init__(**kwargs)
+        self.delay_max = self.params.get("max_delay_ms", 100)
+        self.delay_min = self.params.get("min_delay_ms", 1)
 
-        # Hardcoded on 7 message types we will consider, could be a parameter in the future
-        assert len(self.delays) == 7 * self.network.node_amount * (
-            self.network.node_amount - 1
-        )
-        
-    def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
-        raise NotImplementedError("handle_packet is not implemented in RandomByzzStrategy")
+    def get_delay(self,message_type: int, packet: packet_pb2.Packet) -> int:
+        # randomly choose a delay between min and max
+        delay = random.randint(self.delay_min, self.delay_max)
+        return delay

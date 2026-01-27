@@ -42,7 +42,7 @@ BYZZ_MUTATE_METHODS = {
         "do_nothing",
         "replace_tx_hash",
         "increment_propose_seq",
-        "repeat_5",
+        # "repeat_5",
         "drop",
     ],
     ripple_pb2.TMValidation: [
@@ -50,7 +50,7 @@ BYZZ_MUTATE_METHODS = {
         "replace_ledger_hash",
         "replace_ledger_hash_with_dummy",
         "increment_ledger_sequence",
-        "repeat_5",
+        # "repeat_5",
         "drop",
     ],
 }
