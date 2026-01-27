@@ -18,3 +18,11 @@ encoding:
 rust_log_level: "info"
 # rust_log_level: "debug"
 
+byzz_min_seq: 5
+byzz_max_seq: 10
+
+
+# strategy: random | evo
+strategy: random
+
+timeout_sec_per_seq: 30
