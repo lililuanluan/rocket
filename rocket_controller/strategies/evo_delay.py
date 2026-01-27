@@ -46,6 +46,8 @@ class EvoDelayStrategy(Strategy):
         super().__init__(network_config_path=network_config_path, **kwargs)
 
         self.delays: list[int] = self.params["encoding"]
+        self.byzz_min_seq: int = self.params.get("byzz_min_seq", 5)
+        self.byzz_max_seq: int = self.params.get("byzz_max_seq", 10)
 
 
         self.dummy_proposal = bytes.fromhex(
@@ -79,6 +81,28 @@ class EvoDelayStrategy(Strategy):
 
     def cache_old_messages(self, packet: packet_pb2.Packet):
         ...
+    
+    def get_delay(self, message_type: int, packet: packet_pb2.Packet) -> int:
+        sender_node_id = self.network.port_to_id(packet.from_port)
+        receiver_node_id = self.network.port_to_id(packet.to_port)
+        # To get type index -> subtract 30, for validation, subtract 35
+        type_id = message_type - 30 if message_type != 41 else 6
+        # for n nodes
+        # index = num(message_type) * (n * n-1)
+        #           + from_id * (n-1)
+        #           + conditional(to_id)
+        # conditional(to_id) -> if to_id is larger than from_id, return to_id-1, else return to_id.
+        index = (
+            type_id * (self.network.node_amount * (self.network.node_amount - 1))
+            + sender_node_id * (self.network.node_amount - 1)
+            + (
+                receiver_node_id
+                if receiver_node_id < sender_node_id
+                else receiver_node_id - 1
+            )
+        )
+        return self.delays[index]
+        
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
@@ -106,26 +130,7 @@ class EvoDelayStrategy(Strategy):
         # 35: ripple_pb2.TMHaveTransactionSet
         # 41: ripple_pb2.TMValidation
 
-        # To get type index -> subtract 30, for validation, subtract 35
-        type_id = message_type - 30 if message_type != 41 else 6
-        sender_node_id = self.network.port_to_id(packet.from_port)
-        receiver_node_id = self.network.port_to_id(packet.to_port)
-
-        # for n nodes
-        # index = num(message_type) * (n * n-1)
-        #           + from_id * (n-1)
-        #           + conditional(to_id)
-        # conditional(to_id) -> if to_id is larger than from_id, return to_id-1, else return to_id.
-
-        index = (
-            type_id * (self.network.node_amount * (self.network.node_amount - 1))
-            + sender_node_id * (self.network.node_amount - 1)
-            + (
-                receiver_node_id
-                if receiver_node_id < sender_node_id
-                else receiver_node_id - 1
-            )
-        )
+        configed_delay = self.get_delay(message_type, packet)
 
         # possibly mutate
         current_ledger = self.iteration_type.get_ledger_sequence_cur_max()
@@ -144,11 +149,12 @@ class EvoDelayStrategy(Strategy):
         #         f"receiver={receiver_node_id}, delay_index={index}, delay={self.delays[index]}ms"
         #     )
         
-        # Apply mutation logic in window [3, max_ledger_seq - 5]
+        # Apply mutation logic in window [byzz_min_seq, byzz_max_seq]
+        
         if (
-            3
+            self.byzz_min_seq
             <= current_ledger
-            <= self.max_ledger_seq - 7
+            <= self.byzz_max_seq
         ):
             if isinstance(message, ripple_pb2.TMProposeSet):
                 # cache old proposals
@@ -160,8 +166,8 @@ class EvoDelayStrategy(Strategy):
                 _pub_key = message.nodePubKey.hex()
                 if not self.byzz_mutator.is_sent_from_byzz_node(_pub_key):
                     # only mutate if sender is byzz node
-                    # logger.debug(f"[ProposeSet] Non-byzz node {original_sender}, returning with delay {self.delays[index]}ms")
-                    return packet.data, self.delays[index], 1
+                    # logger.debug(f"[ProposeSet] Non-byzz node {original_sender}, returning with delay {configed_delay}ms")
+                    return packet.data, configed_delay, 1
 
                 # logger.debug(
                 #     f"Mutating propose from non-byzz node {original_sender}, sender_node_id={sender_node_id}"
@@ -173,7 +179,7 @@ class EvoDelayStrategy(Strategy):
                 if signed_message is None:
                     signed_message = message  
                 if delay is None:
-                    delay = self.delays[index]
+                    delay = configed_delay
                 if repeat is None:
                     repeat = 1
                 encoded = PacketEncoderDecoder.encode_message(
@@ -190,7 +196,7 @@ class EvoDelayStrategy(Strategy):
                 parsed = PacketEncoderDecoder.decode_validation(message)
                 if "error" in parsed:
                     logger.error(f"Parsing validation failed: {parsed['error']}")
-                    return packet.data, self.delays[index], 1
+                    return packet.data, configed_delay, 1
                 # cache old validations
                 lh = parsed.get("LedgerHash") if isinstance(parsed, dict) else None
                 ldgr_seq = parsed.get("LedgerSequence") if isinstance(parsed, dict) else None
@@ -204,7 +210,7 @@ class EvoDelayStrategy(Strategy):
                 _pub_key = parsed.get("SigningPubKey", "")
                 if not self.byzz_mutator.is_sent_from_byzz_node(_pub_key):
                     # only mutate if sender is byzz node
-                    return packet.data, self.delays[index], 1
+                    return packet.data, configed_delay, 1
                 # logger.debug(
                 #     f"Mutating validation from non-byzz node {original_sender}, sender_node_id={sender_node_id}"
                 # )
@@ -214,7 +220,7 @@ class EvoDelayStrategy(Strategy):
                 if signed_message is None:
                     signed_message = message  
                 if delay is None:
-                    delay = self.delays[index]
+                    delay = configed_delay
                 if repeat is None:
                     repeat = 1
 
@@ -224,13 +230,12 @@ class EvoDelayStrategy(Strategy):
                 new_packet = packet_pb2.Packet(
                     data=encoded, from_port=packet.from_port, to_port=packet.to_port
                 )
-                return new_packet.data, self.delays[index], 1
+                return new_packet.data, configed_delay, 1
 
             else:
-                # logger.debug(f"[OtherMessage] type={message_type}, delay={self.delays[index]}ms")
-                return packet.data, self.delays[index], 1
-
-        return packet.data, self.delays[index], 1
+                # logger.debug(f"[OtherMessage] type={message_type}, delay={configed_delay}ms")
+                return packet.data, configed_delay, 1
+        return packet.data, configed_delay, 1
 
 
 

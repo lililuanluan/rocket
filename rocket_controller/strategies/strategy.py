@@ -99,11 +99,12 @@ class Strategy(ABC):
         self.start_datetime: datetime = datetime.now()
         self.log_dir = log_dir if log_dir is not None else self.start_datetime
         self.max_ledger_seq = max_ledger_seq if max_ledger_seq is not None else 10
+        timeout_sec_per_seq = self.params.get("timeout_sec_per_seq", 30)
         self.iteration_type = (
             LedgerBasedIteration(
                 max_iterations=max_iteration if max_iteration is not None else 10,
                 max_ledger_seq=self.max_ledger_seq,
-                ledger_timeout_seconds=self.max_ledger_seq*10,
+                ledger_timeout_seconds=self.max_ledger_seq*timeout_sec_per_seq,
                 strategy_stopper=self.strategy_stopper,
                 
             )
