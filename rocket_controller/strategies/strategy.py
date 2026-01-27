@@ -113,8 +113,9 @@ class Strategy(ABC):
 
         # Pass configured byzantine nodes (if any) to the iteration type so
         # spec checks can exclude them.
+        self.byzz_nodes: list[int] = self.network.network_config.get("byzz_nodes", [])
         self.iteration_type.set_log_dir(
-            self.log_dir, byzantine_node_ids=self.network.network_config.get("byzz_nodes", [])
+            self.log_dir, byzantine_node_ids=self.byzz_nodes
         )
         # a queue of subscriber pushed messages, producer-consumer pattern
         self._ws_event_queue: queue.Queue = queue.Queue()
