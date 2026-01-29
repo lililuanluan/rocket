@@ -4,7 +4,7 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use basex_rs::{BaseX, ALPHABET_RIPPLE};
 use bytes::BytesMut;
-use log::{debug, error};
+use log::{debug, error, info, warn};
 use openssl::sha::Sha512;
 use openssl::ssl::{Ssl, SslContext, SslMethod};
 use secp256k1::{Message as CryptoMessage, Secp256k1, SecretKey};
@@ -12,8 +12,10 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::time::timeout;
 use tokio_openssl::SslStream;
 
 /// Struct that represents the object that connects peers with each other.
@@ -104,32 +106,53 @@ impl PeerConnector {
         // panics when the TCP stream returns a split header in the first read.
         let mut buf = BytesMut::new();
         let mut attempts = 0;
+        // read until we see end of HTTP headers ("\r\n\r\n") or reach attempts/size limits
         loop {
             let mut vec = vec![0; 4096];
-            let size = ssl_stream
-                .read(&mut vec)
-                .await
-                .expect("Unable to read handshake response");
-            if size == 0 {
-                error!("Current buffer: {}", String::from_utf8_lossy(&buf).trim());
-                panic!("Socket closed");
+            // read with a per-attempt timeout to avoid long blocking
+            match timeout(Duration::from_secs(5), ssl_stream.read(&mut vec)).await {
+                Ok(Ok(size)) => {
+                    if size == 0 {
+                        error!("Handshake read returned EOF. Current buffer: {}", String::from_utf8_lossy(&buf).trim());
+                        return Err("Socket closed by peer during handshake".to_string());
+                    }
+                    vec.resize(size, 0);
+                    buf.extend_from_slice(&vec);
+                }
+                Ok(Err(e)) => {
+                    error!("Unable to read handshake response: {}", e);
+                    return Err(format!("Unable to read handshake response: {}", e));
+                }
+                Err(_) => {
+                    // timeout
+                    warn!("Timed out waiting for handshake bytes from {}:{} (attempt {})", ip, port, attempts);
+                    attempts += 1;
+                    if attempts > 8 {
+                        return Err("Timeout while reading handshake response".to_string());
+                    }
+                    if buf.len() > 16 * 1024 {
+                        return Err("Handshake buffer too large or incomplete after timeouts".to_string());
+                    }
+                    continue;
+                }
             }
-            vec.resize(size, 0);
-            buf.extend_from_slice(&vec);
+
             // Stop reading when we have the headers terminator
             if buf.windows(4).position(|x| x == b"\r\n\r\n").is_some() {
                 break;
             }
             attempts += 1;
             if attempts > 8 || buf.len() > 16 * 1024 {
-                // give up and try to parse what we have (will panic if invalid)
+                // give up and try to parse what we have
                 break;
             }
         }
 
-        if let Err(e) = Self::check_upgrade_request_response(buf) {
+        if let Err(e) = Self::check_upgrade_request_response(buf.clone()) {
             // Log and return error so caller can skip this pair; avoid panicking.
-            error!("Handshake failed: {}", e);
+            // Dump server response headers/body to help debugging.
+            let response_str = String::from_utf8_lossy(&buf).to_string();
+            error!("Handshake failed: {}; server response: {}", e, response_str);
             return Err(e);
         }
 
@@ -211,26 +234,26 @@ impl PeerConnector {
         let mut buf = vec![0; 1024];
 
         // Get the contents of the last message sent to the peer.
-        let mut size = ssl_ref.finished(&mut buf[..]);
-        if size > buf.len() {
-            buf.resize(size, 0);
-            size = ssl_ref.finished(&mut buf[..]);
+        let mut size1 = ssl_ref.finished(&mut buf[..]);
+        if size1 > buf.len() {
+            buf.resize(size1, 0);
+            size1 = ssl_ref.finished(&mut buf[..]);
         }
         // Hash the finished message
         let mut ctx_sha512_message1 = Sha512::new();
-        ctx_sha512_message1.update(&buf[..size]);
+        ctx_sha512_message1.update(&buf[..size1]);
         let message1_hash = &ctx_sha512_message1.finish();
         debug!("Finished message SHA512: {:?}", message1_hash);
 
         // Get the contents of the last received message from the peer.
-        let mut size = ssl_ref.peer_finished(&mut buf[..]);
-        if size > buf.len() {
-            buf.resize(size, 0);
-            size = ssl_ref.peer_finished(&mut buf[..]);
+        let mut size2 = ssl_ref.peer_finished(&mut buf[..]);
+        if size2 > buf.len() {
+            buf.resize(size2, 0);
+            size2 = ssl_ref.peer_finished(&mut buf[..]);
         }
         // Hash the received message
         let mut ctx_sha512_message2 = Sha512::new();
-        ctx_sha512_message2.update(&buf[..size]);
+        ctx_sha512_message2.update(&buf[..size2]);
         let message2_hash = &ctx_sha512_message2.finish();
         debug!("Received message SHA512: {:?}", message2_hash);
 
@@ -245,11 +268,16 @@ impl PeerConnector {
         let mut ctx_sha512_xor = Sha512::new();
         ctx_sha512_xor.update(&message_xor[..]);
         let xor_hash = ctx_sha512_xor.finish();
-        let msg = CryptoMessage::from_digest_slice(&xor_hash[0..32]).unwrap();
+        let msg = CryptoMessage::from_digest_slice(&xor_hash[0..32])
+            .map_err(|e| format!("Failed to create crypto message from xor hash: {}", e))?;
 
-        let mut seed_bytes = BaseX::with_alphabet(ALPHABET_RIPPLE)
+        let mut seed_bytes = if let Some(b) = BaseX::with_alphabet(ALPHABET_RIPPLE)
             .from_bs58(&String::from(seed))
-            .unwrap();
+        {
+            b
+        } else {
+            return Err(format!("Failed to base58-decode seed"));
+        };
         let mut ctx_sha512_seed = Sha512::new();
 
         // Set last 4 bytes (bytes 18-21) to 0
@@ -265,9 +293,9 @@ impl PeerConnector {
 
         ctx_sha512_seed.update(&seed_bytes[1..]);
         let seed_hash = ctx_sha512_seed.finish();
-        let secp256k1_ctx = Secp256k1::new();
-        let sk = SecretKey::from_slice(&seed_hash[..32]).unwrap();
-        let sig = secp256k1_ctx.sign_ecdsa(&msg, &sk).serialize_der();
+    let secp256k1_ctx = Secp256k1::new();
+    let sk = SecretKey::from_slice(&seed_hash[..32]).map_err(|e| format!("Failed to create secret key: {}", e))?;
+    let sig = secp256k1_ctx.sign_ecdsa(&msg, &sk).serialize_der();
         let b64sig = general_purpose::STANDARD.encode(sig);
 
         // Determine which Upgrade token to send based on local config 'image' (1.4.0 -> RTXP/1.2, else XRPL/2.2)
@@ -282,6 +310,21 @@ impl PeerConnector {
         }
 
         let content = Self::format_upgrade_request_content(upgrade_token, public_key, b64sig.as_str());
+
+        // Log the outgoing Upgrade request (redact Session-Signature for safety)
+        {
+            let mut debug_content = content.clone();
+            if let Some(start) = debug_content.find("Session-Signature:") {
+                // find end of the line
+                if let Some(end_rel) = debug_content[start..].find("\r\n") {
+                    let end = start + end_rel;
+                    // replace the signature payload with a redaction marker
+                    debug_content.replace_range(start..end, "Session-Signature: <redacted>");
+                }
+            }
+            debug!("Sending Upgrade request (redacted): {}", debug_content.lines().take(6).collect::<Vec<&str>>().join("\n"));
+        }
+
         ssl_stream
             .write_all(content.as_bytes())
             .await
