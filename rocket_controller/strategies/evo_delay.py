@@ -194,6 +194,7 @@ class EvoDelayStrategy(Strategy):
             elif isinstance(message, ripple_pb2.TMValidation):
                 # logger.debug("Processing TMValidation for possible mutation")
                 parsed = PacketEncoderDecoder.decode_validation(message)
+                # print(f"parsed validation: {parsed}")
                 if "error" in parsed:
                     logger.error(f"Parsing validation failed: {parsed['error']}")
                     return packet.data, configed_delay, 1
@@ -231,7 +232,15 @@ class EvoDelayStrategy(Strategy):
                     data=encoded, from_port=packet.from_port, to_port=packet.to_port
                 )
                 return new_packet.data, configed_delay, 1
-
+            elif isinstance(message, ripple_pb2.TMHaveTransactionSet):
+                print(f"TMHaveTransactionSet received, {message}")
+                print(f"hash type {type(message.hash)} value: {message.hash.hex()}")
+                method = self.byzz_mutator.get_random_mutation_method(message)
+                mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
+                print(f"mutated_message: {mutated_message}, delay: {delay}, repeat: {repeat}")
+                
+                # print(f"chosen mutation method: {method}")
+                return packet.data, configed_delay, 1
             else:
                 # logger.debug(f"[OtherMessage] type={message_type}, delay={configed_delay}ms")
                 return packet.data, configed_delay, 1
