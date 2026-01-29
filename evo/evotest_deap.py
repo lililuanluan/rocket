@@ -59,10 +59,40 @@ def cleanup_interceptor_processes():
         print(f"Warning: Could not cleanup processes: {e}")
 
 
+
+def cleanup_docker_containers():
+    # 清理可能残留的 validator_* 容器，避免端口/状态冲突
+    try:
+        out = subprocess.check_output(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                "name=validator_",
+                "--format",
+                "{{.Names}}",
+            ],
+            text=True,
+        ).strip()
+        if out:
+            names = [n for n in out.splitlines() if n]
+            for name in names:
+                print(f"Stopping and removing existing container: {name}")
+                try:
+                    subprocess.run(["docker", "rm", "-f", name], check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Warning: failed to remove {name}: {e}")
+    except FileNotFoundError:
+        print("docker not found in PATH; skipping validator cleanup")
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: error while listing validator containers: {e}")
+
 def signal_handler(signum, frame):
     """处理 Ctrl+C 信号"""
     print("\n\n⚠️  Received interrupt signal (Ctrl+C)")
     cleanup_interceptor_processes()
+    cleanup_docker_containers()
     sys.exit(130)
 
 
@@ -122,29 +152,13 @@ def get_strategy_name(config):
     else:
         raise ValueError(f"Unsupported strategy: {strategy}")
 
+
 def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding, config):
     """运行 Rocket（与原版相同）"""
     os.chdir(ROCKET_DIR)
     py = sys.executable
 
-    # 清理可能残留的 validator_* 容器，避免端口/状态冲突
-    try:
-        out = subprocess.check_output(
-            ["docker", "ps", "-a", "--filter", "name=validator_", "--format", "{{.Names}}"],
-            text=True,
-        ).strip()
-        if out:
-            names = [n for n in out.splitlines() if n]
-            for name in names:
-                print(f"Stopping and removing existing container: {name}")
-                try:
-                    subprocess.run(["docker", "rm", "-f", name], check=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"Warning: failed to remove {name}: {e}")
-    except FileNotFoundError:
-        print("docker not found in PATH; skipping validator cleanup")
-    except subprocess.CalledProcessError as e:
-        print(f"Warning: error while listing validator containers: {e}")
+    cleanup_docker_containers()
 
     byzz_min_seq = config.get("byzz_min_seq", 5)
     byzz_max_seq = config.get("byzz_max_seq", 10)
