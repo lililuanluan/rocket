@@ -7,7 +7,7 @@ ripple-image: "xrpld:1.7.2-local"
 seed: 98
 
 max_generation: 10
-population_size: 5
+population_size: 10
 max_ledger_seq: 15
 
 encoding:
@@ -24,6 +24,6 @@ byzz_max_seq: 10
 
 
 # strategy: random | evo
-strategy: random
+strategy: evo
 
 timeout_sec_per_seq: 30
