@@ -233,24 +233,64 @@ impl PeerConnector {
         let ssl_ref = ssl_stream.ssl();
         let mut buf = vec![0; 1024];
 
-        // Get the contents of the last message sent to the peer.
+        // Some rippled 1.x builds can complete the TLS handshake in a way
+        // that makes the 'finished' and 'peer_finished' values transiently
+        // too short (or zero) immediately after connect. In that case the
+        // derived Session-Signature will be invalid and the server will
+        // close the connection. To avoid that, if we're connecting to a
+        // rippled 1.x image retry reading the finished messages a few times
+        // before giving up.
         let mut size1 = ssl_ref.finished(&mut buf[..]);
         if size1 > buf.len() {
             buf.resize(size1, 0);
             size1 = ssl_ref.finished(&mut buf[..]);
         }
+
+        let mut size2 = ssl_ref.peer_finished(&mut buf[..]);
+        if size2 > buf.len() {
+            buf.resize(size2, 0);
+            size2 = ssl_ref.peer_finished(&mut buf[..]);
+        }
+
+        const MIN_FINISHED_LEN: usize = 12;
+        // Determine whether image tag indicates a 1.x rippled
+        let mut is_rippled_v1 = false;
+        if let Some(image) = crate::docker_manager::get_image_from_config_file(Path::new("config.yaml")) {
+            let tag = image.rsplit(':').next().unwrap_or(&image);
+            if tag.starts_with("1.") {
+                is_rippled_v1 = true;
+            }
+        }
+
+        if is_rippled_v1 {
+            let mut attempts = 0;
+            while (size1 < MIN_FINISHED_LEN || size2 < MIN_FINISHED_LEN) && attempts < 10 {
+                debug!("rippled v1: finished sizes too small (size1={}, size2={}), retrying (attempt={})", size1, size2, attempts);
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                size1 = ssl_ref.finished(&mut buf[..]);
+                if size1 > buf.len() {
+                    buf.resize(size1, 0);
+                    size1 = ssl_ref.finished(&mut buf[..]);
+                }
+                size2 = ssl_ref.peer_finished(&mut buf[..]);
+                if size2 > buf.len() {
+                    buf.resize(size2, 0);
+                    size2 = ssl_ref.peer_finished(&mut buf[..]);
+                }
+                attempts += 1;
+            }
+
+            if size1 < MIN_FINISHED_LEN || size2 < MIN_FINISHED_LEN {
+                warn!("rippled v1: could not get sufficient finished message lengths (size1={}, size2={}), proceeding anyway", size1, size2);
+            }
+        }
+
         // Hash the finished message
         let mut ctx_sha512_message1 = Sha512::new();
         ctx_sha512_message1.update(&buf[..size1]);
         let message1_hash = &ctx_sha512_message1.finish();
         debug!("Finished message SHA512: {:?}", message1_hash);
 
-        // Get the contents of the last received message from the peer.
-        let mut size2 = ssl_ref.peer_finished(&mut buf[..]);
-        if size2 > buf.len() {
-            buf.resize(size2, 0);
-            size2 = ssl_ref.peer_finished(&mut buf[..]);
-        }
         // Hash the received message
         let mut ctx_sha512_message2 = Sha512::new();
         ctx_sha512_message2.update(&buf[..size2]);

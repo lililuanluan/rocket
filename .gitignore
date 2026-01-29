@@ -176,3 +176,7 @@ cython_debug/
 rippled
 *.DS_Store
 byzzfuzz
+
+
+1.7.0
+2.6.0

@@ -2,7 +2,7 @@
 
 use crate::packet_client::PacketClient;
 use bytes::BytesMut;
-use log::{debug, error, info};
+use log::error;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -118,7 +118,6 @@ impl Node {
             ));
             read_threads.push(read_thread);
             peer_to_write_half.insert(peer.port, peer.write_half);
-            info!("Inserted write half for port {} (node {}).", peer.port, self.port);
         }
 
         let write_thread = tokio::spawn(Self::write_loop(receiver, peer_to_write_half));
@@ -144,24 +143,20 @@ impl Node {
         loop {
             let mut buffer = BytesMut::with_capacity(SIZE_64KB);
             buffer.resize(SIZE_64KB, 0);
-            let size_read = match read_half.read(buffer.as_mut()).await {
-                Ok(n) => n,
-                Err(e) => {
-                    error!("Could not read from SSL stream (from {} to {}): {}", peer_from_port, peer_to_port, e);
-                    // On read error, stop this read loop gracefully.
-                    return;
-                }
-            };
+            let size_read = read_half
+                .read(buffer.as_mut())
+                .await
+                .expect("Could not read from SSL stream");
 
             let read_moment = Instant::now();
 
             buffer.resize(size_read, 0);
             if size_read == 0 {
-                // Remote closed the stream. Log, notify the write loop to remove the write half, and exit the read loop cleanly.
-                info!("SslStream from peer {} to peer {} has been closed (read returned 0).", peer_from_port, peer_to_port);
-                // Send a control message (empty data) to the write loop so it can remove the associated write half.
-                let _ = message_queue_sender.send(Message::new(Vec::new(), peer_to_port));
-                return;
+                // Remote closed the stream. This used to be a panic in the original implementation.
+                panic!(
+                    "SslStream from peer {} to peer {} has been closed.",
+                    peer_from_port, peer_to_port
+                );
             }
 
             tokio::spawn(Self::handle_message_and_action(
@@ -287,23 +282,12 @@ impl Node {
                 }
             };
 
-            // Interpret an empty-data message as a control message requesting removal of the write half.
-            if message.data.is_empty() {
-                if peer_to_write_half.remove(&message.peer_to_port).is_some() {
-                    info!("Removed write half for port {} due to remote close/control message.", message.peer_to_port);
-                } else {
-                    debug!("Received remove control for port {} but no write half was present.", message.peer_to_port);
-                }
-                continue;
-            }
-
             match peer_to_write_half.get_mut(&message.peer_to_port) {
                 Some(write_half) => {
                     if let Err(e) = write_half.write_all(&message.data).await {
                         error!("Could not write to SSL stream for port {}: {}", message.peer_to_port, e);
                         // On write error, drop this write half to avoid spinning on it.
                         peer_to_write_half.remove(&message.peer_to_port);
-                        info!("Removed write half for port {} due to write error.", message.peer_to_port);
                     }
                 }
                 None => {
