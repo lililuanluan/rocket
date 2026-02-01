@@ -151,6 +151,21 @@ class EvoDelayStrategy(Strategy):
         
         # Apply mutation logic in window [byzz_min_seq, byzz_max_seq]
         
+        def handle_mutated_message(mutated_message, mutated_delay, mutated_repeat):
+            
+            if mutated_message is None:
+                mutated_message = message  
+            if mutated_delay is None:
+                mutated_delay = configed_delay
+            if mutated_repeat is None:
+                mutated_repeat = 1
+            encoded = PacketEncoderDecoder.encode_message(
+                mutated_message, message_type
+            )
+            new_packet = packet_pb2.Packet(
+                data=encoded, from_port=packet.from_port, to_port=packet.to_port
+            )
+            return new_packet.data, mutated_delay, mutated_repeat
         if (
             self.byzz_min_seq
             <= current_ledger
@@ -176,20 +191,7 @@ class EvoDelayStrategy(Strategy):
                 method = self.byzz_mutator.get_random_mutation_method(message)
 
                 signed_message, delay, repeat = self.byzz_mutator.mutate(message, method)
-                if signed_message is None:
-                    signed_message = message  
-                if delay is None:
-                    delay = configed_delay
-                if repeat is None:
-                    repeat = 1
-                encoded = PacketEncoderDecoder.encode_message(
-                    signed_message, message_type
-                )
-                new_packet = packet_pb2.Packet(
-                    data=encoded, from_port=packet.from_port, to_port=packet.to_port
-                )
-
-                return new_packet.data, delay, repeat
+                return handle_mutated_message(signed_message, delay, repeat)
 
             elif isinstance(message, ripple_pb2.TMValidation):
                 # logger.debug("Processing TMValidation for possible mutation")
@@ -218,29 +220,13 @@ class EvoDelayStrategy(Strategy):
                 method = self.byzz_mutator.get_random_mutation_method(message)
 
                 signed_message, delay, repeat = self.byzz_mutator.mutate(message, method)
-                if signed_message is None:
-                    signed_message = message  
-                if delay is None:
-                    delay = configed_delay
-                if repeat is None:
-                    repeat = 1
-
-                encoded = PacketEncoderDecoder.encode_message(
-                    signed_message, message_type
-                )
-                new_packet = packet_pb2.Packet(
-                    data=encoded, from_port=packet.from_port, to_port=packet.to_port
-                )
-                return new_packet.data, configed_delay, 1
+                return handle_mutated_message(signed_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMHaveTransactionSet):
-                print(f"TMHaveTransactionSet received, {message}")
-                print(f"hash type {type(message.hash)} value: {message.hash.hex()}")
                 method = self.byzz_mutator.get_random_mutation_method(message)
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
-                print(f"mutated_message: {mutated_message}, delay: {delay}, repeat: {repeat}")
                 
                 # print(f"chosen mutation method: {method}")
-                return packet.data, configed_delay, 1
+                return handle_mutated_message(mutated_message, delay, repeat)
             else:
                 # logger.debug(f"[OtherMessage] type={message_type}, delay={configed_delay}ms")
                 return packet.data, configed_delay, 1
