@@ -2,21 +2,14 @@
 
 IMAGE_NAME = xrpld:1.4.0-local
 DOCKERFILE = Dockerfile.rippled-1.4.0
+IMAGE_NAME_1_7 = xrpld:1.7.2-local
+DOCKERFILE_1_7 = Dockerfile.rippled-1.7.2
 RIPPLED_DIR = rippled
 
 .PHONY: all build clean force-build
 
 all: build
 
-<<<<<<< HEAD
-build: $(DOCKERFILE) $(RIPPLED_DIR)
-	@UID=$$(id -u); GID=$$(id -g); \
-	docker build -f $(DOCKERFILE) -t $(IMAGE_NAME) \
-	  --build-arg UID=$$UID \
-	  --build-arg GID=$$GID \
-	  .
-
-=======
 build: build-1.4 build-1.7
 
 build-1.4: $(DOCKERFILE) $(RIPPLED_DIR)
@@ -31,20 +24,10 @@ build-1.7: $(DOCKERFILE_1_7) $(RIPPLED_DIR)
 	  --build-arg GID=$$(id -g) \
 	  .
 
->>>>>>> 8c00566 (build images better)
 $(RIPPLED_DIR):
 	@echo "Note: rippled source should be copied via Dockerfile"
 	git clone git@github.com:XRPLF/rippled.git || true
 
-<<<<<<< HEAD
-force-build:
-	@UID=$$(id -u); GID=$$(id -g); \
-	docker build --no-cache -f $(DOCKERFILE) -t $(IMAGE_NAME) \
-	  --build-arg UID=$$UID \
-	  --build-arg GID=$$GID \
-	  .
-
-=======
 force-build: force-build-1.4 force-build-1.7
 
 force-build-1.4:
@@ -59,7 +42,7 @@ force-build-1.7:
 	  --build-arg GID=$$(id -g) \
 	  .
 
->>>>>>> 8c00566 (build images better)
 clean:
-# 	rm -rf $(RIPPLED_DIR)
+#	 rm -rf $(RIPPLED_DIR)
 	docker rmi $(IMAGE_NAME) || true
+	docker rmi $(IMAGE_NAME_1_7) || true
