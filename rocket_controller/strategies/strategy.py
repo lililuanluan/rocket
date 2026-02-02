@@ -256,6 +256,21 @@ class Strategy(ABC):
                             logger.debug(f"_save_validator_log_async: docker logs failed for {container_name}: {e}")
                 except Exception:
                     logger.exception(f"Failed to save validator log for node {node_idx}")
+
+                # Also periodically fetch the in-container debug logfile so we preserve debug logs
+                debug_file_path = os.path.join(out_dir, f"validator_{node_idx}_debug.txt")
+                try:
+                    with open(debug_file_path, "w") as df:
+                        try:
+                            subprocess.run([
+                                'docker', 'exec', '-i', container_name,
+                                'cat', '/var/log/rippled/debug.log'
+                            ], stdout=df, stderr=df, check=False, text=True)
+                        except Exception as e:
+                            logger.debug(f"_save_validator_log_async: docker exec debug log failed for {container_name}: {e}")
+                except Exception:
+                    logger.exception(f"Failed to save validator debug log for node {node_idx}")
+
                 time.sleep(5)
         for idx, _ in enumerate(validator_node_list):
             t = threading.Thread(target=_worker, args=(idx,), name=f"ValidatorLogSaver-{idx}", daemon=True)
