@@ -25,6 +25,10 @@
 [] 把transaction提交用线程执行，在锁区只负责更新 transaction_sent这个集合
 [] 现在的提交逻辑是死循环，容易把程序阻塞，需要改。
 
+[] 如果interceptor panic，进行错误处理
+[] fitness functions
+
+
 ## 提交jpynb文件
 ```bash
 

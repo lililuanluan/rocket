@@ -15,7 +15,7 @@ base_port_ws_admin: 62000
 base_port_rpc: 63000
 
 # The number of validator nodes to configure and start
-number_of_nodes: 8
+number_of_nodes: 6
 
 # Optional: define network partitions (list of lists of node indices). If empty,
 # all nodes are considered part of the same partition. This key is required by

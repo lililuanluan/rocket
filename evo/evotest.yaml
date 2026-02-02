@@ -13,7 +13,7 @@ max_ledger_seq: 15
 encoding:
   # Delay
   min_value: 0 # Minimum delay value in milliseconds
-  max_value: 1000 # Maximum delay value in milliseconds
+  max_value: 100 # Maximum delay value in milliseconds
 
 
 rust_log_level: "info"
@@ -27,3 +27,7 @@ byzz_max_seq: 10
 strategy: evo
 
 timeout_sec_per_seq: 30
+
+
+# time proposal 
+fitness_function: "time"
