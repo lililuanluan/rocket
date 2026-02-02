@@ -102,7 +102,11 @@ class EvoDelayStrategy(Strategy):
             )
         )
         return self.delays[index]
-        
+
+
+    def get_mutation_method(self, message) -> str:
+        method = self.byzz_mutator.get_mutation_method_50_percent(message)
+        return method
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
@@ -188,7 +192,7 @@ class EvoDelayStrategy(Strategy):
                 #     f"Mutating propose from non-byzz node {original_sender}, sender_node_id={sender_node_id}"
                 # )
                 # message sent by byzz nodes:
-                method = self.byzz_mutator.get_random_mutation_method(message)
+                method = self.get_mutation_method(message)
 
                 signed_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(signed_message, delay, repeat)
@@ -217,12 +221,12 @@ class EvoDelayStrategy(Strategy):
                 # logger.debug(
                 #     f"Mutating validation from non-byzz node {original_sender}, sender_node_id={sender_node_id}"
                 # )
-                method = self.byzz_mutator.get_random_mutation_method(message)
+                method = self.get_mutation_method(message)
 
                 signed_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(signed_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMHaveTransactionSet):
-                method = self.byzz_mutator.get_random_mutation_method(message)
+                method = self.get_mutation_method(message)
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 
                 # print(f"chosen mutation method: {method}")
