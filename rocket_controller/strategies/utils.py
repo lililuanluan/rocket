@@ -12,6 +12,7 @@ from rocket_controller.helper import MAX_U32
 import random
 from loguru import logger
 import copy
+from threading import Lock
 
 
 def normalize_pubhex(val: Any) -> str:
@@ -52,8 +53,8 @@ BYZZ_MUTATE_METHODS = {
         "replace_ledger_hash",
         "replace_ledger_hash_with_dummy",
         "increment_ledger_sequence",
-        "increment_signing_time",
-        "flip_flags",
+        # "increment_signing_time", # TODO bug
+        # "flip_flags",
         # "repeat_5",
         # TODO closing time
         "drop",
@@ -70,7 +71,14 @@ class ByzzMutator:
     def __init__(self, strategy: Strategy):
         self.strategy = strategy
         self.byzz_mutate_methods = BYZZ_MUTATE_METHODS
+        self.lock = Lock()
         # TODO 确保strategy对象有一些属性，比如old_proposals, dummy_proposal等
+        
+        self.log_debug = False
+
+    def debug(self, *args):
+        if self.log_debug:
+            logger.debug(*args)
 
     def is_sent_from_byzz_node(self, _pub_key: Any) -> bool:
         # Resolve the original sender node id from the signing pubkey using
@@ -94,6 +102,20 @@ class ByzzMutator:
 
         return random.choice(self.byzz_mutate_methods[type(message)])
 
+    def get_mutation_method_50_percent(self, message) -> str:
+        # 50 % do_nothing, 50 % random other
+        if type(message) not in self.byzz_mutate_methods:
+            logger.error(
+                f"No mutation methods defined for message type: {type(message)}"
+            )
+            raise ValueError(
+                f"No mutation methods defined for message type: {type(message)}"
+            )
+
+        if random.random() < 0.5:
+            return "do_nothing"
+        return random.choice([i for i in self.byzz_mutate_methods[type(message)] if i != "do_nothing"])
+
     def mutate_propose_set(
         self, message: ripple_pb2.TMProposeSet, method: str
     ) -> Tuple[Any, Any, Any]:
@@ -112,22 +134,27 @@ class ByzzMutator:
             return None, None, None
 
         elif method == "replace_tx_hash":
-            # replace_txs_with_old_propose returns a new message (non-destructive)
-            new_msg = replace_txs_with_old_propose(
-                msg_copy,
-                self.strategy.old_proposals,
-                self.strategy.dummy_proposal,
-            )
+            self.debug("Mutate TMProposeSet: replace_tx_hash")
+            with self.lock:
+                # replace_txs_with_old_propose returns a new message (non-destructive)
+                new_msg = replace_txs_with_old_propose(
+                    msg_copy,
+                    self.strategy.old_proposals,
+                    self.strategy.dummy_proposal,
+                )
             signed_message = sign_message(new_msg)
             return signed_message, None, None
         elif method == "increment_propose_seq":
+            self.debug("Mutate TMProposeSet: increment_propose_seq")
             new_msg = increment_propose_seq(msg_copy)
             signed_message = sign_message(new_msg)
             return signed_message, None, None
         elif method == "repeat_5":
+            self.debug("Mutate TMProposeSet: repeat_5")
             return None, None, 5
         elif method == "drop":
-            return None, MAX_U32, None
+            self.debug("Mutate TMProposeSet: drop")
+            return None, MAX_U32, 0
         else:
             raise ValueError(f"Unsupported mutation method for TMProposeSet: {method}")
 
@@ -135,11 +162,12 @@ class ByzzMutator:
         self, message: ripple_pb2.TMValidation, method: str
     ) -> Tuple[Any, Any, Any]:
         def sign_message(parsed):
+            private_key = self.strategy.network.public_to_private_key_map[
+                normalize_pubhex(parsed["SigningPubKey"])
+            ]
             return PacketEncoderDecoder.sign_message(
                 parsed,
-                self.strategy.network.public_to_private_key_map[
-                    normalize_pubhex(parsed.get("SigningPubKey", ""))
-                ],
+                private_key,
             )
 
         parsed = PacketEncoderDecoder.decode_validation(message)
@@ -147,11 +175,14 @@ class ByzzMutator:
         if method == "do_nothing":
             return None, None, None
         elif method == "increment_ledger_sequence":
+            self.debug("Mutate TMValidation: increment_ledger_sequence")
             parsed["LedgerSequence"] = int(parsed.get("LedgerSequence", 0)) + 1
             return sign_message(parsed), None, None
         elif method == "replace_ledger_hash":
+            self.debug("Mutate TMValidation: replace_ledger_hash")
             current_hash = parsed.get("LedgerHash", "")
-            old_hashes = self.strategy.old_validation_hashes.get(ldgr_seq, set())
+            with self.lock:
+                old_hashes = self.strategy.old_validation_hashes.get(ldgr_seq, set())
             candidate_hashes = [h for h in old_hashes if h != current_hash]
             if candidate_hashes:
                 parsed["LedgerHash"] = random.choice(candidate_hashes)
@@ -159,22 +190,28 @@ class ByzzMutator:
                 parsed["LedgerHash"] = self.strategy.dummy_validation
             return sign_message(parsed), None, None
         elif method == "replace_ledger_hash_with_dummy":
+            self.debug("Mutate TMValidation: replace_ledger_hash_with_dummy")
             parsed["LedgerHash"] = self.strategy.dummy_validation
             return sign_message(parsed), None, None
         elif method == "increment_signing_time":
+            self.debug("Mutate TMValidation: increment_signing_time")
             parsed["SigningTime"] = int(parsed.get("SigningTime", 0)) + 1
             return sign_message(parsed), None, None
         elif method == "flip_flags":
+            self.debug("Mutate TMValidation: flip_flags")
             # flip a bit of parsed["Flags"]
             flags = int(parsed.get("Flags", 0))
             bit_to_flip = 1 << random.randint(0, 31)
             parsed["Flags"] = flags ^ bit_to_flip
             return sign_message(parsed), None, None
         elif method == "repeat_5":
+            self.debug("Mutate TMValidation: repeat_5")
             return None, None, 5
         elif method == "drop":
-            return None, MAX_U32, None
+            self.debug("Mutate TMValidation: drop")
+            return None, MAX_U32, 0
         else:
+            logger.error(f"Unsupported mutation method for TMValidation: {method}")
             raise ValueError(f"Unsupported mutation method for TMValidation: {method}")
 
     def mutate_have_transaction_set(
@@ -184,7 +221,7 @@ class ByzzMutator:
         if method == "do_nothing":
             return None, None, None
         elif method == "drop":
-            return None, MAX_U32, None
+            return None, MAX_U32, 0
         elif method == "to_tsneed_dummy":
             # Work on a copy and return it
             msg_copy = copy.deepcopy(message)
