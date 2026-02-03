@@ -28,6 +28,8 @@
 [] 如果interceptor panic，进行错误处理
 [] fitness functions
 
+[] TODO 写一个脚本，检查actions文件，mutation是否起作用了？
+
 
 ## 提交jpynb文件
 ```bash

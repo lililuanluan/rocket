@@ -44,6 +44,8 @@ GENERATION_DATA = []
 # CSV 文件路径（用于实时写入）
 CSV_FILE_PATH = None
 
+BYZZ_NODES = None
+
 
 def cleanup_interceptor_processes():
     """清理所有 rocket-interceptor 进程"""
@@ -226,28 +228,22 @@ def evaluate_individual(individual, generation, individual_id, config):
     run_rocket(log_dir, MAX_ITERATION, MAX_LEDGER_SEQ, SEED, list(individual), config)
 
     # 评估结果
-    eval_result = evaluate_log(LOGS_DIR / log_dir)
+    eval_result = evaluate_log(LOGS_DIR / log_dir, byzz_nodes=BYZZ_NODES)
 
     # 保存到 individual 对象上
     individual.log_dir = log_dir
     individual.evaluation_result = eval_result
-
-    # 计算 fitness（DEAP 要求返回 tuple）
-    if FITNESS_FUNCTION == "time":
+    
+    if FITNESS_FUNCTION in eval_result:
         fitness = (
-            eval_result["mean_validation_time"]
-            if eval_result["mean_validation_time"]
-            else 0.0
-        )
-    elif FITNESS_FUNCTION == "proposal":
-        fitness = (
-            eval_result["propose_set_count"]
-            if eval_result["propose_set_count"]
+            eval_result[FITNESS_FUNCTION]
+            if eval_result[FITNESS_FUNCTION]
             else 0.0
         )
     else:
-        fitness = 0.0
+        raise ValueError(f"Fitness function '{FITNESS_FUNCTION}' not found in evaluation result")
 
+    
     print(f"Individual fitness: {fitness}")
 
     # 实时写入 CSV（传递完整的 eval_result）
@@ -281,7 +277,7 @@ def init_csv_file(output_dir):
             "fitness_type",
             "fitness",
             "mean_validation_time",
-            "propose_set_count",
+            "num_propose_set",
             "total_failures",
         ]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -307,7 +303,7 @@ def write_individual_to_csv(generation, individual_id, fitness, eval_result):
             "fitness_type",
             "fitness",
             "mean_validation_time",
-            "propose_set_count",
+            "num_propose_set",
             "total_failures",
         ]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -327,7 +323,7 @@ def write_individual_to_csv(generation, individual_id, fitness, eval_result):
                 "fitness_type": FITNESS_FUNCTION,  # 'time' or 'proposal'
                 "fitness": fitness_formatted,
                 "mean_validation_time": mean_time_formatted,
-                "propose_set_count": eval_result["propose_set_count"],
+                "num_propose_set": eval_result["num_propose_set"],
                 "total_failures": eval_result["total_failures"],
             }
         )
@@ -341,6 +337,7 @@ def main(config):
     global ENCODING_MIN, ENCODING_MAX, ENCODING_LENGTH
     global START_DATETIME, SEED, MAX_ITERATION, MAX_LEDGER_SEQ, FITNESS_FUNCTION
     global EVALUATION_COUNTER, GENERATION_DATA, CSV_FILE_PATH
+    global BYZZ_NODES
 
     # 重置全局变量
     GENERATION_DATA = []
@@ -355,6 +352,10 @@ def main(config):
     SEED = config.get("seed", 42)
     random.seed(SEED)
     np.random.seed(SEED)
+
+    with open("network.yaml", "r") as f:
+        network_config = yaml.safe_load(f)
+        BYZZ_NODES = network_config["byzz_nodes"]
 
     START_DATETIME = datetime.now().strftime("%Y_%m_%d_%Hh%Mm")
 
@@ -495,7 +496,7 @@ def main(config):
         result = best_ind.evaluation_result
         # evaluate_log returns a dict; use key access to avoid AttributeError
         print(f"  Mean validation time: {result.get('mean_validation_time')}")
-        print(f"  Propose set count: {result.get('propose_set_count')}")
+        print(f"  Propose set count: {result.get('num_propose_set')}")
         print(f"  Total failures: {result.get('total_failures')}")
 
     # 打印进化日志

@@ -29,5 +29,13 @@ strategy: evo
 timeout_sec_per_seq: 30
 
 
-# time proposal 
-fitness_function: "time"
+# "num_propose_set"
+# "num_getledger_hashes"
+# "num_getledger_messages"
+# "mean_validation_time"
+# "var_validation_time"
+# "validation_distribution_entropy"
+# "message_entropy_integral"
+# "message_entropy_average"
+# "markov_matrix_similarity"
+fitness_function: "num_getledger_hashes"
