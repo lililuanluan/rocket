@@ -45,7 +45,8 @@ if [[ -n "${ENV_ARGS-}" ]]; then
   echo "[entrypoint] Starting rippled with ENV_ARGS: ${ENV_ARGS}"
   # split ENV_ARGS into array
   read -r -a _env_args <<< "${ENV_ARGS}"
-  exec rippled "${_env_args[@]}" --net --conf /config/rippled.cfg
+  # 注意：不要使用 --net 参数，否则会尝试从网络同步账本，导致启动变慢
+  exec rippled "${_env_args[@]}" --conf /config/rippled.cfg
 else
-  exec rippled --net --conf /config/rippled.cfg
+  exec rippled --conf /config/rippled.cfg
 fi
