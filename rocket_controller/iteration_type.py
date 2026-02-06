@@ -38,7 +38,8 @@ class TimeBasedIteration:
         timeout_seconds: int = 60,
         ledger_timeout: bool = False,
         max_ledger_seq: int = -1,
-        strategy_stopper = None # func in strategy to stop ws subscriber or other things
+        strategy_stopper = None, # func in strategy to stop ws subscriber or other things
+        grpc_port : int = 50051
     ):
         """
         Init Iteration Type with an InterceptorManager attached.
@@ -58,8 +59,8 @@ class TimeBasedIteration:
         self._timer: threading.Timer | None = None
         self._timeout_seconds = timeout_seconds
         self.ledger_timeout = ledger_timeout
-
-        self._interceptor_manager = InterceptorManager()
+        self.grpc_port = grpc_port
+        self._interceptor_manager = InterceptorManager(grpc_port=self.grpc_port)
         self._validator_nodes: List[ValidatorNode] | None = None
         self._log_dir: str | None = None
 
@@ -574,7 +575,8 @@ class LedgerBasedIteration(TimeBasedIteration):
         max_iterations: int,
         max_ledger_seq: int = 10,
         ledger_timeout_seconds: int = 60,
-        strategy_stopper = None # func in strategy to stop ws subscriber or other things
+        strategy_stopper = None, # func in strategy to stop ws subscriber or other things
+        grpc_port : int = 50051
     ):
         """
         Init the TimeIteration class with a specified timeout in seconds.
@@ -589,7 +591,8 @@ class LedgerBasedIteration(TimeBasedIteration):
             timeout_seconds=ledger_timeout_seconds,
             ledger_timeout=True,
             max_ledger_seq=max_ledger_seq,
-            strategy_stopper=strategy_stopper
+            strategy_stopper=strategy_stopper,
+            grpc_port=grpc_port
         )
 
 

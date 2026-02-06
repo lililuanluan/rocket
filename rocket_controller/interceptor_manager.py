@@ -5,6 +5,7 @@ from subprocess import PIPE, Popen, TimeoutExpired
 from sys import platform
 from threading import Thread
 import sys
+import os
 
 import docker
 from docker import DockerClient
@@ -14,9 +15,10 @@ from loguru import logger
 class InterceptorManager:
     """Class for interacting with the network packet interceptor subprocess."""
 
-    def __init__(self):
+    def __init__(self, grpc_port: int = 50051):
         """Initialize the InterceptorManager, with None for the process variable."""
         self.process: Popen | None = None
+        self.grpc_port = grpc_port
 
     @staticmethod
     def __stream_reader(pipe, stream):
@@ -80,6 +82,8 @@ class InterceptorManager:
             else "/rocket_interceptor/rocket-interceptor.exe"
         )
         logger.info("Starting interceptor")
+        process_env = os.environ.copy()
+        process_env["ROCKET_GRPC_PORT"] = str(self.grpc_port)
         try:
             self.process = Popen(
                 [f"./{file}"],
@@ -88,6 +92,7 @@ class InterceptorManager:
                 stdout=PIPE,
                 stderr=PIPE,
                 text=True,
+                env=process_env,
             )
         except FileNotFoundError as exc:
             logger.error(

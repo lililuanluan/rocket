@@ -43,6 +43,7 @@ class Strategy(ABC):
         log_dir: str | None = None,
         max_iteration: int | None = None,
         max_ledger_seq: int | None = None,
+        grpc_port: int | None = None,
     ):
         """
         Initialize the Strategy interface with necessary fields.
@@ -106,7 +107,7 @@ class Strategy(ABC):
                 max_ledger_seq=self.max_ledger_seq,
                 ledger_timeout_seconds=self.max_ledger_seq*timeout_sec_per_seq,
                 strategy_stopper=self.strategy_stopper,
-                
+                grpc_port=grpc_port,
             )
             if iteration_type is None
             else iteration_type

@@ -98,7 +98,15 @@ def parse_args() -> argparse.Namespace:
         help="Maximum ledger sequence number (for LedgerBasedIteration).",
         metavar="N",
     )
+    parser.add_argument(
+        "--grpc-port",
+        type=int,
+        default=50051,
+        help="The gRPC port for the controller to listen on. Default is 50051.",
+        metavar="PORT",
+    )
 
+    # note: add_argument will replace - with _ automatically
     return parser.parse_args()
 
 
@@ -194,5 +202,7 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
         params_dict["max_iteration"] = args.max_iteration
     if args.max_ledger_seq:
         params_dict["max_ledger_seq"] = args.max_ledger_seq
+    if args.grpc_port:
+        params_dict["grpc_port"] = args.grpc_port
 
     return params_dict

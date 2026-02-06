@@ -4,6 +4,7 @@ use crate::packet_client::proto::{Config, GetConfig, PacketAck};
 use log::{debug, info};
 use proto::packet_service_client::PacketServiceClient;
 use proto::{Packet, ValidatorNodeInfo};
+use std::env;
 
 pub mod proto {
     tonic::include_proto!("packet");
@@ -26,7 +27,17 @@ impl Clone for PacketClient {
 impl PacketClient {
     /// Initializes a new PacketClient that connects to the controller.
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let client = PacketServiceClient::connect("http://[::1]:50051").await?;
+        // let client = PacketServiceClient::connect("http://[::1]:50051").await?;
+        // here, instead of hardcoding grpc port, we read it from env var
+        // if we read from files, multiple instances of interceptor would need to read different config files
+        let grpc_port = env::var("ROCKET_GRPC_PORT")
+            .unwrap_or_else(|_| "50051".to_string())
+            .parse::<u16>()
+            .unwrap_or(50051);
+
+        let addr = format!("http://[::1]:{}", grpc_port);
+        info!("Connecting to controller at {}", addr);
+        let client = PacketServiceClient::connect(addr).await?;
         Ok(Self { client })
     }
 

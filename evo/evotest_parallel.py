@@ -197,6 +197,8 @@ def run_rocket(log_dir, max_iteration, max_ledger_seq, seed, encoding, config):
         str(max_iteration),
         "--max-ledger-seq",
         str(max_ledger_seq),
+        "--grpc-port",
+        str(51453),
     ]
 
     print(f"running command: {' '.join(cmd)}")
