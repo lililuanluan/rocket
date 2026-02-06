@@ -12,7 +12,7 @@ RIPPLED_DIR = rippled
 
 all: build
 
-build: build-1.4 build-1.7 build-2.6
+build:build-2.6 # build-1.4 build-1.7 
 
 build-1.4: $(DOCKERFILE) $(RIPPLED_DIR)
 	@docker build -f $(DOCKERFILE) -t $(IMAGE_NAME) \

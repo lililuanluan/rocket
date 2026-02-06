@@ -69,6 +69,11 @@ RUN apt-get update && apt-get install -y \
 # 从构建阶段复制 rippled 二进制文件
 COPY --from=builder /opt/rippled/.build/rippled /usr/local/bin/rippled
 
+# 复制默认配置文件（当 /config/ 下文件不存在时使用）
+RUN mkdir -p /opt/ripple/etc
+COPY rippled_default_2.6.0.cfg /opt/ripple/etc/rippled.cfg
+COPY validators_default_2.6.0.txt /opt/ripple/etc/validators.txt
+
 # 复制 entrypoint
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /usr/local/bin/rippled /entrypoint.sh
@@ -79,7 +84,7 @@ RUN mkdir -p /config/db /var/lib/rippled/db /var/log/rippled
 WORKDIR /config
 
 # 持久化目录
-VOLUME ["/config/db", "/var/lib/rippled/db", "/var/log/rippled"]wd wd
+VOLUME ["/config/db", "/var/lib/rippled/db", "/var/log/rippled"]
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD []
