@@ -71,9 +71,16 @@ class InterceptorManager:
     def cleanup_docker_containers(container_names: list[str]):
         """Stop the validator containers."""
         docker_client: DockerClient = docker.from_env()
-        for c in docker_client.containers.list():
-            if c.name in container_names:
-                c.stop()
+        for name in container_names:
+            try:
+                container = docker_client.containers.get(name)
+                container.stop()
+                container.remove(force=True)
+            except docker.errors.NotFound:
+                # 容器可能已被其他 worker 删除
+                pass
+            except Exception as e:
+                logger.warning(f"Error cleaning up container {name}: {e}")
 
     def start_new(self):
         """Starts the rocket-interceptor subprocess, and spawns a thread checking for output."""
