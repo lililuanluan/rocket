@@ -44,6 +44,7 @@ class Strategy(ABC):
         max_iteration: int | None = None,
         max_ledger_seq: int | None = None,
         grpc_port: int | None = None,
+        instance_id: str | None = None,
     ):
         """
         Initialize the Strategy interface with necessary fields.
@@ -101,6 +102,7 @@ class Strategy(ABC):
         self.log_dir = log_dir if log_dir is not None else self.start_datetime
         self.max_ledger_seq = max_ledger_seq if max_ledger_seq is not None else 10
         timeout_sec_per_seq = self.params.get("timeout_sec_per_seq", 30)
+        self.instance_id = instance_id if instance_id is not None else ""
         self.iteration_type = (
             LedgerBasedIteration(
                 max_iterations=max_iteration if max_iteration is not None else 10,
@@ -108,6 +110,7 @@ class Strategy(ABC):
                 ledger_timeout_seconds=self.max_ledger_seq*timeout_sec_per_seq,
                 strategy_stopper=self.strategy_stopper,
                 grpc_port=grpc_port,
+                instance_id=instance_id,
             )
             if iteration_type is None
             else iteration_type
@@ -240,10 +243,10 @@ class Strategy(ABC):
     def _save_validator_log_background(self, validator_node_list: List[ValidatorNode]):
         import os
         import subprocess
-        
-        def _worker(node_idx):
+        instance_id = self.instance_id
+        def _worker(node: ValidatorNode):
             out_dir = os.path.join("./logs/" + self.log_dir, f"iteration-{self.iteration_type.cur_iteration}", "validator_live_logs")
-            container_name = f"validator_{node_idx}"
+            container_name = node.get_container_name(instance_id)
             os.makedirs(out_dir, exist_ok=True)
             fname = f"validator_{node.id}_log"
             log_file_path = os.path.join(out_dir, fname + ".txt")

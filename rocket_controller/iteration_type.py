@@ -39,7 +39,8 @@ class TimeBasedIteration:
         ledger_timeout: bool = False,
         max_ledger_seq: int = -1,
         strategy_stopper = None, # func in strategy to stop ws subscriber or other things
-        grpc_port : int = 50051
+        grpc_port : int = 50051,
+        instance_id: str = "",
     ):
         """
         Init Iteration Type with an InterceptorManager attached.
@@ -60,7 +61,8 @@ class TimeBasedIteration:
         self._timeout_seconds = timeout_seconds
         self.ledger_timeout = ledger_timeout
         self.grpc_port = grpc_port
-        self._interceptor_manager = InterceptorManager(grpc_port=self.grpc_port)
+        self.instance_id = instance_id
+        self._interceptor_manager = InterceptorManager(grpc_port=self.grpc_port, instance_id=self.instance_id)
         self._validator_nodes: List[ValidatorNode] | None = None
         self._log_dir: str | None = None
 
@@ -221,7 +223,8 @@ class TimeBasedIteration:
         )
         self.strategy_stopper() if self.strategy_stopper else None
         self._interceptor_manager.stop()
-        self._interceptor_manager.cleanup_docker_containers()
+        container_names = [node.get_container_name(self.instance_id) for node in self._validator_nodes] if self._validator_nodes else []
+        self._interceptor_manager.cleanup_docker_containers(container_names)
 
     def _terminate_server(self):
         """Terminate the gRPC server."""
@@ -308,9 +311,9 @@ class TimeBasedIteration:
 
             # Pull logs from each validator node for the previous iteration
             if self._validator_nodes:
-                for i, node in enumerate(self._validator_nodes):
-                    container_name = f"validator_{i}"
-                    log_file_path = os.path.join("./logs/" + self._log_dir, f"iteration-{self.cur_iteration - 1}", "validator_logs", f"validator_{i}_log.txt")
+                for node in self._validator_nodes:
+                    container_name = node.get_container_name(self.instance_id)
+                    log_file_path = os.path.join("./logs/" + self._log_dir, f"iteration-{self.cur_iteration - 1}", "validator_logs", f"{container_name}_log.txt")
                     os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
                     try:
                         with open(log_file_path, 'w') as f:
@@ -576,7 +579,8 @@ class LedgerBasedIteration(TimeBasedIteration):
         max_ledger_seq: int = 10,
         ledger_timeout_seconds: int = 60,
         strategy_stopper = None, # func in strategy to stop ws subscriber or other things
-        grpc_port : int = 50051
+        grpc_port : int = 50051,
+        instance_id: str = "",
     ):
         """
         Init the TimeIteration class with a specified timeout in seconds.
@@ -592,7 +596,8 @@ class LedgerBasedIteration(TimeBasedIteration):
             ledger_timeout=True,
             max_ledger_seq=max_ledger_seq,
             strategy_stopper=strategy_stopper,
-            grpc_port=grpc_port
+            grpc_port=grpc_port,
+            instance_id=instance_id,
         )
 
 

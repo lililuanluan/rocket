@@ -15,10 +15,11 @@ from loguru import logger
 class InterceptorManager:
     """Class for interacting with the network packet interceptor subprocess."""
 
-    def __init__(self, grpc_port: int = 50051):
+    def __init__(self, grpc_port: int = 50051, instance_id: str = ""):
         """Initialize the InterceptorManager, with None for the process variable."""
         self.process: Popen | None = None
         self.grpc_port = grpc_port
+        self.instance_id = instance_id
 
     @staticmethod
     def __stream_reader(pipe, stream):
@@ -67,11 +68,11 @@ class InterceptorManager:
             logger.exception("Error while waiting for interceptor process")
 
     @staticmethod
-    def cleanup_docker_containers():
+    def cleanup_docker_containers(container_names: list[str]):
         """Stop the validator containers."""
         docker_client: DockerClient = docker.from_env()
         for c in docker_client.containers.list():
-            if "validator_" in c.name:
+            if c.name in container_names:
                 c.stop()
 
     def start_new(self):
@@ -84,6 +85,7 @@ class InterceptorManager:
         logger.info("Starting interceptor")
         process_env = os.environ.copy()
         process_env["ROCKET_GRPC_PORT"] = str(self.grpc_port)
+        process_env["ROCKET_INSTANCE_ID"] = self.instance_id
         try:
             self.process = Popen(
                 [f"./{file}"],
