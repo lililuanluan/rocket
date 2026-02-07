@@ -117,6 +117,8 @@ pub struct DockerNetwork {
     pub containers: Vec<DockerContainer>,
     /// A Docker object to access the Docker API.
     docker: Docker,
+    /// Instance ID for parallel execution.
+    instance_id: String,
 }
 
 impl DockerNetwork {
@@ -125,10 +127,14 @@ impl DockerNetwork {
     /// # Parameters
     /// * 'config' - the config to be used to set up the network.
     pub fn new(config: proto::Config) -> DockerNetwork {
+        // instance id: if not in env, set to empty string
+        let instance_id = std::env::var("ROCKET_INSTANCE_ID")
+            .unwrap_or_else(|_| "".to_string());
         DockerNetwork {
             config,
             containers: Vec::new(),
             docker: Docker::connect_with_local_defaults().unwrap(),
+            instance_id,
         }
     }
 
@@ -204,7 +210,14 @@ impl DockerNetwork {
                 for name in names {
                     debug!("{}", name);
                     // Docker container names always start with a slash
-                    if name.starts_with("/validator_") || name.eq("/key_generator") {
+                    let instance_id = &self.instance_id;
+                    let should_stop = if instance_id.is_empty() {
+                        name.starts_with("/validator_") || name.eq("/key_generator")
+                    } else {
+                        name.starts_with(format!("/{instance_id}_validator_").as_str())
+                            || name.eq(format!("/{instance_id}_key_generator").as_str())
+                    };
+                    if should_stop {
                         debug!(
                             "Stopping container (auto removed): {}",
                             container.id.clone().unwrap().as_str()
@@ -383,7 +396,17 @@ impl DockerNetwork {
     /// * If an error occurred while creating or executing the 'validation_create' command.
     /// * If an error occurred while removing the Docker container who generated the keys.
     async fn generate_keys(&self, n: u16) -> Vec<ValidatorKeyData> {
-        let container_name = String::from("key_generator");
+        let container_name = if self.instance_id.is_empty() {
+            String::from("key_generator")
+        } else {
+            format!("{}_key_generator", self.instance_id)
+        };
+
+        // Create the config directory for key_generator container (required for bind mount)
+        let config_dir = format!("network/{}/config", container_name.as_str());
+        fs::create_dir_all(&config_dir).expect("Could not create key_generator config directory");
+
+
         let create_options = CreateContainerOptions {
             name: container_name.as_str(),
             ..Default::default()
@@ -511,7 +534,11 @@ impl DockerNetwork {
 
         let mut ret: Vec<(String, ValidatorKeyData)> = Vec::new();
         for (i, key) in keys.iter().enumerate() {
-            let container_name = format!("validator_{}", i);
+            let container_name = if self.instance_id.is_empty() {
+                format!("validator_{}", i)
+            } else {
+                format!("{}_validator_{}", self.instance_id, i)
+            };
             let new_config_contents = base_config_contents
                 .clone()
                 .replace("{validation_seed}", key.validation_seed.as_str());
