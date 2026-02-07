@@ -37,7 +37,6 @@ loguru==0.7.2
 MarkupSafe==2.1.5
 matplotlib==3.10.7
 maturin==1.9.6
--e git+ssh://git@github.com/lililuanluan/rocket.git@59a5e5dba58b613fc977062566dc6ca1b22bc539#egg=maturin_test&subdirectory=serialize
 mypy==1.10.0
 mypy-extensions==1.0.0
 numpy==2.3.4
