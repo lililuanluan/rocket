@@ -283,7 +283,7 @@ def get_message_entropy_integration(df_exec):
 
 
 # 对每个节点发送/接收的消息组成的序列，计算马尔可夫转移矩阵，然后求所有节点矩阵的相似度
-def get_msg_sending_markov_matrix_similarity(df_exec):
+def get_msg_sending_markov_matrix_non_similarity(df_exec):
     """
     计算所有节点马尔可夫转移矩阵的平均相似度
 
@@ -375,7 +375,7 @@ def get_msg_sending_markov_matrix_similarity(df_exec):
     # 5. 返回平均相似度
     mean_similarity = np.mean(similarities) if similarities else 0.0
 
-    return mean_similarity
+    return 1 - mean_similarity
 
 
 def get_test_total_time(f):
@@ -445,8 +445,8 @@ def evaluate_log(log_dir, byzz_nodes: list):
     print(f"Message entropy integral: {message_entropy_integral}")
     print(f"Message entropy average: {message_entropy_average}")
 
-    markov_matrix_similarity = get_msg_sending_markov_matrix_similarity(df_action)
-    print(f"Markov matrix similarity: {markov_matrix_similarity}")
+    markov_matrix_non_similarity = get_msg_sending_markov_matrix_non_similarity(df_action)
+    print(f"Markov matrix non-similarity: {markov_matrix_non_similarity}")
 
     # 读取 aggregated_spec_check_log.json（注意：这是一个对象，不是数组）
     aggregate_spec_check_path = f"{log_dir}/aggregated_spec_check_log.json"
@@ -479,7 +479,7 @@ def evaluate_log(log_dir, byzz_nodes: list):
         "validation_distribution_entropy": validation_distribution_entropy,
         "message_entropy_integral": message_entropy_integral,
         "message_entropy_average": message_entropy_average,
-        "markov_matrix_similarity": markov_matrix_similarity,
+        "markov_matrix_non_similarity": markov_matrix_non_similarity,
     }
 
     res.update(
