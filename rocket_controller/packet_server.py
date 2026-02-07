@@ -107,7 +107,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             ValidatorNodeInfoAck: An acknowledgement.
         """
         validator_node_list: List[ValidatorNode] = []
-        for request in request_iterator:
+        for i, request in enumerate(request_iterator):
             validator_node_list.append(
                 ValidatorNode(
                     peer=SocketAddress(
@@ -133,6 +133,7 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
                         validation_public_key=request.validation_public_key,
                         validation_seed=request.validation_seed,
                     ),
+                    id=i,
                 )
             )
         self.strategy.update_network(validator_node_list)

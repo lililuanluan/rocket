@@ -245,7 +245,7 @@ class Strategy(ABC):
             out_dir = os.path.join("./logs/" + self.log_dir, f"iteration-{self.iteration_type.cur_iteration}", "validator_live_logs")
             container_name = f"validator_{node_idx}"
             os.makedirs(out_dir, exist_ok=True)
-            fname = f"validator_{node_idx}_log"
+            fname = f"validator_{node.id}_log"
             log_file_path = os.path.join(out_dir, fname + ".txt")
                 
             while self._save_validator_log_flag.is_set():
@@ -256,10 +256,10 @@ class Strategy(ABC):
                         except Exception as e:
                             logger.debug(f"_save_validator_log_async: docker logs failed for {container_name}: {e}")
                 except Exception:
-                    logger.exception(f"Failed to save validator log for node {node_idx}")
+                    logger.exception(f"Failed to save validator log for node {node.id}")
 
                 # Also periodically fetch the in-container debug logfile so we preserve debug logs
-                debug_file_path = os.path.join(out_dir, f"validator_{node_idx}_debug.txt")
+                debug_file_path = os.path.join(out_dir, f"validator_{node.id}_debug.txt")
                 try:
                     with open(debug_file_path, "w") as df:
                         try:
@@ -270,11 +270,11 @@ class Strategy(ABC):
                         except Exception as e:
                             logger.debug(f"_save_validator_log_async: docker exec debug log failed for {container_name}: {e}")
                 except Exception:
-                    logger.exception(f"Failed to save validator debug log for node {node_idx}")
+                    logger.exception(f"Failed to save validator debug log for node {node.id}")
 
                 time.sleep(5)
-        for idx, _ in enumerate(validator_node_list):
-            t = threading.Thread(target=_worker, args=(idx,), name=f"ValidatorLogSaver-{idx}", daemon=True)
+        for node in validator_node_list:
+            t = threading.Thread(target=_worker, args=(node,), name=f"ValidatorLogSaver-{node.id}", daemon=True)
             t.start()
         
 

@@ -187,10 +187,10 @@ class TimeBasedIteration:
 
     def validate_transactions(self):
         logger.info("Only showing transactions for Node 0. For all nodes see the transaction log.")
-        for node_id in range(len(self._validator_nodes)):
+        for node in self._validator_nodes:
             # ask every node if each transaction is executed
             for sender_alias, receiver_alias, amount, tx_hash, sequence in self.to_be_validated_txs:
-                self.validate_transaction(node_id, sender_alias, receiver_alias, amount, tx_hash, sequence)
+                self.validate_transaction(node.id, sender_alias, receiver_alias, amount, tx_hash, sequence)
 
 
     def validate_transaction(
@@ -261,9 +261,9 @@ class TimeBasedIteration:
             # this may race with on_status_change; ensure consistent state
             _now = datetime.now()
             self.ledger_validation_map = {
-                i: {"seq": 1, "time": _now} for i in range(len(validator_nodes))
+                node.id: {"seq": 1, "time": _now} for node in validator_nodes
             }
-            self.ledger_validation_history = {i: {} for i in range(len(validator_nodes))}
+            self.ledger_validation_history = {node.id: {} for node in validator_nodes}
             self._validator_nodes = validator_nodes
 
     def set_log_dir(self, log_dir: str, byzantine_node_ids: Iterable[int] | None = None):
@@ -344,9 +344,9 @@ class TimeBasedIteration:
         # enumerate over validator nodes safely
         if not self._validator_nodes:
             return
-        for node_idx, _ in enumerate(self._validator_nodes):
+        for node in self._validator_nodes:
             for seq in range(1, self._max_ledger_seq + 1):
-                node_history = self.ledger_validation_history.get(node_idx, {})
+                node_history = self.ledger_validation_history.get(node.id, {})
                 entry = node_history.get(seq)
                 if entry and entry.get("deltatime"):
                     # deltatime is expected to be a timedelta
@@ -362,10 +362,10 @@ class TimeBasedIteration:
                     # No history available for this seq; use 0.0 as conservative default
                     ttc = 0.0
                 t = threading.Thread(
-                    name=f"LogLedgerResult-{node_idx}-{seq}",
+                    name=f"LogLedgerResult-{node.id}-{seq}",
                     target=self._ledger_results.log_ledger_result,
                     args=(
-                        node_idx,
+                        node.id,
                         seq,
                         self._max_ledger_seq,
                         ttc,

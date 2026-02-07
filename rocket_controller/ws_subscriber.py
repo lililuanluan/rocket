@@ -126,7 +126,7 @@ class WSSubscriber:
 
     async def _main(self) -> None:
         tasks: List[asyncio.Task] = []
-        for idx, node in enumerate(self.validator_nodes):
+        for node in self.validator_nodes:
             # Build ordered candidate urls: try public WS first, then admin WS.
             candidates: list[str] = []
 
@@ -151,12 +151,11 @@ class WSSubscriber:
                     pass
 
             if not candidates:
-                logger.debug(f"Skipping WS subscriber for node {idx}: no ws ports available")
+                logger.debug(f"Skipping WS subscriber for node {node.id}: no ws ports available")
                 continue
 
             # Create a single task per node which will attempt the candidate URLs in order.
-            tasks.append(asyncio.create_task(self._listen_node(idx, candidates)))
-
+            tasks.append(asyncio.create_task(self._listen_node(node.id, candidates)))
         if not tasks:
             logger.debug("WSSubscriber: no websocket tasks created")
             return

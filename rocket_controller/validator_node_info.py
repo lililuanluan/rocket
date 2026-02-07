@@ -78,6 +78,7 @@ class ValidatorNode:
         ws_admin: SocketAddress,
         rpc: SocketAddress,
         validator_key_data: ValidatorKeyData,
+        id: int,
     ):
         """
         Initializes a new ValidatorNode object.
@@ -94,6 +95,12 @@ class ValidatorNode:
         self.ws_private = ws_admin
         self.rpc = rpc
         self.validator_key_data = validator_key_data
+        self.id = id
+
+    def get_container_name(self, instance_id: str = "") -> str:
+        if instance_id == "":
+            return f"validator_{self.id}"
+        return f"{instance_id}_validator_{self.id}"
 
     @override
     def __str__(self):
