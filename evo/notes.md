@@ -30,6 +30,8 @@
 
 [] TODO 写一个脚本，检查actions文件，mutation是否起作用了？
 
+[] 将fitness的值也放到log文件夹中
+
 
 ## 提交jpynb文件
 ```bash

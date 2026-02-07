@@ -38,5 +38,7 @@ timeout_sec_per_seq: 30
 # "validation_distribution_entropy"
 # "message_entropy_integral"
 # "message_entropy_average"
-# "markov_matrix_similarity"
-fitness_function: "num_getledger_hashes"
+# "markov_matrix_non_similarity"
+fitness_function: "markov_matrix_non_similarity"
+
+max_parallel_workers: 5  # 同时运行的最大实例数

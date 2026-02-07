@@ -1,6 +1,8 @@
 bin/
 out/
-EvoDelayStrategy.yaml
+EvoDelayStrategy*.yaml
 tmp
 protos/
-RandomByzzStrategy.yaml
+RandomByzzStrategy*.yaml
+network_*.yaml
+tmp/
