@@ -21,6 +21,8 @@ import re
 from pathlib import Path
 from loguru import logger
 
+from google.protobuf.message import Message
+
 TMP_ERROR_FILE = Path(__file__).parent / "../../evo/out/error.log" # TODO add this as a param
 
 
@@ -170,7 +172,7 @@ class EvoDelayStrategy(Strategy):
 
         # possibly mutate
         current_ledger = self.iteration_type.get_ledger_sequence_cur_max()
-        
+
         # # Debug logging for message routing
         # if isinstance(message, ripple_pb2.TMProposeSet):
         #     logger.debug(
@@ -184,11 +186,11 @@ class EvoDelayStrategy(Strategy):
         #         f"[Validation] type={message_type}, sender={sender_node_id}, "
         #         f"receiver={receiver_node_id}, delay_index={index}, delay={self.delays[index]}ms"
         #     )
-        
+
         # Apply mutation logic in window [byzz_min_seq, byzz_max_seq]
-        
+
         def handle_mutated_message(mutated_message, mutated_delay, mutated_repeat):
-            
+
             if mutated_message is None:
                 mutated_message = message  
             if mutated_delay is None:
@@ -246,12 +248,14 @@ class EvoDelayStrategy(Strategy):
 
                 # print(f"chosen mutation method: {method}")
                 return handle_mutated_message(mutated_message, delay, repeat)
+            elif isinstance(message, ripple_pb2.TMTransaction):
+                method = self.get_mutation_method(message)
+                mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
+                return handle_mutated_message(mutated_message, delay, repeat)
             else:
                 # logger.debug(f"[OtherMessage] type={message_type}, delay={configed_delay}ms")
                 return packet.data, configed_delay, 1
         return packet.data, configed_delay, 1
-
-
 
     def test_sign_message(self, packet: packet_pb2.Packet):
         message, message_type = PacketEncoderDecoder.decode_packet(packet)

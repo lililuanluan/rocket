@@ -64,11 +64,16 @@ BYZZ_MUTATE_METHODS = {
         "drop",
         "to_tsneed_dummy",
     ],
+    ripple_pb2.TMTransaction: [
+        "do_nothing",
+        "drop",
+        "replace_tx_hash",
+    ],
 }
 
 
 class ByzzMutator:
-    def __init__(self, strategy: Strategy):
+    def __init__(self, strategy: Strategy): # use EvodealyStrategy would cause circular import
         self.strategy = strategy
         self.byzz_mutate_methods = BYZZ_MUTATE_METHODS
         self.lock = Lock()
@@ -239,6 +244,32 @@ class ByzzMutator:
                 f"Unsupported mutation method for TMHaveTransactionSet: {method}"
             )
 
+    def mutate_transaction(
+        self, message: ripple_pb2.TMTransaction, method: str
+    ) -> Tuple[Any, Any, Any]:
+        if method == "do_nothing":
+            return None, None, None
+        elif method == "drop":
+            return None, MAX_U32, 0
+        elif method == "replace_tx_hash":
+            msg_copy = copy.deepcopy(message)
+            # Replace the transaction blob with a previously seen transaction hash or dummy
+            prev_tx = None
+            for tx in self.strategy.old_transactions:
+                # old_transactions stores hex strings of rawTransaction (message.rawTransaction.hex())
+                # compare against msg_copy.rawTransaction.hex() to avoid AttributeError
+                current_tx_hex = msg_copy.rawTransaction.hex()
+                if current_tx_hex is None or tx != current_tx_hex:
+                    prev_tx = tx
+                    break
+            if prev_tx is None:
+                prev_tx = self.strategy.dummy_transaction
+            msg_copy.rawTransaction = bytes.fromhex(prev_tx)
+            return msg_copy, None, None
+        else:
+            logger.error(f"Unsupported mutation method for TMTransaction: {method}")
+            raise ValueError(f"Unsupported mutation method for TMTransaction: {method}")
+
     def mutate(self, message, method=None) -> Tuple[Any, Any, Any]:
         """
         return: mutated|None, delay|None, repeat|None
@@ -252,6 +283,8 @@ class ByzzMutator:
             return self.mutate_validation(message, method)
         elif isinstance(message, ripple_pb2.TMHaveTransactionSet):
             return self.mutate_have_transaction_set(message, method)
+        elif isinstance(message, ripple_pb2.TMTransaction):
+            return self.mutate_transaction(message, method)
         else:
             logger.error(f"Unsupported message type for mutation: {type(message)}")
             raise ValueError(f"Unsupported message type for mutation: {type(message)}")
