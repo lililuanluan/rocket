@@ -192,7 +192,9 @@ def setup_docker_images(config):
 
     original_cwd = os.getcwd()
     os.chdir(ROCKET_DIR / "images")
-    subprocess.run(["make", "build"], check=True)
+    # 去掉ripple_image中前面 "xrpld:" 的部分
+    build_target = ripple_image.split(":")[-1]
+    subprocess.run(["make", build_target], check=True)
     print("✓ Local images built successfully")
     os.chdir(original_cwd)
 

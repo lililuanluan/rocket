@@ -2,13 +2,14 @@
 # ripple-image: "xrpllabsofficial/xrpld:2.6.0"
 # ripple-image: "xrpld:1.4.0-local"
 # ripple-image: "xrpld:1.7.2-local"
-ripple-image: "xrpld:2.6.0-local"
+# ripple-image: "xrpld:2.6.0-local"
+ripple-image: "xrpld:2.6.0-byzzfuzz-local"
 
 
 seed: 98
 
 max_generation: 10
-population_size: 10
+population_size: 6
 max_ledger_seq: 15
 
 encoding:
@@ -41,4 +42,4 @@ timeout_sec_per_seq: 30
 # "markov_matrix_non_similarity"
 fitness_function: "markov_matrix_non_similarity"
 
-max_parallel_workers: 5  # 同时运行的最大实例数
+max_parallel_workers: 3  # 同时运行的最大实例数（改为3防止Docker资源竞争）
