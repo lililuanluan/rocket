@@ -50,14 +50,15 @@ class EvoDelayStrategy(Strategy):
         self.byzz_max_seq: int = self.params.get("byzz_max_seq", 10)
 
 
-        self.dummy_proposal = bytes.fromhex(
-            "e803e1999369975aed1bfd2444a3552a73383c03a2004cb784ce07e13ebd7d7c"
-        )
-        self.dummy_validation = "E803E1999369975AED1BFD2444A3552A73383C03A2004CB784CE07E13EBD7D7C"
-        # seq -> set of proposals
-        self.old_proposals = {-1: set([self.dummy_proposal,])}
-        # seq -> set of validations
-        self.old_validation_hashes = {-1: set([self.dummy_validation,])}
+        self.dummy_hash = "E803E1999369975AED1BFD2444A3552A73383C03A2004CB784CE07E13EBD7D7C"
+        self.dummy_proposal = bytes.fromhex(self.dummy_hash)
+        self.dummy_validation = self.dummy_hash
+        self.dummy_transaction = self.dummy_hash
+        
+        self.old_proposals = {-1: set([self.dummy_proposal,])} # seq -> set of proposals
+        self.old_validation_hashes = {-1: set([self.dummy_validation,])} # seq -> set of validations
+        self.old_transactions = []
+
         self.byzz_mutate_methods = BYZZ_MUTATE_METHODS
         self.byzz_mutator = ByzzMutator(self)
 
@@ -78,10 +79,35 @@ class EvoDelayStrategy(Strategy):
     # 分为small scope和any scope
     # small scope：对数值+1，对hash替换为网络中的前一个hash
 
+    def cache_old_messages(self, message: Message) -> dict | None:
+        # TODO: could clear old cache for small scode mutations
+        # for now: cache[seq] -> set()
+        # cache old proposals
+        if isinstance(message, ripple_pb2.TMProposeSet):
+            prop_seq = message.proposeSeq
+            if prop_seq not in self.old_proposals:
+                self.old_proposals[prop_seq] = set()
+            self.old_proposals[prop_seq].add(message.currentTxHash)
+        elif isinstance(message, ripple_pb2.TMValidation):
+            parsed = PacketEncoderDecoder.decode_validation(message)
+            if "error" in parsed:
+                raise ValueError(
+                    f"Failed to parse validation for caching: {parsed['error']}"
+                )
+            # cache old validations
+            lh = parsed.get("LedgerHash") if isinstance(parsed, dict) else None
+            ldgr_seq = (
+                parsed.get("LedgerSequence") if isinstance(parsed, dict) else None
+            )
+            if ldgr_seq not in self.old_validation_hashes:
+                self.old_validation_hashes[ldgr_seq] = set()
+            if lh:
+                self.old_validation_hashes[ldgr_seq].add(lh)
+        elif isinstance(message, ripple_pb2.TMTransaction):
+            tx = message.rawTransaction.hex()
+            if tx not in self.old_transactions:
+                self.old_transactions.append(tx)
 
-    def cache_old_messages(self, packet: packet_pb2.Packet):
-        ...
-    
     def get_delay(self, message_type: int, packet: packet_pb2.Packet) -> int:
         sender_node_id = self.network.port_to_id(packet.from_port)
         receiver_node_id = self.network.port_to_id(packet.to_port)
@@ -121,6 +147,12 @@ class EvoDelayStrategy(Strategy):
 
         # Code taken from packet decoder
         message, message_type = PacketEncoderDecoder.decode_packet(packet)
+
+        try:
+            self.cache_old_messages(message) # parse validation may fail
+        except Exception as e:
+            logger.error(f"Error caching old messages: {e}")
+            return packet.data, 0, 1
 
         if message_type not in set(range(30, 36)).union({41}):
             return packet.data, 0, 1
@@ -176,11 +208,6 @@ class EvoDelayStrategy(Strategy):
             <= self.byzz_max_seq
         ):
             if isinstance(message, ripple_pb2.TMProposeSet):
-                # cache old proposals
-                prop_seq = message.proposeSeq
-                if prop_seq not in self.old_proposals:
-                    self.old_proposals[prop_seq] = set()
-                self.old_proposals[prop_seq].add(message.currentTxHash)
                 # identify original sender
                 _pub_key = message.nodePubKey.hex()
                 if not self.byzz_mutator.is_sent_from_byzz_node(_pub_key):
@@ -197,22 +224,10 @@ class EvoDelayStrategy(Strategy):
                 signed_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(signed_message, delay, repeat)
 
-            elif isinstance(message, ripple_pb2.TMValidation):
+            elif isinstance(message, ripple_pb2.TMValidation): # TODO: 让parsed返回结果也继承自Message，统一接口
                 # logger.debug("Processing TMValidation for possible mutation")
                 parsed = PacketEncoderDecoder.decode_validation(message)
-                # print(f"parsed validation: {parsed}")
-                if "error" in parsed:
-                    logger.error(f"Parsing validation failed: {parsed['error']}")
-                    return packet.data, configed_delay, 1
-                # cache old validations
-                lh = parsed.get("LedgerHash") if isinstance(parsed, dict) else None
-                ldgr_seq = parsed.get("LedgerSequence") if isinstance(parsed, dict) else None
-                if ldgr_seq not in self.old_validation_hashes:
-                    self.old_validation_hashes[ldgr_seq] = set()
-                if lh:
-                    self.old_validation_hashes[ldgr_seq].add(lh)
 
-                    
                 # logger.debug(f"Parsed validation content: {parsed}")
                 _pub_key = parsed.get("SigningPubKey", "")
                 if not self.byzz_mutator.is_sent_from_byzz_node(_pub_key):
@@ -228,7 +243,7 @@ class EvoDelayStrategy(Strategy):
             elif isinstance(message, ripple_pb2.TMHaveTransactionSet):
                 method = self.get_mutation_method(message)
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
-                
+
                 # print(f"chosen mutation method: {method}")
                 return handle_mutated_message(mutated_message, delay, repeat)
             else:
