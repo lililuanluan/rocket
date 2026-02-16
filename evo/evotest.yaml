@@ -1,9 +1,9 @@
 # ripple-image: "ghcr.io/amousavigourabi/docker-rippled/seeded-2.4.0-fully-lowered-threshold:latest"
-# ripple-image: "xrpllabsofficial/xrpld:2.6.0"
+ripple-image: "xrpllabsofficial/xrpld:2.6.0"
 # ripple-image: "xrpld:1.4.0-local"
 # ripple-image: "xrpld:1.7.2-local"
 # ripple-image: "xrpld:2.6.0-local"
-ripple-image: "xrpld:2.6.0-byzzfuzz-local"
+# ripple-image: "xrpld:2.6.0-byzzfuzz-local"
 
 
 seed: 98
@@ -25,21 +25,23 @@ byzz_min_seq: 5
 byzz_max_seq: 10
 
 
-# strategy: random | evo
-strategy: evo
+
+# strategy: EvoDelayStrategy
+# strategy: RandomDelayByzzStrategy
+strategy: RandomByzzStrategy
+# strategy: RandomDelayStrategy
 
 timeout_sec_per_seq: 30
 
 
-# "num_propose_set"
-# "num_getledger_hashes"
-# "num_getledger_messages"
-# "mean_validation_time"
-# "var_validation_time"
-# "validation_distribution_entropy"
-# "message_entropy_integral"
-# "message_entropy_average"
-# "markov_matrix_non_similarity"
-fitness_function: "markov_matrix_non_similarity"
+# fitness_function: "num_propose_set"
+# fitness_function: "num_getledger_hashes"
+# fitness_function: "num_getledger_messages"
+# fitness_function: "mean_validation_time"
+# fitness_function: "var_validation_time"
+fitness_function: "validation_distribution_entropy"
+# fitness_function: "message_entropy_integral"
+# fitness_function: "message_entropy_average"
+# fitness_function: "markov_matrix_non_similarity"
 
 max_parallel_workers: 3  # 同时运行的最大实例数（改为3防止Docker资源竞争）

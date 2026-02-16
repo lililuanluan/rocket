@@ -21,7 +21,7 @@ from pathlib import Path
 from loguru import logger
 
 
-class RandomByzzStrategy(EvoDelayStrategy):
+class RandomDelayByzzStrategy(EvoDelayStrategy):
 
     def __init__(
         self,
@@ -35,3 +35,34 @@ class RandomByzzStrategy(EvoDelayStrategy):
         # randomly choose a delay between min and max
         delay = random.randint(self.delay_min, self.delay_max)
         return delay
+
+
+class RandomByzzStrategy(EvoDelayStrategy):
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+
+    def get_delay(self,message_type: int, packet: packet_pb2.Packet) -> int:
+        return 0
+
+
+class RandomDelayStrategy(EvoDelayStrategy):
+
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.delay_max = self.params.get("max_delay_ms", 100)
+        self.delay_min = self.params.get("min_delay_ms", 1)
+
+    def get_delay(self,message_type: int, packet: packet_pb2.Packet) -> int:
+        # randomly choose a delay between min and max
+        delay = random.randint(self.delay_min, self.delay_max)
+        return delay
+
+    def get_mutation_method(self, message):
+        return "do_nothing"

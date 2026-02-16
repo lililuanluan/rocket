@@ -202,12 +202,17 @@ def setup_docker_images(config):
 
 def get_strategy_name(config):
     strategy = config.get("strategy", "evo")
-    if strategy == "random":
-        return "RandomByzzStrategy"
-    elif strategy == "evo":
-        return "EvoDelayStrategy"
-    else:
-        raise ValueError(f"Unsupported strategy: {strategy}")
+
+    # 检查策略类是否在 rocket_controller/strategies 中存在
+    import importlib
+    strategies_module = importlib.import_module("rocket_controller.strategies")
+    if not hasattr(strategies_module, strategy):
+        raise ValueError(
+            f"Strategy class '{strategy}' not found in rocket_controller/strategies. "
+            f"Available: {[c for c in dir(strategies_module) if not c.startswith('_')]}"
+        )
+
+    return strategy
 
 
 def generate_instance_network_config(instance_id: int, base_config: dict) -> dict:
