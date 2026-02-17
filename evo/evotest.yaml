@@ -8,8 +8,8 @@ ripple-image: "xrpllabsofficial/xrpld:2.6.0"
 
 seed: 98
 
-max_generation: 10
-population_size: 6
+max_generation: 100
+population_size: 10
 max_ledger_seq: 15
 
 encoding:
@@ -26,9 +26,9 @@ byzz_max_seq: 10
 
 
 
-# strategy: EvoDelayStrategy
-# strategy: RandomDelayByzzStrategy
-strategy: RandomByzzStrategy
+strategy: EvoDelayStrategy
+strategy: RandomDelayByzzStrategy
+# strategy: RandomByzzStrategy
 # strategy: RandomDelayStrategy
 
 timeout_sec_per_seq: 30
@@ -38,10 +38,12 @@ timeout_sec_per_seq: 30
 # fitness_function: "num_getledger_hashes"
 # fitness_function: "num_getledger_messages"
 # fitness_function: "mean_validation_time"
-# fitness_function: "var_validation_time"
-fitness_function: "validation_distribution_entropy"
+fitness_function: "var_validation_time"
+# fitness_function: "validation_distribution_entropy"
 # fitness_function: "message_entropy_integral"
 # fitness_function: "message_entropy_average"
 # fitness_function: "markov_matrix_non_similarity"
 
 max_parallel_workers: 3  # 同时运行的最大实例数（改为3防止Docker资源竞争）
+
+individual_timeout_sec: 300 # TODO
