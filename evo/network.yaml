@@ -15,7 +15,7 @@ base_port_ws_admin: 62000
 base_port_rpc: 63000
 
 # The number of validator nodes to configure and start
-number_of_nodes: 6
+number_of_nodes: 7
 
 # Optional: define network partitions (list of lists of node indices). If empty,
 # all nodes are considered part of the same partition. This key is required by
@@ -91,12 +91,12 @@ transactions:
       destination_account: "Account3" # Account alias to send the transaction to.
       time: 2 # Seconds after which the transaction is performed.
       in_seq: [5]
-    # - peer_id: 5
-    #   amount: 82000000000
-    #   sender_account: "Account1"
-    #   destination_account: "Account3"
-    #   time: 2
-    #   in_seq: [5]
+    - peer_id: 5
+      amount: 82000000000
+      sender_account: "Account1"
+      destination_account: "Account3"
+      time: 2
+      in_seq: [5]
     # - peer_id: 6
     #   amount: 83000000000
     #   sender_account: "Account1"
