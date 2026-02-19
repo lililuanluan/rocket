@@ -32,37 +32,19 @@ from utils import *
 from configs import EvotestConfig
 
 # dirs
-DIRS = get_dirs(__file__)
-CUR_DIR = DIRS["cur_dir"]
-ROCKET_DIR = DIRS["rocket_dir"]
-INTERCEPTOR_DIR = DIRS["interceptor_dir"]
-LOGS_DIR = DIRS["logs_dir"]
-TMP_DIR = DIRS["tmp_dir"]  # 临时配置文件目录
+dirs = get_dirs(__file__) # TODO: remove this, use EvotestConfig instead
 
-configs = EvotestConfig.from_dirs(DIRS)
-NUMBER_OF_NODES = configs.number_of_nodes
+configs = EvotestConfig.from_dirs(dirs)
+
 
 
 
 # 全局变量用于存储配置
-ENCODING_MIN = 0
-ENCODING_MAX = 4000
-ENCODING_LENGTH = 0
-START_DATETIME = ""
-SEED = 42
 MAX_ITERATION = 1
-MAX_LEDGER_SEQ = 5
-FITNESS_FUNCTION = "time"
-EVALUATION_COUNTER = 0
-MAX_PARALLEL_WORKERS = 4
+evaluation_cnt = 0
 
 
 
-# CSV 文件路径（用于实时写入）
-CSV_FILE_PATH = None
-CSV_LOCK = None
-
-BYZZ_NODES = None
 
 
 def cleanup_all_interceptor_processes():
@@ -210,21 +192,20 @@ def generate_instance_network_config(instance_id: int, base_config: dict) -> dic
 
 def run_rocket_instance(
     instance_id: str,
-    log_dir: str,
-    max_iteration: int,
+    log_dir: str, # <name>/G{gen}T{ind}/
     max_ledger_seq: int,
     seed: int,
     encoding: list,
     config: dict,
     base_network_config: dict,
     port_offset: int,
+    dirs=dirs,
 ):
     """运行单个 Rocket 实例
     
     Args:
         instance_id: 实例 ID，格式为 G{gen}T{ind}，用于隔离容器
         log_dir: 日志目录
-        max_iteration: 最大迭代次数
         max_ledger_seq: 最大账本序列号
         seed: 随机种子
         encoding: 编码（延迟策略）
@@ -232,7 +213,7 @@ def run_rocket_instance(
         base_network_config: 基础网络配置
         port_offset: 端口偏移量，用于隔离网络端口
     """
-    os.chdir(ROCKET_DIR)
+    os.chdir(dirs["rocket_dir"])
     py = sys.executable
     
     # 计算 gRPC 端口（使用 port_offset 而不是 instance_id）
@@ -249,15 +230,16 @@ def run_rocket_instance(
     instance_network_config = generate_instance_network_config(port_offset, base_network_config)
     
     # 确保临时目录存在
-    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_dir = dirs["tmp_dir"]
+    tmp_dir.mkdir(parents=True, exist_ok=True)
     
     # 写入实例专属的网络配置文件（放到 tmp 目录）
-    instance_network_yaml = TMP_DIR / f"network_{instance_id}.yaml"
+    instance_network_yaml = tmp_dir / f"network_{instance_id}.yaml"
     with open(instance_network_yaml, "w") as f:
         yaml.dump(instance_network_config, f)
 
     strategy_name = get_strategy_name(config)
-    strategy_yaml = TMP_DIR / f"{strategy_name}_{instance_id}.yaml"
+    strategy_yaml = tmp_dir / f"{strategy_name}_{instance_id}.yaml"
     with open(strategy_yaml, "w") as f:
         yaml.dump(
             {
@@ -284,7 +266,7 @@ def run_rocket_instance(
         "--log-dir",
         log_dir,
         "--max-iteration",
-        str(max_iteration),
+        str(1),
         "--max-ledger-seq",
         str(max_ledger_seq),
         "--grpc-port",
@@ -295,7 +277,7 @@ def run_rocket_instance(
         str(config.get("ripple-image", "")),
     ]
 
-    print(f"[{instance_id}] Running command: {' '.join(cmd)}")
+    print(f"[{instance_id}] \n\tRunning command: {' '.join(cmd)}\n\tstderr saved to {dirs['logs_dir'] / log_dir / 'rocket_stderr.log'}")
     env = os.environ.copy()
     env["RUST_BACKTRACE"] = "full"
     env["RUST_LOG"] = config.get("rust_log_level", "")
@@ -303,7 +285,7 @@ def run_rocket_instance(
     env["ROCKET_INSTANCE_ID"] = str(instance_id)
     
     # 将输出重定向到 log 文件夹
-    full_log_dir = LOGS_DIR / log_dir
+    full_log_dir = dirs["logs_dir"] / log_dir
     full_log_dir.mkdir(parents=True, exist_ok=True)
     stdout_log = full_log_dir / "rocket_stdout.log"
     stderr_log = full_log_dir / "rocket_stderr.log"
@@ -316,7 +298,7 @@ def run_rocket_instance(
     else:
         print(f"[{instance_id}] Rocket finished successfully")
 
-    os.chdir(CUR_DIR)
+    os.chdir(dirs["cur_dir"])
     
     # 清理临时配置文件
     try:
@@ -338,8 +320,7 @@ def evaluate_individual_worker(args):
         port_offset,
         config,
         base_network_config,
-        start_datetime,
-        max_iteration,
+        test_log_id,
         max_ledger_seq,
         seed,
         fitness_function,
@@ -349,13 +330,12 @@ def evaluate_individual_worker(args):
     
     # 生成 log 目录和 instance_id（使用 G{gen}T{ind} 格式）
     instance_id = f"G{generation}T{individual_id}"
-    log_dir = f"{start_datetime}/{instance_id}/"
+    log_dir = f"{test_log_id}/{instance_id}/"
     
     # 运行 Rocket
     run_rocket_instance(
         instance_id=instance_id,
         log_dir=log_dir,
-        max_iteration=max_iteration,
         max_ledger_seq=max_ledger_seq,
         seed=seed,
         encoding=individual_genes,
@@ -386,14 +366,13 @@ def evaluate_individual_worker(args):
 
 def init_csv_file(output_dir):
     """初始化 CSV 文件"""
-    global CSV_FILE_PATH # 对全局变量赋值才需要声明global
 
-    output_path = Path(output_dir) / "result.csv"
+    output_path = Path(output_dir) / "evo_result.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    CSV_FILE_PATH = output_path
 
-    with open(CSV_FILE_PATH, "w", newline="") as csvfile:
+
+    with open(output_path, "w", newline="") as csvfile:
         fieldnames = [
             "generation",
             "individual_id",
@@ -406,18 +385,17 @@ def init_csv_file(output_dir):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
-    print(f"✓ CSV file initialized: {CSV_FILE_PATH}")
-    return CSV_FILE_PATH
+    print(f"✓ CSV file initialized: {output_path}")
+    return output_path
 
 # TODO: write all evaluation results (fitness) to csv
-def write_result_to_csv(result, fitness_function):
-    """写入评估结果到 CSV"""
-    global CSV_FILE_PATH
+def  write_result_to_csv(result, fitness_function, csv_file_path):
 
-    if CSV_FILE_PATH is None:
+    if csv_file_path is None:
+        print("Warning: CSV file path is not set. Skipping writing results to CSV.")
         return
 
-    with open(CSV_FILE_PATH, "a", newline="") as csvfile:
+    with open(csv_file_path, "a", newline="") as csvfile:
         fieldnames = [
             "generation",
             "individual_id",
@@ -463,8 +441,7 @@ def parallel_evaluate_population(
     generation,
     config,
     base_network_config,
-    start_datetime,
-    max_iteration,
+    test_log_dir,
     max_ledger_seq,
     seed,
     fitness_function,
@@ -483,6 +460,13 @@ def parallel_evaluate_population(
     Returns:
         results: 评估结果列表
     """
+    # test_log_dir is a Path like .../logs/<datetime>
+    # use only the run-directory name (the datetime identifier) as the test_log_id
+    # (previous code used test_log_dir.parent which caused instance logs to be
+    # written to logs/ instead of logs/<datetime>/)
+    test_log_dir = Path(test_log_dir)
+    test_log_id = test_log_dir.name
+    print(f"test_log_id: {test_log_id} (run dir: {test_log_dir})")
     # 准备任务参数
     tasks = []
     for idx, ind in enumerate(population):
@@ -494,8 +478,7 @@ def parallel_evaluate_population(
             port_offset,
             config,
             base_network_config,
-            start_datetime,
-            max_iteration,
+            test_log_id,
             max_ledger_seq,
             seed,
             fitness_function,
@@ -523,7 +506,7 @@ def parallel_evaluate_population(
                     results.append(result)
                     
                     # 实时写入 CSV
-                    write_result_to_csv(result, fitness_function)
+                    write_result_to_csv(result, fitness_function, csv_file_path=Path(test_log_dir) / "evo_result.csv")
                     
                 except Exception as e:
                     print(f"Error evaluating individual: {e}")
@@ -533,69 +516,61 @@ def parallel_evaluate_population(
     return results
 
 
-def main(configs):
-    global ENCODING_MIN, ENCODING_MAX, ENCODING_LENGTH
-    global START_DATETIME, SEED, MAX_ITERATION, MAX_LEDGER_SEQ, FITNESS_FUNCTION
-    global EVALUATION_COUNTER, CSV_FILE_PATH, MAX_PARALLEL_WORKERS
-    global BYZZ_NODES
+def main(configs: EvotestConfig):
+    global MAX_ITERATION
+    global evaluation_cnt
 
     # 重置全局变量
-    EVALUATION_COUNTER = 0
-    CSV_FILE_PATH = None
+    evaluation_cnt = 0
     config = configs.config
 
-    build_interceptor(interceptor_dir=INTERCEPTOR_DIR, cargo_clean=False)
-    setup_docker_images(config["ripple-image"], ROCKET_DIR)
+    build_interceptor(interceptor_dir=configs.interceptor_dir, cargo_clean=False)
+    setup_docker_images(configs.ripple_image, configs.rocket_dir)
     setup_deap_types()
 
     # 读取配置
-    SEED = config.get("seed", 42)
-    random.seed(SEED)
-    np.random.seed(SEED)
+    random.seed(configs.seed)
+    np.random.seed(configs.seed)
 
-    with open("network.yaml", "r") as f:
-        base_network_config = yaml.safe_load(f)
-        BYZZ_NODES = base_network_config["byzz_nodes"]
 
-    START_DATETIME = datetime.now().strftime("%Y_%m_%d_%Hh%Mm")
+    # 精确到秒
+    test_log_id = configs.test_log_dir_identifier
 
     lambda_ = config.get("population_size", 4)
     mu = min(lambda_, config.get("mu", 4))
     max_generation = config.get("max_generation", 10)
-    FITNESS_FUNCTION = config.get("fitness_function", "time")
-    MAX_PARALLEL_WORKERS = config.get("max_parallel_workers", 4)
+    fitness_function = configs.fitness_function
 
-    ENCODING_LENGTH = NUMBER_OF_NODES * (NUMBER_OF_NODES - 1) * 7
-    ENCODING_MIN = config["encoding"]["min_value"]
-    ENCODING_MAX = config["encoding"]["max_value"]
+    num_nodes =  configs.number_of_nodes
+    encoding_len = num_nodes * (num_nodes - 1) * 7
+    delay_min = configs.delay_min
+    delay_max = configs.delay_max
 
-    MAX_ITERATION = config.get("max_iteration", 1)
-    MAX_LEDGER_SEQ = config.get("max_ledger_seq", 5)
+
 
     print(f"=== Starting Parallel (μ+λ) EA with DEAP ===")
     print(f"μ={mu}, λ={lambda_}, max_generations={max_generation}")
-    print(f"Max parallel workers: {MAX_PARALLEL_WORKERS}")
-    print(f"Fitness function: {FITNESS_FUNCTION}")
-    print(f"Encoding length: {ENCODING_LENGTH}, range: [{ENCODING_MIN}, {ENCODING_MAX}]")
+    print(f"Max parallel workers: {configs.max_parallel_workers}")
+    print(f"Fitness function: {fitness_function}")
+    print(f"Encoding length: {encoding_len}, range: [{delay_min}, {delay_max}]")
     print()
 
-    # 初始化 CSV 文件
-    output_dir = CUR_DIR / "out"
-    csv_path = init_csv_file(output_dir)
+    
+    csv_path = init_csv_file(configs.test_log_dir)
     print()
 
     # 设置 DEAP toolbox
     toolbox = base.Toolbox()
 
     # 注册遗传算法操作
-    toolbox.register("individual", create_individual, ENCODING_MIN, ENCODING_MAX, ENCODING_LENGTH)
+    toolbox.register("individual", create_individual, delay_min, delay_max, encoding_len)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     # 注册遗传算子
     def crossover_and_round(ind1, ind2):
         """SBX 交叉后转换为整数"""
         tools.cxSimulatedBinaryBounded(
-            ind1, ind2, eta=3.0, low=ENCODING_MIN, up=ENCODING_MAX
+            ind1, ind2, eta=3.0, low=delay_min, up=delay_max
         )
         ind1[:] = [int(round(x)) for x in ind1]
         ind2[:] = [int(round(x)) for x in ind2]
@@ -606,11 +581,11 @@ def main(configs):
         tools.mutGaussian(
             individual,
             mu=0,
-            sigma=(ENCODING_MAX - ENCODING_MIN) / 100.0,
-            indpb=1.0 / ENCODING_LENGTH,
+            sigma=(delay_max - delay_min) / 100.0,
+            indpb=1.0 / encoding_len,
         )
         individual[:] = [
-            int(round(max(ENCODING_MIN, min(ENCODING_MAX, x)))) for x in individual
+            int(round(max(delay_min, min(delay_max, x)))) for x in individual
         ]
         return (individual,)
 
@@ -641,18 +616,17 @@ def main(configs):
         population,
         generation=0,
         config=config,
-        base_network_config=base_network_config,
-        start_datetime=START_DATETIME,
-        max_iteration=MAX_ITERATION,
-        max_ledger_seq=MAX_LEDGER_SEQ,
-        seed=SEED,
-        fitness_function=FITNESS_FUNCTION,
-        byzz_nodes=BYZZ_NODES,
-        logs_dir=LOGS_DIR,
-        max_workers=MAX_PARALLEL_WORKERS,
+        base_network_config=configs.base_network_config,
+        test_log_dir=configs.test_log_dir,
+        max_ledger_seq=configs.max_ledger_seq,
+        seed=configs.seed,
+        fitness_function=fitness_function,
+        byzz_nodes=configs.byzz_nodes,
+        logs_dir=configs.logs_dir,
+        max_workers=configs.max_parallel_workers,
     )
 
-    EVALUATION_COUNTER += len(results)
+    evaluation_cnt += len(results)
 
     # 更新个体的 fitness
     for result in results:
@@ -686,18 +660,17 @@ def main(configs):
                 invalid_ind,
                 generation=gen,
                 config=config,
-                base_network_config=base_network_config,
-                start_datetime=START_DATETIME,
-                max_iteration=MAX_ITERATION,
-                max_ledger_seq=MAX_LEDGER_SEQ,
-                seed=SEED,
-                fitness_function=FITNESS_FUNCTION,
-                byzz_nodes=BYZZ_NODES,
-                logs_dir=LOGS_DIR,
-                max_workers=MAX_PARALLEL_WORKERS,
+                base_network_config=configs.base_network_config,
+                test_log_dir=configs.test_log_dir,
+                max_ledger_seq=configs.max_ledger_seq,
+                seed=configs.seed,
+                fitness_function=fitness_function,
+                byzz_nodes=configs.byzz_nodes,
+                logs_dir=configs.logs_dir,
+                max_workers=configs.max_parallel_workers,
             )
 
-            EVALUATION_COUNTER += len(results)
+            evaluation_cnt += len(results)
 
             # 更新个体的 fitness
             for result in results:
@@ -717,7 +690,7 @@ def main(configs):
 
     # 最终总结
     print("\n=== Evolution Complete ===")
-    print(f"Total evaluations: {EVALUATION_COUNTER}")
+    print(f"Total evaluations: {evaluation_cnt}")
 
     best_ind = hof[0]
     print(f"\nBest individual:")
