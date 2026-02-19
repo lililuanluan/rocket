@@ -15,12 +15,13 @@ from loguru import logger
 class InterceptorManager:
     """Class for interacting with the network packet interceptor subprocess."""
 
-    def __init__(self, grpc_port: int = 50051, instance_id: str = ""):
+    def __init__(self, grpc_port: int = 50051, instance_id: str = "", rippled_img: str | None = None):
         """Initialize the InterceptorManager, with None for the process variable."""
         self.process: Popen | None = None
         self.grpc_port = grpc_port
         self.instance_id = instance_id
-
+        self.rippled_img = rippled_img if rippled_img is not None else "xrpllabsofficial/xrpld:2.3.0" # use the same default as in the interceptor
+        logger.info(f"Using rippled image: {self.rippled_img}")
     @staticmethod
     def __stream_reader(pipe, stream):
         """Read a process stream line-by-line and log it immediately."""
@@ -93,6 +94,7 @@ class InterceptorManager:
         process_env = os.environ.copy()
         process_env["ROCKET_GRPC_PORT"] = str(self.grpc_port)
         process_env["ROCKET_INSTANCE_ID"] = self.instance_id
+        process_env["RIPPLE_IMAGE"] = self.rippled_img
         try:
             self.process = Popen(
                 [f"./{file}"],

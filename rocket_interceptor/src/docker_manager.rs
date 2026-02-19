@@ -20,8 +20,6 @@ use futures_util::stream::StreamExt;
 use futures_util::TryStreamExt;
 use serde::Deserialize;
 use serde_json::Value;
-use std::path::Path;
-use serde_yaml;
 
 const DEFAULT_IMAGE: &str = "xrpllabsofficial/xrpld:2.3.0";
 
@@ -270,7 +268,8 @@ impl DockerNetwork {
     /// # Panics
     /// * If an error occurred while downloading the image.
     async fn download_image(&mut self) {
-        let image = self.get_image_from_local_config();
+        let image = self.get_image_from_env();
+        info!("Checking for docker image '{}'", image);
         // Check whether the image already exists locally. If so, skip pulling.
         match self.docker.list_images::<String>(None).await {
             Ok(images) => {
@@ -313,7 +312,7 @@ impl DockerNetwork {
     /// * If it could not format the directory path to the 'config' directory.
     /// * If the Docker container who runs the validator could not be created or started.
     async fn start_validator(&self, container: &mut DockerContainer) {
-        let image = self.get_image_from_local_config();
+        let image = self.get_image_from_env();
         let mut port_map = PortMap::new();
         port_map.insert(
             String::from("51235/tcp"),
@@ -412,7 +411,7 @@ impl DockerNetwork {
             ..Default::default()
         };
 
-        let image = self.get_image_from_local_config();
+        let image = self.get_image_from_env();
         let container_config = bollard::container::Config {
             image: Some(image.as_str()),
             host_config: Some(HostConfig {
@@ -575,18 +574,11 @@ impl DockerNetwork {
         ret
     }
 
-    /// Read ripple image name from a local config.yaml in the interceptor working directory.
+    /// Read ripple image name from the environment variable `RIPPLE_IMAGE`.
     /// Falls back to DEFAULT_IMAGE when missing or on error.
-    fn get_image_from_local_config(&self) -> String {
-        let path = Path::new("config.yaml");
-        if path.exists() {
-            if let Ok(s) = std::fs::read_to_string(path) {
-                if let Ok(doc) = serde_yaml::from_str::<serde_yaml::Value>(&s) {
-                    if let Some(img) = doc.get("image").and_then(|v| v.as_str()) {
-                        return img.to_string();
-                    }
-                }
-            }
+    fn get_image_from_env(&self) -> String {
+        if let Ok(image) = std::env::var("RIPPLE_IMAGE") {
+            return image;
         }
         DEFAULT_IMAGE.to_string()
     }

@@ -41,6 +41,7 @@ class TimeBasedIteration:
         strategy_stopper = None, # func in strategy to stop ws subscriber or other things
         grpc_port : int = 50051,
         instance_id: str = "",
+        rippled_img: str | None = None,
     ):
         """
         Init Iteration Type with an InterceptorManager attached.
@@ -62,7 +63,12 @@ class TimeBasedIteration:
         self.ledger_timeout = ledger_timeout
         self.grpc_port = grpc_port
         self.instance_id = instance_id
-        self._interceptor_manager = InterceptorManager(grpc_port=self.grpc_port, instance_id=self.instance_id)
+        self.rippled_img = rippled_img
+        self._interceptor_manager = InterceptorManager(
+            grpc_port=self.grpc_port,
+            instance_id=self.instance_id,
+            rippled_img=self.rippled_img,
+        )
         self._validator_nodes: List[ValidatorNode] | None = None
         self._log_dir: str | None = None
 
@@ -84,7 +90,6 @@ class TimeBasedIteration:
         self.to_be_validated_txs: List[(str, str, int, str, int | str)] = [] # sender_alias, receiver_alias, amount, tx_hash, sequence
         self._validation_lock = threading.Lock() # lock for accessing to_be_validated_txs
         self._tx_logger: TransactionLogger | None = None
-
 
     def _record_tx_to_be_validated(self, sender_alias: str, destination_alias: str, amount: int, tx_hash: str, sequence: int | str = 'N/A'):
         # do not use when _validation_lock is held
@@ -119,9 +124,6 @@ class TimeBasedIteration:
                 self.perform_transaction(peer_id, amount, sender_alias, destination_alias)
                 self.transactions_attempted.add(tx_key)
             logger.info(f"All genesis transactions performed.{self.transactions_attempted}")
-            
-            
-
 
     def perform_transaction_async(self, peer_id: int, amount: int, sender_alias: str, destination_alias: str = None, delay: float = 0): # not working...
         # start a thread named "SubmitTransaction{peer_id}-{amount}-{sender_alias}-{destination_alias}"
@@ -193,7 +195,6 @@ class TimeBasedIteration:
             # ask every node if each transaction is executed
             for sender_alias, receiver_alias, amount, tx_hash, sequence in self.to_be_validated_txs:
                 self.validate_transaction(node.id, sender_alias, receiver_alias, amount, tx_hash, sequence)
-
 
     def validate_transaction(
             self,
@@ -581,6 +582,7 @@ class LedgerBasedIteration(TimeBasedIteration):
         strategy_stopper = None, # func in strategy to stop ws subscriber or other things
         grpc_port : int = 50051,
         instance_id: str = "",
+        rippled_img: str | None = None,
     ):
         """
         Init the TimeIteration class with a specified timeout in seconds.
@@ -598,6 +600,7 @@ class LedgerBasedIteration(TimeBasedIteration):
             strategy_stopper=strategy_stopper,
             grpc_port=grpc_port,
             instance_id=instance_id,
+            rippled_img=rippled_img,
         )
 
 

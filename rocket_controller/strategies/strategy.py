@@ -45,6 +45,7 @@ class Strategy(ABC):
         max_ledger_seq: int | None = None,
         grpc_port: int | None = None,
         instance_id: str = "",
+        rippled_img: str | None = None,
     ):
         """
         Initialize the Strategy interface with necessary fields.
@@ -103,6 +104,7 @@ class Strategy(ABC):
         self.max_ledger_seq = max_ledger_seq if max_ledger_seq is not None else 10
         timeout_sec_per_seq = self.params.get("timeout_sec_per_seq", 30)
         self.instance_id = instance_id if instance_id is not None else ""
+        self.rippled_img = rippled_img
         self.iteration_type = (
             LedgerBasedIteration(
                 max_iterations=max_iteration if max_iteration is not None else 10,
@@ -111,6 +113,7 @@ class Strategy(ABC):
                 strategy_stopper=self.strategy_stopper,
                 grpc_port=grpc_port,
                 instance_id=self.instance_id,
+                rippled_img=self.rippled_img,
             )
             if iteration_type is None
             else iteration_type

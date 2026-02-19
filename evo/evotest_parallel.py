@@ -319,6 +319,8 @@ def run_rocket_instance(
         str(grpc_port),
         "--instance-id",
         str(instance_id),
+        "--rippled-img",
+        str(config.get("ripple-image", "")),
     ]
 
     print(f"[{instance_id}] Running command: {' '.join(cmd)}")

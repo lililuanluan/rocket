@@ -112,6 +112,13 @@ def parse_args() -> argparse.Namespace:
         help="An optional identifier for this instance of the node cluster",
         metavar="ID",
     )
+    parser.add_argument(
+        "--rippled-img",
+        type=str,
+        default=None,
+        help="The name of the rippled docker image to run.",
+        metavar="IMAGE",
+    )
 
     # note: add_argument will replace - with _ automatically
     return parser.parse_args()
@@ -213,5 +220,7 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
         params_dict["grpc_port"] = args.grpc_port
     if args.instance_id:
         params_dict["instance_id"] = args.instance_id
+    if args.rippled_img:
+        params_dict["rippled_img"] = args.rippled_img
 
     return params_dict
