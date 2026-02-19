@@ -7,6 +7,7 @@ import re
 import codecs
 from typing import Tuple, Set
 from itertools import combinations
+from utils import *
 
 # Ensure project root is on sys.path so local packages like 'protos' can be imported
 
@@ -445,7 +446,9 @@ def evaluate_log(log_dir, byzz_nodes: list):
     print(f"Message entropy integral: {message_entropy_integral}")
     print(f"Message entropy average: {message_entropy_average}")
 
-    markov_matrix_non_similarity = get_msg_sending_markov_matrix_non_similarity(df_action)
+    markov_matrix_non_similarity = get_msg_sending_markov_matrix_non_similarity(
+        df_action
+    )
     print(f"Markov matrix non-similarity: {markov_matrix_non_similarity}")
 
     # 读取 aggregated_spec_check_log.json（注意：这是一个对象，不是数组）
@@ -492,13 +495,11 @@ def evaluate_log(log_dir, byzz_nodes: list):
             "agg_spec_check": agg_spec_check,
         }
     )
-    
+
     return res
 
 
 if __name__ == "__main__":
-    res = evaluate_log(
-        "/Users/lli21/rocket/logs/2026_02_02_14h36m/G0T1", byzz_nodes=[3]
-    )
+    res = evaluate_log(get_last_log_dir()/"G0T1", byzz_nodes=[3])
     for k, v in res.items():
         print(f"{k}: {v}")

@@ -14,7 +14,6 @@ import sys
 from pathlib import Path
 import subprocess
 import shutil
-from rebuild_interceptor import rebuild_interceptor_with
 from datetime import datetime
 from evaluate import evaluate_log
 import random
@@ -29,13 +28,15 @@ import copy
 
 # DEAP imports
 from deap import base, creator, tools, algorithms
+from utils import *
 
 # dirs
-CUR_DIR = Path(__file__).parent
-ROCKET_DIR = CUR_DIR.parent
-INTERCEPTOR_DIR = ROCKET_DIR / "rocket_interceptor"
-LOGS_DIR = ROCKET_DIR / "logs"
-TMP_DIR = CUR_DIR / "tmp"  # 临时配置文件目录
+DIRS = get_dirs(__file__)
+CUR_DIR = DIRS["cur_dir"]
+ROCKET_DIR = DIRS["rocket_dir"]
+INTERCEPTOR_DIR = DIRS["interceptor_dir"]
+LOGS_DIR = DIRS["logs_dir"]
+TMP_DIR = DIRS["tmp_dir"]  # 临时配置文件目录
 
 with open(CUR_DIR / "network.yaml", "r") as f:
     network_config = yaml.safe_load(f)
@@ -169,18 +170,23 @@ def setup_deap_types():
             evaluation_result=None,
         )
 
-
-def setup_interceptor(config):
+def build_interceptor(interceptor_dir, cargo_clean=False):
     """设置 interceptor"""
-    ripple_image = config["ripple-image"]
-
-    success = rebuild_interceptor_with(
-        img=ripple_image, interceptor_dir=INTERCEPTOR_DIR
-    )
-    if not success:
+    original_cwd = os.getcwd()
+    os.chdir(interceptor_dir)
+    try:
+        if cargo_clean:
+            subprocess.run(["cargo", "clean"], check=True)
+        subprocess.run(["./build.sh"], check=True)
+    except Exception as e:
+        print(f"Error occurred while building interceptor: {e}")
         raise RuntimeError("Rebuild interceptor failed")
+    finally:
+        os.chdir(original_cwd)
 
-    target_path = INTERCEPTOR_DIR / "rocket-interceptor"
+
+
+    target_path = interceptor_dir / "rocket-interceptor"
     assert target_path.exists(), f"Interceptor binary not found at {target_path}"
 
 
@@ -414,7 +420,7 @@ def evaluate_individual_worker(args):
 
 def init_csv_file(output_dir):
     """初始化 CSV 文件"""
-    global CSV_FILE_PATH
+    global CSV_FILE_PATH # 对全局变量赋值才需要声明global
 
     output_path = Path(output_dir) / "result.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -572,7 +578,7 @@ def main(config):
     EVALUATION_COUNTER = 0
     CSV_FILE_PATH = None
 
-    setup_interceptor(config)
+    build_interceptor(interceptor_dir=INTERCEPTOR_DIR, cargo_clean=False)
     setup_docker_images(config)
     setup_deap_types()
 
@@ -679,9 +685,9 @@ def main(config):
         logs_dir=LOGS_DIR,
         max_workers=MAX_PARALLEL_WORKERS,
     )
-    
+
     EVALUATION_COUNTER += len(results)
-    
+
     # 更新个体的 fitness
     for result in results:
         ind_idx = result["individual_id"] - 1
@@ -701,13 +707,13 @@ def main(config):
     # 主进化循环
     for gen in range(1, max_generation + 1):
         print(f"\n=== Generation {gen} ===")
-        
+
         # 生成子代
         offspring = algorithms.varOr(population, toolbox, lambda_, cxpb=0.7, mutpb=0.3)
 
         # 获取未评估的个体
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        
+
         if invalid_ind:
             # 并行评估子代
             results = parallel_evaluate_population(
@@ -724,9 +730,9 @@ def main(config):
                 logs_dir=LOGS_DIR,
                 max_workers=MAX_PARALLEL_WORKERS,
             )
-            
+
             EVALUATION_COUNTER += len(results)
-            
+
             # 更新个体的 fitness
             for result in results:
                 ind_idx = result["individual_id"] - 1
