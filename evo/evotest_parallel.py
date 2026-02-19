@@ -39,9 +39,8 @@ configs = EvotestConfig.from_dirs(dirs)
 
 
 
-# 全局变量用于存储配置
-MAX_ITERATION = 1
-evaluation_cnt = 0
+
+
 
 
 
@@ -517,8 +516,6 @@ def parallel_evaluate_population(
 
 
 def main(configs: EvotestConfig):
-    global MAX_ITERATION
-    global evaluation_cnt
 
     # 重置全局变量
     evaluation_cnt = 0
