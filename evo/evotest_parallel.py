@@ -29,6 +29,7 @@ import copy
 # DEAP imports
 from deap import base, creator, tools, algorithms
 from utils import *
+from configs import EvotestConfig
 
 # dirs
 DIRS = get_dirs(__file__)
@@ -38,9 +39,9 @@ INTERCEPTOR_DIR = DIRS["interceptor_dir"]
 LOGS_DIR = DIRS["logs_dir"]
 TMP_DIR = DIRS["tmp_dir"]  # 临时配置文件目录
 
-with open(CUR_DIR / "network.yaml", "r") as f:
-    network_config = yaml.safe_load(f)
-    NUMBER_OF_NODES = network_config["number_of_nodes"]
+configs = EvotestConfig.from_dirs(DIRS)
+NUMBER_OF_NODES = configs.number_of_nodes
+
 
 
 # 全局变量用于存储配置
@@ -55,8 +56,7 @@ FITNESS_FUNCTION = "time"
 EVALUATION_COUNTER = 0
 MAX_PARALLEL_WORKERS = 4
 
-# 用于记录每代的 fitness 数据
-GENERATION_DATA = []
+
 
 # CSV 文件路径（用于实时写入）
 CSV_FILE_PATH = None
@@ -207,7 +207,7 @@ def setup_docker_images(config):
 
 
 def get_strategy_name(config):
-    strategy = config.get("strategy", "evo")
+    strategy = config.get("strategy", "EvoDelayStrategy")
 
     # 检查策略类是否在 rocket_controller/strategies 中存在
     import importlib
@@ -567,16 +567,16 @@ def parallel_evaluate_population(
     return results
 
 
-def main(config):
+def main(configs):
     global ENCODING_MIN, ENCODING_MAX, ENCODING_LENGTH
     global START_DATETIME, SEED, MAX_ITERATION, MAX_LEDGER_SEQ, FITNESS_FUNCTION
-    global EVALUATION_COUNTER, GENERATION_DATA, CSV_FILE_PATH, MAX_PARALLEL_WORKERS
+    global EVALUATION_COUNTER, CSV_FILE_PATH, MAX_PARALLEL_WORKERS
     global BYZZ_NODES
 
     # 重置全局变量
-    GENERATION_DATA = []
     EVALUATION_COUNTER = 0
     CSV_FILE_PATH = None
+    config = configs.config
 
     build_interceptor(interceptor_dir=INTERCEPTOR_DIR, cargo_clean=False)
     setup_docker_images(config)
@@ -779,14 +779,7 @@ def main(config):
 
 if __name__ == "__main__":
     try:
-        with open("evotest.yaml", "r") as f:
-            config = yaml.safe_load(f)
-            
-            # 可以在配置中添加 max_parallel_workers
-            if "max_parallel_workers" not in config:
-                config["max_parallel_workers"] = 4
-                
-            main(config)
+        main(configs)
     except Exception as e:
         print(f"Error during evolution: {e}")
         import traceback
