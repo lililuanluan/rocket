@@ -132,10 +132,7 @@ def signal_handler(signum, frame):
     sys.exit(130)
 
 
-# 注册信号处理器和退出清理
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-atexit.register(cleanup_all_interceptor_processes)
+
 
 
 def setup_deap_types():
@@ -520,6 +517,13 @@ def main(configs: EvotestConfig):
     # 重置全局变量
     evaluation_cnt = 0
     config = configs.config
+
+    # register signal handlers / atexit only in the main process
+    # (worker processes must not install these handlers)
+    if mp.current_process().name == "MainProcess":
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        atexit.register(cleanup_all_interceptor_processes)
 
     build_interceptor(interceptor_dir=configs.interceptor_dir, cargo_clean=False)
     setup_docker_images(configs.ripple_image, configs.rocket_dir)
