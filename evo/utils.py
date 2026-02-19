@@ -38,6 +38,43 @@ def get_configs():
     pass
 
 
+def build_interceptor(interceptor_dir, cargo_clean=False):
+    """设置 interceptor"""
+    original_cwd = os.getcwd()
+    os.chdir(interceptor_dir)
+    try:
+        if cargo_clean:
+            subprocess.run(["cargo", "clean"], check=True)
+        subprocess.run(["./build.sh"], check=True)
+    except Exception as e:
+        print(f"Error occurred while building interceptor: {e}")
+        raise RuntimeError("Rebuild interceptor failed")
+    finally:
+        os.chdir(original_cwd)
+
+
+
+    target_path = interceptor_dir / "rocket-interceptor"
+    assert target_path.exists(), f"Interceptor binary not found at {target_path}"
+
+
+
+def setup_docker_images(ripple_image, rocket_dir):
+    # 打印当前本地所有的docker镜像
+    """拉取/构建 Docker 镜像"""
+    if "local" not in ripple_image:
+        print(f"Pulling Docker image: {ripple_image}")
+        subprocess.run(["docker", "pull", ripple_image], check=True)
+
+    original_cwd = os.getcwd()
+    os.chdir(rocket_dir / "images")
+    # 去掉ripple_image中前面 "xrpld:" 的部分
+    build_target = ripple_image.split(":")[-1]
+    if "local" in ripple_image:
+        print(f"Building local Docker image: {ripple_image} with target {build_target}")
+        subprocess.run(["make", build_target], check=True)
+        print("✓ Local images built successfully")
+    os.chdir(original_cwd)
 
 
 
