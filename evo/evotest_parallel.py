@@ -48,10 +48,6 @@ def signal_handler(signum, frame):
     cleanup_all_docker_containers()
     sys.exit(130)
 
-
-
-
-
 def setup_deap_types():
     """设置 DEAP 的类型系统"""
     if not hasattr(creator, "FitnessMax"):
@@ -374,7 +370,7 @@ def main(configs: EvotestConfig):
 
     # 重置全局变量
     evaluation_cnt = 0
-    config = configs.config
+    # config = configs.config
 
     # register signal handlers / atexit only in the main process
     # (worker processes must not install these handlers)
@@ -393,9 +389,9 @@ def main(configs: EvotestConfig):
 
 
 
-    lambda_ = config.get("population_size", 4)
-    mu = min(lambda_, config.get("mu", 4))
-    max_generation = config.get("max_generation", 10)
+    lambda_ = configs.population_size
+    mu = min(lambda_, configs.mu)
+    max_generation = configs.max_generation
     fitness_function = configs.fitness_function
 
     num_nodes =  configs.number_of_nodes
@@ -472,7 +468,7 @@ def main(configs: EvotestConfig):
     results = parallel_evaluate_population(
         population,
         generation=0,
-        config=config,
+        config=configs.config,
         base_network_config=configs.base_network_config,
         test_log_dir=configs.test_log_dir,
         max_ledger_seq=configs.max_ledger_seq,
@@ -516,7 +512,7 @@ def main(configs: EvotestConfig):
             results = parallel_evaluate_population(
                 invalid_ind,
                 generation=gen,
-                config=config,
+                config=configs.config,
                 base_network_config=configs.base_network_config,
                 test_log_dir=configs.test_log_dir,
                 max_ledger_seq=configs.max_ledger_seq,

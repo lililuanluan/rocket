@@ -26,6 +26,10 @@ class EvotestConfig:
                 "fitness_function", "mean_validation_time"
             )
             self.max_ledger_seq = self.config.get("max_ledger_seq", 15)
+            self.population_size = self.config.get("population_size", 10)
+            self.mu = self.config.get("mu", 4)
+            self.max_generation = self.config.get("max_generation", 10)
+            
         
         self.test_log_dir_identifier = self._start_datetime
         self.test_log_dir = self.logs_dir / self.test_log_dir_identifier
