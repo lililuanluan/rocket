@@ -46,6 +46,6 @@ fitness_function: "var_validation_time"
 # fitness_function: "message_entropy_average"
 # fitness_function: "markov_matrix_non_similarity"
 
-max_parallel_workers: 3  # 同时运行的最大实例数（改为3防止Docker资源竞争）
+max_parallel_workers: 1  # 同时运行的最大实例数（改为3防止Docker资源竞争）；若设为 1，则会把 Rocket 的 stdout/stderr 打印到屏幕（用于交互调试）
 
 individual_timeout_sec: 300 # TODO

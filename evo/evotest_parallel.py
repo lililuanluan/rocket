@@ -97,9 +97,10 @@ def run_rocket_instance(
     base_network_config: dict,
     port_offset: int,
     dirs=dirs,
+    output_screen=False,
 ):
     """运行单个 Rocket 实例
-    
+
     Args:
         instance_id: 实例 ID，格式为 G{gen}T{ind}，用于隔离容器
         log_dir: 日志目录
@@ -109,13 +110,14 @@ def run_rocket_instance(
         config: 策略配置
         base_network_config: 基础网络配置
         port_offset: 端口偏移量，用于隔离网络端口
+        output_screen: 如果为 True，将把 rocket 的 stdout/stderr 打印到屏幕；否则重定向到日志文件
     """
     os.chdir(dirs["rocket_dir"])
     py = sys.executable
-    
+
     # 计算 gRPC 端口（使用 port_offset 而不是 instance_id）
     grpc_port = 50051 + port_offset
-    
+
     # 清理该实例的旧容器
     cleanup_instance_docker_containers(instance_id)
 
@@ -174,19 +176,26 @@ def run_rocket_instance(
         str(config.get("ripple-image", "")),
     ]
 
-    print(f"[{instance_id}] \n\tRunning command: {' '.join(cmd)}\n\tstderr saved to {dirs['logs_dir'] / log_dir / 'rocket_stderr.log'}")
+    if output_screen:
+        print(f"[{instance_id}] \n\tRunning command: {' '.join(cmd)}\n\toutput: (printed to screen)")
+    else:
+        print(f"[{instance_id}] \n\tRunning command: {' '.join(cmd)}\n\tstderr saved to {dirs['logs_dir'] / log_dir / 'rocket_stderr.log'}")
     env = os.environ.copy()
     env["RUST_BACKTRACE"] = "full"
     env["RUST_LOG"] = config.get("rust_log_level", "")
     
-    # 将输出重定向到 log 文件夹
+    # 将输出重定向到 log 文件夹，或直接打印到屏幕
     full_log_dir = dirs["logs_dir"] / log_dir
     full_log_dir.mkdir(parents=True, exist_ok=True)
     stdout_log = full_log_dir / "rocket_stdout.log"
     stderr_log = full_log_dir / "rocket_stderr.log"
-    
-    with open(stdout_log, "w") as stdout_f, open(stderr_log, "w") as stderr_f:
-        retcode = subprocess.call(cmd, env=env, stdout=stdout_f, stderr=stderr_f)
+
+    if output_screen:
+        # Print to terminal (inherit parent's stdout/stderr)
+        retcode = subprocess.call(cmd, env=env)
+    else:
+        with open(stdout_log, "w") as stdout_f, open(stderr_log, "w") as stderr_f:
+            retcode = subprocess.call(cmd, env=env, stdout=stdout_f, stderr=stderr_f)
 
     if retcode != 0:
         print(f"[{instance_id}] Rocket exited with code {retcode}")
@@ -221,6 +230,7 @@ def evaluate_individual_worker(args):
         fitness_function,
         byzz_nodes,
         logs_dir,
+        output_screen,
     ) = args
     
     # 生成 log 目录和 instance_id（使用 G{gen}T{ind} 格式）
@@ -237,6 +247,7 @@ def evaluate_individual_worker(args):
         config=config,
         base_network_config=base_network_config,
         port_offset=port_offset,
+        output_screen=output_screen,
     )
 
     # 评估结果
@@ -305,6 +316,7 @@ def parallel_evaluate_population(
     print(f"test_log_id: {test_log_id} (run dir: {test_log_dir})")
     # 准备任务参数
     tasks = []
+    output_screen_flag = True if max_workers == 1 else False
     for idx, ind in enumerate(population):
         port_offset = idx % max_workers  # 用于端口隔离
         tasks.append((
@@ -320,6 +332,7 @@ def parallel_evaluate_population(
             fitness_function,
             byzz_nodes,
             str(logs_dir),
+            output_screen_flag,
         ))
     
     results = []
