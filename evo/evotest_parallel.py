@@ -30,6 +30,8 @@ import copy
 from deap import base, creator, tools, algorithms
 from utils import *
 from configs import EvotestConfig
+from cleanup import cleanup_all_interceptor_processes, cleanup_all_docker_containers, cleanup_instance_docker_containers
+from evologger import EvoLogger
 
 # dirs
 dirs = get_dirs(__file__) # TODO: remove this, use EvotestConfig instead
@@ -37,91 +39,6 @@ dirs = get_dirs(__file__) # TODO: remove this, use EvotestConfig instead
 configs = EvotestConfig.from_dirs(dirs)
 
 
-
-
-
-
-
-
-
-
-
-def cleanup_all_interceptor_processes():
-    """清理所有 rocket-interceptor 进程"""
-    try:
-        print("\n🧹 Cleaning up all rocket-interceptor processes...")
-        subprocess.run(
-            ["killall", "-9", "rocket-interceptor"],
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-        )
-        print("✓ Cleanup complete")
-    except Exception as e:
-        print(f"Warning: Could not cleanup processes: {e}")
-
-
-def cleanup_all_docker_containers():
-    """清理所有 validator 容器"""
-    try:
-        out = subprocess.check_output(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                "name=validator_",
-                "--format",
-                "{{.Names}}",
-            ],
-            text=True,
-        ).strip()
-        if out:
-            names = [n for n in out.splitlines() if n]
-            for name in names:
-                print(f"Stopping and removing container: {name}")
-                try:
-                    subprocess.run(["docker", "rm", "-f", name], check=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"Warning: failed to remove {name}: {e}")
-    except FileNotFoundError:
-        print("docker not found in PATH; skipping validator cleanup")
-    except subprocess.CalledProcessError as e:
-        print(f"Warning: error while listing validator containers: {e}")
-
-
-def cleanup_instance_docker_containers(instance_id):
-    """清理特定实例的 validator 容器
-    
-    Args:
-        instance_id: 实例 ID，可以是字符串如 "G0T1" 或整数
-    """
-    try:
-        instance_id_str = str(instance_id)
-        
-        out = subprocess.check_output(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                "name=validator_",
-                "--format",
-                "{{.Names}}",
-            ],
-            text=True,
-        ).strip()
-        if out:
-            names = [n for n in out.splitlines() if n]
-            for name in names:
-                # 匹配包含 _i{instance_id} 后缀的容器
-                if f"_i{instance_id_str}" in name:
-                    try:
-                        subprocess.run(["docker", "rm", "-f", name], check=True,
-                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    except subprocess.CalledProcessError:
-                        pass
-    except Exception:
-        pass
 
 
 def signal_handler(signum, frame):
@@ -277,8 +194,6 @@ def run_rocket_instance(
     env = os.environ.copy()
     env["RUST_BACKTRACE"] = "full"
     env["RUST_LOG"] = config.get("rust_log_level", "")
-    env["ROCKET_GRPC_PORT"] = str(grpc_port)
-    env["ROCKET_INSTANCE_ID"] = str(instance_id)
     
     # 将输出重定向到 log 文件夹
     full_log_dir = dirs["logs_dir"] / log_dir
@@ -360,68 +275,9 @@ def evaluate_individual_worker(args):
     }
 
 
-def init_csv_file(output_dir):
-    """初始化 CSV 文件"""
-
-    output_path = Path(output_dir) / "evo_result.csv"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 
-    with open(output_path, "w", newline="") as csvfile:
-        fieldnames = [
-            "generation",
-            "individual_id",
-            "fitness_type",
-            "fitness",
-            "mean_validation_time",
-            "num_propose_set",
-            "total_failures",
-        ]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-
-    print(f"✓ CSV file initialized: {output_path}")
-    return output_path
-
-# TODO: write all evaluation results (fitness) to csv
-def  write_result_to_csv(result, fitness_function, csv_file_path):
-
-    if csv_file_path is None:
-        print("Warning: CSV file path is not set. Skipping writing results to CSV.")
-        return
-
-    with open(csv_file_path, "a", newline="") as csvfile:
-        fieldnames = [
-            "generation",
-            "individual_id",
-            "fitness_type",
-            "fitness",
-            "mean_validation_time",
-            "num_propose_set",
-            "total_failures",
-        ]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-        eval_result = result["eval_result"]
-        fitness_formatted = round(result["fitness"], 3)
-        mean_time_formatted = (
-            round(eval_result["mean_validation_time"], 3)
-            if eval_result["mean_validation_time"]
-            else 0.0
-        )
-
-        writer.writerow(
-            {
-                "generation": result["generation"],
-                "individual_id": result["individual_id"],
-                "fitness_type": fitness_function,
-                "fitness": fitness_formatted,
-                "mean_validation_time": mean_time_formatted,
-                "num_propose_set": eval_result["num_propose_set"],
-                "total_failures": eval_result["total_failures"],
-            }
-        )
 
 
 def create_individual(encoding_min, encoding_max, encoding_length):
@@ -502,7 +358,7 @@ def parallel_evaluate_population(
                     results.append(result)
                     
                     # 实时写入 CSV
-                    write_result_to_csv(result, fitness_function, csv_file_path=Path(test_log_dir) / "evo_result.csv")
+                    EvoLogger.write_result_to_csv(result, fitness_function, Path(configs.test_log_dir) / "evo_result.csv")
                     
                 except Exception as e:
                     print(f"Error evaluating individual: {e}")
@@ -513,6 +369,8 @@ def parallel_evaluate_population(
 
 
 def main(configs: EvotestConfig):
+    
+    EvoLogger.init_log(configs.test_log_dir)
 
     # 重置全局变量
     evaluation_cnt = 0
@@ -534,8 +392,6 @@ def main(configs: EvotestConfig):
     np.random.seed(configs.seed)
 
 
-    # 精确到秒
-    test_log_id = configs.test_log_dir_identifier
 
     lambda_ = config.get("population_size", 4)
     mu = min(lambda_, config.get("mu", 4))
@@ -557,7 +413,7 @@ def main(configs: EvotestConfig):
     print()
 
     
-    csv_path = init_csv_file(configs.test_log_dir)
+
     print()
 
     # 设置 DEAP toolbox
@@ -707,12 +563,6 @@ def main(configs: EvotestConfig):
 
     print("\n=== Evolution Statistics ===")
     print(logbook)
-
-    print(f"\n✓ Results saved to: {csv_path}")
-    print(f"\n📊 Analysis tip:")
-    print(f"   import pandas as pd")
-    print(f"   df = pd.read_csv('{csv_path}')")
-    print(f"   df.groupby('generation')['fitness'].describe()")
 
     return population, logbook, hof
 
