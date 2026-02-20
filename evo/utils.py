@@ -77,7 +77,18 @@ def setup_docker_images(ripple_image, rocket_dir):
     os.chdir(original_cwd)
 
 
+def get_strategy_name(strategy):
 
+    # 检查策略类是否在 rocket_controller/strategies 中存在
+    import importlib
+    strategies_module = importlib.import_module("rocket_controller.strategies")
+    if not hasattr(strategies_module, strategy):
+        raise ValueError(
+            f"Strategy class '{strategy}' not found in rocket_controller/strategies. "
+            f"Available: {[c for c in dir(strategies_module) if not c.startswith('_')]}"
+        )
+
+    return strategy
 
 def aggregate_logs(log_dir=None):
     if log_dir is None:
