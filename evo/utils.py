@@ -15,7 +15,7 @@ def get_last_log_dir():
     return max(log_dir.iterdir(), key=os.path.getmtime)
 
 
-def get_dirs(script_path): 
+def get_dirs(script_path) -> dict: 
     # dir: 文件夹
     # path：文件或文件夹
     # must be some script in rocket/evo/
