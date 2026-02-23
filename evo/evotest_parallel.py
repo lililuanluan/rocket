@@ -29,14 +29,13 @@ import copy
 # DEAP imports
 from deap import base, creator, tools, algorithms
 from utils import *
-from configs import EvotestConfig
+from configs import get_configs
 from cleanup import cleanup_all_interceptor_processes, cleanup_all_docker_containers, cleanup_instance_docker_containers
 from evologger import EvoLogger
 
-# dirs
-dirs = get_dirs(__file__) # TODO: remove this, use EvotestConfig instead
-
-configs = EvotestConfig.from_dirs(dirs)
+"""The `main` function will call :func:`get_configs` and receive a single
+dictionary containing all parameters.  We avoid any global `dirs` variable and
+do not use the EvotestConfig class at all.  """
 
 
 
@@ -68,11 +67,14 @@ def setup_deap_types():
 
 def generate_instance_network_config(instance_id: int, base_config: dict) -> dict:
     """为每个实例生成独立的网络配置
-    
+
+    NOTE: the first parameter is *not* a literal identifier but the
+    numerical port offset assigned by the caller (usually idx % max_workers).
+
     Args:
-        instance_id: 实例 ID (0, 1, 2, ...)
+        instance_id: integer offset used to shift all base ports (0, 1, 2, ...).
         base_config: 基础网络配置
-    
+
     Returns:
         修改后的网络配置，端口偏移了 instance_id * 100
     """
@@ -89,14 +91,14 @@ def generate_instance_network_config(instance_id: int, base_config: dict) -> dic
 
 def run_rocket_instance(
     instance_id: str,
-    log_dir: str, # <name>/G{gen}T{ind}/
+    log_dir: str,  # <name>/G{gen}T{ind}/
     max_ledger_seq: int,
     seed: int,
     encoding: list,
     config: dict,
     base_network_config: dict,
     port_offset: int,
-    dirs=dirs,
+    dirs=None,
     output_screen=False,
 ):
     """运行单个 Rocket 实例
@@ -112,11 +114,18 @@ def run_rocket_instance(
         port_offset: 端口偏移量，用于隔离网络端口
         output_screen: 如果为 True，将把 rocket 的 stdout/stderr 打印到屏幕；否则重定向到日志文件
     """
+    # allow caller to pass directories or recompute them lazily
+    if dirs is None:
+        dirs = get_dirs(__file__)
     os.chdir(dirs["rocket_dir"])
     py = sys.executable
 
     # 计算 gRPC 端口（使用 port_offset 而不是 instance_id）
-    grpc_port = 50051 + port_offset
+    # grpc_base_port is provided via the global configuration dict; default
+    # to 50051 for backward compatibility.  individual workers will add their
+    # own port_offset (derived from their index) to this base.
+    grpc_base = config.get("grpc_base_port", 50051)
+    grpc_port = grpc_base + port_offset
 
     # 清理该实例的旧容器
     cleanup_instance_docker_containers(instance_id)
@@ -233,8 +242,11 @@ def evaluate_individual_worker(args):
         output_screen,
     ) = args
     
-    # 生成 log 目录和 instance_id（使用 G{gen}T{ind} 格式）
-    instance_id = f"G{generation}T{individual_id}"
+    # 生成 log 目录和 instance_id。若提供了 run_id，则将其作为前缀，
+    # 这样容器名里会携带 run_id 以实现跨进程隔离。
+    run_id = config.get("run_id", "")
+    base_id = f"G{generation}T{individual_id}-F{fitness_function}"
+    instance_id = f"{run_id}-{base_id}" if run_id else base_id
     log_dir = f"{test_log_id}/{instance_id}/"
     
     # 运行 Rocket
@@ -348,14 +360,14 @@ def parallel_evaluate_population(
         
         with ProcessPoolExecutor(max_workers=min(len(batch_tasks), max_workers)) as executor:
             futures = {executor.submit(evaluate_individual_worker, t): i for i, t in enumerate(batch_tasks)}
-            
             for future in as_completed(futures):
                 try:
                     result = future.result()
                     results.append(result)
                     
                     # 实时写入 CSV
-                    EvoLogger.write_result_to_csv(result, fitness_function, Path(configs.test_log_dir) / "evo_result.csv")
+                    # `test_log_dir` is passed as an argument to this function
+                    EvoLogger.write_result_to_csv(result, fitness_function, Path(test_log_dir) / "evo_result.csv")
                     
                 except Exception as e:
                     print(f"Error evaluating individual: {e}")
@@ -365,13 +377,13 @@ def parallel_evaluate_population(
     return results
 
 
-def main(configs: EvotestConfig):
+def main(configs: dict):
     
-    EvoLogger.init_log(configs.test_log_dir)
+    EvoLogger.init_log(configs["test_log_dir"])
 
     # 重置全局变量
     evaluation_cnt = 0
-    # config = configs.config
+    # (the entire configuration is already in the `configs` dict)
 
     # register signal handlers / atexit only in the main process
     # (worker processes must not install these handlers)
@@ -380,31 +392,32 @@ def main(configs: EvotestConfig):
         signal.signal(signal.SIGTERM, signal_handler)
         atexit.register(cleanup_all_interceptor_processes)
 
-    build_interceptor(interceptor_dir=configs.interceptor_dir, cargo_clean=False)
-    setup_docker_images(configs.ripple_image, configs.rocket_dir)
+    # build_interceptor(interceptor_dir=configs["interceptor_dir"], cargo_clean=False) # TODO build outside, otherwise race
+    setup_docker_images(configs["ripple_image"], configs["rocket_dir"])
     setup_deap_types()
 
     # 读取配置
-    random.seed(configs.seed)
-    np.random.seed(configs.seed)
+    random.seed(configs["seed"])
+    np.random.seed(configs["seed"])
 
 
 
-    lambda_ = configs.population_size
-    mu = min(lambda_, configs.mu)
-    max_generation = configs.max_generation
-    fitness_function = configs.fitness_function
+    lambda_ = configs["population_size"]
+    mu = min(lambda_, configs["mu"])
+    max_generation = configs["max_generation"]
+    fitness_function = configs["fitness_function"]
 
-    num_nodes =  configs.number_of_nodes
+    num_nodes = configs.get("number_of_nodes")
     encoding_len = num_nodes * (num_nodes - 1) * 7
-    delay_min = configs.delay_min
-    delay_max = configs.delay_max
+    # use the CLI parameter names directly (no intermediate mapping)
+    delay_min = configs.get("min_delay_ms")
+    delay_max = configs.get("max_delay_ms")
 
 
 
     print(f"=== Starting Parallel (μ+λ) EA with DEAP ===")
     print(f"μ={mu}, λ={lambda_}, max_generations={max_generation}")
-    print(f"Max parallel workers: {configs.max_parallel_workers}")
+    print(f"Max parallel workers: {configs.get('max_parallel_workers')}")
     print(f"Fitness function: {fitness_function}")
     print(f"Encoding length: {encoding_len}, range: [{delay_min}, {delay_max}]")
     print()
@@ -469,15 +482,15 @@ def main(configs: EvotestConfig):
     results = parallel_evaluate_population(
         population,
         generation=0,
-        config=configs.config,
-        base_network_config=configs.base_network_config,
-        test_log_dir=configs.test_log_dir,
-        max_ledger_seq=configs.max_ledger_seq,
-        seed=configs.seed,
+        config=configs,  # now use entire dict instead of a nested `config` attr
+        base_network_config=configs.get("base_network_config"),
+        test_log_dir=configs.get("test_log_dir"),
+        max_ledger_seq=configs.get("max_ledger_seq"),
+        seed=configs.get("seed"),
         fitness_function=fitness_function,
-        byzz_nodes=configs.byzz_nodes,
-        logs_dir=configs.logs_dir,
-        max_workers=configs.max_parallel_workers,
+        byzz_nodes=configs.get("byzz_nodes"),
+        logs_dir=configs.get("logs_dir"),
+        max_workers=configs.get("max_parallel_workers"),
     )
 
     evaluation_cnt += len(results)
@@ -513,15 +526,15 @@ def main(configs: EvotestConfig):
             results = parallel_evaluate_population(
                 invalid_ind,
                 generation=gen,
-                config=configs.config,
-                base_network_config=configs.base_network_config,
-                test_log_dir=configs.test_log_dir,
-                max_ledger_seq=configs.max_ledger_seq,
-                seed=configs.seed,
+                config=configs,
+                base_network_config=configs.get("base_network_config"),
+                test_log_dir=configs.get("test_log_dir"),
+                max_ledger_seq=configs.get("max_ledger_seq"),
+                seed=configs.get("seed"),
                 fitness_function=fitness_function,
-                byzz_nodes=configs.byzz_nodes,
-                logs_dir=configs.logs_dir,
-                max_workers=configs.max_parallel_workers,
+                byzz_nodes=configs.get("byzz_nodes"),
+                logs_dir=configs.get("logs_dir"),
+                max_workers=configs.get("max_parallel_workers"),
             )
 
             evaluation_cnt += len(results)
@@ -566,7 +579,8 @@ def main(configs: EvotestConfig):
 
 if __name__ == "__main__":
     try:
-        main(configs)
+        cfg = get_configs()
+        main(cfg)
     except Exception as e:
         print(f"Error during evolution: {e}")
         import traceback
