@@ -12,10 +12,10 @@ import yaml
 import os
 import sys
 from pathlib import Path
+from evaluate import evaluate_log
 import subprocess
 import shutil
 from datetime import datetime
-from evaluate import evaluate_log
 import random
 import numpy as np
 import csv
@@ -32,6 +32,10 @@ from utils import *
 from configs import get_configs
 from cleanup import cleanup_all_interceptor_processes, cleanup_all_docker_containers, cleanup_instance_docker_containers
 from evologger import EvoLogger
+
+
+from evo import encodings
+
 
 """The `main` function will call :func:`get_configs` and receive a single
 dictionary containing all parameters.  We avoid any global `dirs` variable and
@@ -59,11 +63,6 @@ def setup_deap_types():
             log_dir=None,
             evaluation_result=None,
         )
-
-
-
-
-
 
 def generate_instance_network_config(instance_id: int, base_config: dict) -> dict:
     """为每个实例生成独立的网络配置
@@ -94,7 +93,7 @@ def run_rocket_instance(
     log_dir: str,  # <name>/G{gen}T{ind}/
     max_ledger_seq: int,
     seed: int,
-    encoding: list,
+    encoding: dict,
     config: dict,
     base_network_config: dict,
     port_offset: int,
@@ -155,8 +154,8 @@ def run_rocket_instance(
                 "encoding": encoding,
                 "byzz_min_seq": byzz_min_seq,
                 "byzz_max_seq": byzz_max_seq,
-                "min_delay_ms": config.get("encoding", {}).get("min_value", 0),
-                "max_delay_ms": config.get("encoding", {}).get("max_value", 4000),
+                "min_delay_ms": config["min_delay_ms"],
+                "max_delay_ms": config["max_delay_ms"],
                 "timeout_sec_per_seq": timeout_sec_per_seq,
             },
             f,
@@ -245,7 +244,7 @@ def evaluate_individual_worker(args):
     # 生成 log 目录和 instance_id。若提供了 run_id，则将其作为前缀，
     # 这样容器名里会携带 run_id 以实现跨进程隔离。
     run_id = config.get("run_id", "")
-    base_id = f"G{generation}T{individual_id}-F{fitness_function}"
+    base_id = f"G{generation}T{individual_id}-F-{fitness_function}-S-{config['strategy']}"
     instance_id = f"{run_id}-{base_id}" if run_id else base_id
     log_dir = f"{test_log_id}/{instance_id}/"
     
@@ -282,17 +281,6 @@ def evaluate_individual_worker(args):
     }
 
 
-
-
-
-
-
-def create_individual(encoding_min, encoding_max, encoding_length):
-    """创建随机个体"""
-    encoding = [
-        random.randint(encoding_min, encoding_max) for _ in range(encoding_length)
-    ]
-    return creator.Individual(encoding)
 
 
 def parallel_evaluate_population(
@@ -332,7 +320,7 @@ def parallel_evaluate_population(
     for idx, ind in enumerate(population):
         port_offset = idx % max_workers  # 用于端口隔离
         tasks.append((
-            list(ind),  # 个体基因
+            ind.to_dict(),  # 个体基因
             generation,
             idx + 1,  # individual_id 从 1 开始
             port_offset,
@@ -376,6 +364,15 @@ def parallel_evaluate_population(
     
     return results
 
+def get_encoding_cls(strategy: str):
+    cls_name = f"{strategy}Encoding"
+    return getattr(encodings, cls_name)
+
+def sample_individual(configs: dict):
+    strategy = configs["strategy"]
+    encoding_cls = get_encoding_cls(strategy)
+    return encoding_cls.sample(configs)
+
 
 def main(configs: dict):
     
@@ -414,50 +411,21 @@ def main(configs: dict):
     delay_max = configs.get("max_delay_ms")
 
 
-
-    print(f"=== Starting Parallel (μ+λ) EA with DEAP ===")
-    print(f"μ={mu}, λ={lambda_}, max_generations={max_generation}")
-    print(f"Max parallel workers: {configs.get('max_parallel_workers')}")
-    print(f"Fitness function: {fitness_function}")
-    print(f"Encoding length: {encoding_len}, range: [{delay_min}, {delay_max}]")
-    print()
-
+    strategy = configs["strategy"]
+    encoding_cls = get_encoding_cls(strategy)
     
 
-    print()
 
     # 设置 DEAP toolbox
     toolbox = base.Toolbox()
 
     # 注册遗传算法操作
-    toolbox.register("individual", create_individual, delay_min, delay_max, encoding_len)
+    toolbox.register("individual", sample_individual, configs)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
-    # 注册遗传算子
-    def crossover_and_round(ind1, ind2):
-        """SBX 交叉后转换为整数"""
-        tools.cxSimulatedBinaryBounded(
-            ind1, ind2, eta=3.0, low=delay_min, up=delay_max
-        )
-        ind1[:] = [int(round(x)) for x in ind1]
-        ind2[:] = [int(round(x)) for x in ind2]
-        return ind1, ind2
 
-    def mutate_and_round(individual):
-        """高斯变异后转换为整数并限制范围"""
-        tools.mutGaussian(
-            individual,
-            mu=0,
-            sigma=(delay_max - delay_min) / 100.0,
-            indpb=1.0 / encoding_len,
-        )
-        individual[:] = [
-            int(round(max(delay_min, min(delay_max, x)))) for x in individual
-        ]
-        return (individual,)
-
-    toolbox.register("mate", crossover_and_round)
-    toolbox.register("mutate", mutate_and_round)
+    toolbox.register("mate", encoding_cls.mate)
+    toolbox.register("mutate", encoding_cls.mutate)
     toolbox.register("select", tools.selBest)
 
     # 统计信息
