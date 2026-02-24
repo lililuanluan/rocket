@@ -77,11 +77,8 @@ class InterceptorManager:
                 container = docker_client.containers.get(name)
                 container.stop()
                 container.remove(force=True)
-            except docker.errors.NotFound:
-                # 容器可能已被其他 worker 删除
-                pass
             except Exception as e:
-                logger.warning(f"Error cleaning up container {name}: {e}")
+                pass
 
     def start_new(self):
         """Starts the rocket-interceptor subprocess, and spawns a thread checking for output."""
