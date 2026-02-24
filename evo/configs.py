@@ -4,8 +4,6 @@ import argparse
 from utils import get_dirs
 
 
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="evotest_parallel.py",
@@ -115,7 +113,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strategy",
         type=str,
-        choices=["EvoDelayStrategy", "RandomDelayByzzStrategy", "RandomByzzStrategy", "RandomDelayStrategy"],   
+        # TODO: 自动获取rocket_controller.strategies模块下的所有strategy的子类
+        choices=[
+            "EvoDelayStrategy",
+            "RandomDelayByzzStrategy",
+            "RandomByzzStrategy",
+            "RandomDelayStrategy",
+            "EvoDelayBySeqStrategy",
+        ],
         default="EvoDelayStrategy",
         metavar="STRATEGY",
         help="the name of the rocket_controller strategy class to use (e.g. EvoDelayStrategy)",

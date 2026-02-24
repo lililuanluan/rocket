@@ -47,7 +47,7 @@ class EvoDelayStrategy(Strategy):
     ):
         super().__init__(network_config_path=network_config_path, **kwargs)
 
-        self.delays: list[int] = self.params["encoding"]
+        self.encoding: dict = self.params["encoding"]
         self.byzz_min_seq: int = self.params.get("byzz_min_seq", 5)
         self.byzz_max_seq: int = self.params.get("byzz_max_seq", 10)
 
@@ -64,11 +64,12 @@ class EvoDelayStrategy(Strategy):
         self.byzz_mutate_methods = BYZZ_MUTATE_METHODS
         self.byzz_mutator = ByzzMutator(self)
 
+
     def setup(self):
         """Setup method for EvoDelayStrategy."""
 
         # Hardcoded on 7 message types we will consider, could be a parameter in the future
-        assert len(self.delays) == 7 * self.network.node_amount * (
+        assert len(self.encoding["delays"]) == 7 * self.network.node_amount * (
             self.network.node_amount - 1
         )
 
@@ -110,7 +111,8 @@ class EvoDelayStrategy(Strategy):
             if tx not in self.old_transactions:
                 self.old_transactions.append(tx)
 
-    def get_delay(self, message_type: int, packet: packet_pb2.Packet) -> int:
+
+    def get_delay(self, message_type: int, packet: packet_pb2.Packet, current_ledger: int) -> int:
         sender_node_id = self.network.port_to_id(packet.from_port)
         receiver_node_id = self.network.port_to_id(packet.to_port)
         # To get type index -> subtract 30, for validation, subtract 35
@@ -129,7 +131,7 @@ class EvoDelayStrategy(Strategy):
                 else receiver_node_id - 1
             )
         )
-        return self.delays[index]
+        return self.encoding["delays"][index]
 
 
     def get_mutation_method(self, message) -> str:
@@ -149,6 +151,7 @@ class EvoDelayStrategy(Strategy):
 
         # Code taken from packet decoder
         message, message_type = PacketEncoderDecoder.decode_packet(packet)
+        sender_node_id = self.network.port_to_id(packet.from_port)
 
         try:
             self.cache_old_messages(message) # parse validation may fail
@@ -168,10 +171,12 @@ class EvoDelayStrategy(Strategy):
         # 35: ripple_pb2.TMHaveTransactionSet
         # 41: ripple_pb2.TMValidation
 
-        configed_delay = self.get_delay(message_type, packet)
+        try:
+            current_ledger = self.iteration_type.get_ledger_sequence(sender_node_id)
+        except ValueError as e: # byzz_node seq is not in map
+            current_ledger = self.iteration_type.get_ledger_sequence_cur_max()     
 
-        # possibly mutate
-        current_ledger = self.iteration_type.get_ledger_sequence_cur_max()
+        configed_delay = self.get_delay(message_type, packet, current_ledger)
 
         # # Debug logging for message routing
         # if isinstance(message, ripple_pb2.TMProposeSet):
