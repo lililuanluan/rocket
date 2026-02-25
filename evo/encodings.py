@@ -1,6 +1,7 @@
 import numpy as np
 from deap import tools
 import sys
+import random
 
 
 class BaseEncoding:
@@ -9,10 +10,11 @@ class BaseEncoding:
 
     @staticmethod
     def mate(ind1, ind2):
-        raise NotImplementedError("mate method not implemented")
+        return ind1, ind2
 
-    def mutate(self, **kwargs):
-        raise NotImplementedError("mutate method not implemented")
+    @staticmethod
+    def mutate(ind, **kwargs):
+        return (ind,)
 
     def repair(self):
         # 将mate和mutate之后的基因修复为合理的类型
@@ -30,18 +32,13 @@ class RandomDelayByzzStrategyEncoding(BaseEncoding):
     def __init__(self):
         pass
 
-    def mate(self, ind1, ind2):
-        pass
-
-    def mutate(self, ind):
-        pass
-
     def repair(self):
         pass
 
     def to_dict(self):
         return {}
 
+    @staticmethod
     def sample(configs):
         return RandomDelayByzzStrategyEncoding()
 
@@ -77,6 +74,17 @@ class RandomDelayByzzPartitionStrategyEncoding(BaseEncoding):
         pass
 
     def to_dict(self):
+        return {
+            "partition_seq": self.partition_seq,
+            "partition_duration": self.partition_duration,
+        }
+
+
+class RandomByzzStrategyEncoding(BaseEncoding):
+    def __init__(self):
+        pass
+
+    def to_dict(self):
         return {}
 
     def sample(configs):
@@ -85,15 +93,6 @@ class RandomDelayByzzPartitionStrategyEncoding(BaseEncoding):
 
 class RandomDelayStrategyEncoding(BaseEncoding):
     def __init__(self):
-        pass
-
-    def mate(self, ind1, ind2):
-        pass
-
-    def mutate(self, ind):
-        pass
-
-    def repair(self):
         pass
 
     def to_dict(self):
@@ -176,21 +175,28 @@ class EvoDelayBySeqStrategyEncoding(EvoDelayStrategyEncoding):
         self.delay_max = delay_max
         self.num_message_types = num_message_types
         self.num_seqs = byzz_max_seq - byzz_min_seq + 1
-        self.encoding_len = num_nodes * (num_nodes - 1) * num_message_types * self.num_seqs
+        self.encoding_len = (
+            num_nodes * (num_nodes - 1) * num_message_types * self.num_seqs
+        )
         self.encoding = []
 
     @staticmethod
     def sample(configs):
         num_nodes, delay_min, delay_max, byzz_min_seq, byzz_max_seq = (
             configs["number_of_nodes"],
-            configs.get("min_delay_ms"),
-            configs.get("max_delay_ms"),
-            configs.get("byzz_min_seq"),
-            configs.get("byzz_max_seq"),
+            configs["min_delay_ms"],
+            configs["max_delay_ms"],
+            configs["byzz_min_seq"],
+            configs["byzz_max_seq"],
         )
         num_message_types = 7
         ind = EvoDelayBySeqStrategyEncoding(
-            byzz_min_seq, byzz_max_seq, num_nodes, delay_min, delay_max, num_message_types
+            byzz_min_seq,
+            byzz_max_seq,
+            num_nodes,
+            delay_min,
+            delay_max,
+            num_message_types,
         )
         ind.encoding = [
             np.random.randint(delay_min, delay_max) for _ in range(ind.encoding_len)
