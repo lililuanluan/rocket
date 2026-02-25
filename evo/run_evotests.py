@@ -1,4 +1,3 @@
-
 import subprocess
 import sys
 import time
@@ -15,7 +14,7 @@ from pathlib import Path
 
 
 def main():
-    images = [f"xrpld:2.6.0-bug{i}-local" for i in range(1, 11)]
+    images = ["xrpllabsofficial/xrpld:2.6.0"]
     strategies = ["EvoDelayStrategy", "RandomDelayByzzStrategy"]
     # choose real fitness names from the allowed list; "fitness_function" was
     # a placeholder and not a valid choice for the CLI parser
@@ -62,6 +61,8 @@ def main():
                     str(base_ws_admin),
                     "--base-port-rpc",
                     str(base_rpc),
+                    "--max-parallel-workers",
+                    str(5),
                     # logs dir and test-log-dir are computed inside the
                     # called script based on run-id; no need to pass them
                     # explicitly
