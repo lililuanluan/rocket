@@ -22,6 +22,7 @@ from pathlib import Path
 from loguru import logger
 
 from google.protobuf.message import Message
+import time
 
 TMP_ERROR_FILE = Path(__file__).parent / "../../evo/out/error.log" # TODO add this as a param
 
@@ -133,6 +134,8 @@ class EvoDelayStrategy(Strategy):
         )
         return self.encoding["delays"][index]
 
+    def get_partition_delay(self, cur_time) -> int:
+        return 0
 
     def get_mutation_method(self, message) -> str:
         method = self.byzz_mutator.get_mutation_method_50_percent(message)
@@ -160,7 +163,7 @@ class EvoDelayStrategy(Strategy):
             return packet.data, 0, 1
 
         if message_type not in set(range(30, 36)).union({41}):
-            return packet.data, 0, 1
+            return packet.data, self.get_partition_delay(time.time()), 1
 
         # Types used in evolutionary paper: https://doi.org/10.1109/ICSE-SEIP58684.2023.00009
         # 30: ripple_pb2.TMTransaction

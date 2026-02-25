@@ -46,15 +46,32 @@ class RandomDelayByzzStrategyEncoding(BaseEncoding):
         return RandomDelayByzzStrategyEncoding()
 
 
-class RandomByzzStrategyEncoding(BaseEncoding):
-    def __init__(self):
-        pass
 
-    def mate(self, ind1, ind2):
-        pass
+class EvoDelayByzzPartition(BaseEncoding):
+    pass
 
-    def mutate(self, ind):
-        pass
+class RandomDelayByzzPartitionStrategyEncoding(BaseEncoding):
+    # 配置：partition seq，partition duration，做成一个列表 [(seq1, duration1), (seq2, duration2), ...]，
+    def __init__(
+        self,
+        partition_seq,
+        partition_duration,
+    ):
+        self.partition_seq = partition_seq
+        self.partition_duration = partition_duration
+
+    @staticmethod
+    def sample(configs):
+        partition_seq, partition_duration = (
+            configs["partition_seq"],
+            configs["partition_duration"],
+        )
+        ind = RandomDelayByzzPartitionStrategyEncoding(
+            partition_seq=partition_seq,
+            partition_duration=partition_duration,
+        )
+
+        return ind
 
     def repair(self):
         pass

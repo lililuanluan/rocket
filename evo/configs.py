@@ -120,6 +120,7 @@ def parse_args() -> argparse.Namespace:
             "RandomByzzStrategy",
             "RandomDelayStrategy",
             "EvoDelayBySeqStrategy",
+            "RandomDelayByzzPartitionStrategy",
         ],
         default="EvoDelayStrategy",
         metavar="STRATEGY",
@@ -223,6 +224,22 @@ def parse_args() -> argparse.Namespace:
         default=50051,
         metavar="GRPC_BASE_PORT",
         help="the starting gRPC port; each instance will add its own offset",
+    )
+
+    parser.add_argument(
+        "--partition-seq",
+        type=int,
+        default=5,
+        metavar="PARTITION_SEQ",
+        help="the starting ledger sequence for network partition (default: 5)",
+    )
+
+    parser.add_argument(
+        "--partition-duration",
+        type=int,
+        default=1000,
+        metavar="PARTITION_DURATION",
+        help="the duration of the network partition in milliseconds (default: 1000)",
     )
 
     return parser.parse_args()
