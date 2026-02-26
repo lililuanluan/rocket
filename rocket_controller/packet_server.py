@@ -141,11 +141,12 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         if self.strategy.keep_action_log:
             log_dir = Path(format_datetime(self.strategy.start_datetime)) if self.strategy.log_dir is None else self.strategy.log_dir
+            iteration_subdir = log_dir / f"iteration-{self.strategy.iteration_type.cur_iteration}"
             self.logger = ActionLogger(
-                sub_directory=log_dir / f"iteration-{self.strategy.iteration_type.cur_iteration}",
+                sub_directory=iteration_subdir,
                 validator_node_list=validator_node_list,
-                action_log_filename=log_dir / f"action-{self.strategy.iteration_type.cur_iteration}",
-                node_log_filename=log_dir / f"node_info-{self.strategy.iteration_type.cur_iteration}",
+                action_log_filename=f"action-{self.strategy.iteration_type.cur_iteration}",
+                node_log_filename=f"node_info-{self.strategy.iteration_type.cur_iteration}",
             )
 
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")
