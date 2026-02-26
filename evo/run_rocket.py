@@ -4,6 +4,7 @@ import sys
 from cleanup import cleanup_instance_docker_containers
 import yaml
 import subprocess
+
 from utils import build_interceptor, get_dirs
 from datetime import datetime
 
@@ -13,10 +14,11 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 from rocket_controller.helper import format_datetime
+from evo.evaluate import evaluate_log
 
 
 # 一个独立的函数，运行一个rocket实例
-def run_rocket(
+def run_rocket_and_evaluate(
     log_dir: Path,  # 绝对路径或相对于rocket的相对路径
     cluster_id: str,  # 生成的docker容器名称前缀，容器名为 prefix_validator_1等，这个prefix是一个cluster的唯一标识
     max_ledger_seq: int,
@@ -39,6 +41,7 @@ def run_rocket(
     max_delay_ms: int,
     ripple_image: str,
     rust_log_level: str,
+    fitness_function: str,
 ):
     cur_dir = os.getcwd()
     os.chdir(rocket_dir)
@@ -104,10 +107,9 @@ def run_rocket(
     ]
 
     # 将输出重定向到 log 文件夹，或直接打印到屏幕
-    full_log_dir = log_dir
-    full_log_dir.mkdir(parents=True, exist_ok=True)
-    stdout_log = full_log_dir / "rocket_stdout.log"
-    stderr_log = full_log_dir / "rocket_stderr.log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stdout_log = log_dir / "rocket_stdout.log"
+    stderr_log = log_dir / "rocket_stderr.log"
 
     env = os.environ.copy()
     env["RUST_BACKTRACE"] = "full"
@@ -120,7 +122,7 @@ def run_rocket(
         retcode = subprocess.call(cmd, env=env)
     else:
         print(
-            f"[{cluster_id}] \n\tRunning command: {' '.join(cmd)}\n\tstderr saved to {full_log_dir / stderr_log}"
+            f"[{cluster_id}] \n\tRunning command: {' '.join(cmd)}\n\tstderr saved to {log_dir / stderr_log}"
         )
         with open(stdout_log, "w") as stdout_f, open(stderr_log, "w") as stderr_f:
             retcode = subprocess.call(cmd, env=env, stdout=stdout_f, stderr=stderr_f)
@@ -138,6 +140,23 @@ def run_rocket(
         pass
 
     os.chdir(cur_dir)
+    
+    with open(network_yaml, "r") as f:
+        network_config = yaml.safe_load(f)
+        byzz_nodes = network_config["byzz_nodes"]
+    eval_result = evaluate_log(log_dir, byzz_nodes=byzz_nodes)
+    
+    if fitness_function in eval_result:
+        fitness = eval_result[fitness_function] if eval_result[fitness_function] else 0.0
+    else:
+        fitness = 0.0
+        
+    return {
+        "eval_result": eval_result,
+        "fitness": fitness,
+    }
+
+
 
 
 if __name__ == "__main__":
@@ -149,7 +168,7 @@ if __name__ == "__main__":
 
     build_interceptor(interceptor_dir=dirs["interceptor_dir"], cargo_clean=False)
 
-    run_rocket(
+    eval_res = run_rocket_and_evaluate(
         # ``datetime`` is already imported from ``datetime`` so use
         # ``datetime.now()`` rather than ``datetime.datetime``.
         log_dir=dirs["logs_dir"]
@@ -177,4 +196,8 @@ if __name__ == "__main__":
         max_delay_ms=100,
         ripple_image="xrpld:2.6.0-bug5-local",
         rust_log_level="info",
+        fitness_function="num_getledger_hashes",
     )
+    
+    
+    print(f"Evaluation result: {eval_res}")
