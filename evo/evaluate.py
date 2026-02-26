@@ -392,9 +392,9 @@ def get_test_total_time(f):
     return (df.max() - df.min()) / 1000.0
 
 
-def get_node_info(log_dir):
-    node_info_path = f"{log_dir}/iteration-1/node_info-1.csv"
-    if not os.path.exists(node_info_path):
+def get_node_info(log_dir: Path):
+    node_info_path = log_dir / "iteration-1" / "node_info-1.csv"
+    if not node_info_path.exists():
         print(f"Node info file {node_info_path} does not exist.")
         return None
     df_node_info = pd.read_csv(node_info_path)
@@ -405,22 +405,22 @@ def get_node_info(log_dir):
     }
 
 
-def evaluate_log(log_dir, byzz_nodes: list):
+def evaluate_log(log_dir: Path, byzz_nodes: list):
 
     node_info = get_node_info(log_dir)
-    # print(f"Node info: {node_info}")
+    print(f"Node info: {node_info}")
 
     # 如果存在 log_dir/iteration-1/action-1.csv，则进行评估
-    action_log_path = f"{log_dir}/iteration-1/action-1.csv"
-    if not os.path.exists(action_log_path):
+    action_log_path = log_dir / "iteration-1" / "action-1.csv"
+    if not action_log_path.exists():
         print(f"Action log file {action_log_path} does not exist.")
         return None
     df_action = pd.read_csv(action_log_path)
     # 计算 "message_type"为"TMProposeSet" 的行数
     propose_set_count = get_prop_set_count(df_action)
 
-    result_log_path = f"{log_dir}/iteration-1/result-1.csv"
-    if not os.path.exists(result_log_path):
+    result_log_path = log_dir / "iteration-1" / "result-1.csv"
+    if not result_log_path.exists():
         print(f"Result log file {result_log_path} does not exist.")
         return None
     df_result = pd.read_csv(result_log_path)
@@ -500,6 +500,6 @@ def evaluate_log(log_dir, byzz_nodes: list):
 
 
 if __name__ == "__main__":
-    res = evaluate_log(get_last_log_dir()/"G0T1", byzz_nodes=[3])
+    res = evaluate_log(Path("/home/luanli/rocket/logs/2026_02_26_14h56m/WhateverStrategy/GxTx"), byzz_nodes=[3])
     for k, v in res.items():
         print(f"{k}: {v}")
