@@ -17,11 +17,17 @@ import subprocess
 import shutil
 from datetime import datetime
 import random
-import numpy as np
+try:
+    import numpy as np
+except ModuleNotFoundError as e:
+    raise ImportError(
+        "Numpy is required for evotest_parallel. "
+        "Activate the virtualenv or install dependencies (`pip install -r requirements.txt`)."
+    ) from e
 import csv
 import signal
 import atexit
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
 import tempfile
 import copy
@@ -34,7 +40,8 @@ from cleanup import cleanup_all_interceptor_processes, cleanup_all_docker_contai
 from evologger import EvoLogger
 
 
-from evo import encodings
+from evo import encoding
+from evo.run_rocket import run_rocket_and_evaluate
 
 
 """The `main` function will call :func:`get_configs` and receive a single
@@ -88,195 +95,74 @@ def generate_instance_network_config(instance_id: int, base_config: dict) -> dic
     return config
 
 
-def run_rocket_instance(
-    instance_id: str,
-    log_dir: str,  # <name>/G{gen}T{ind}/
-    max_ledger_seq: int,
-    seed: int,
-    encoding: dict,
-    config: dict,
-    base_network_config: dict,
-    port_offset: int,
-    dirs=None,
-    output_screen=False,
-):
-    """运行单个 Rocket 实例
-
-    Args:
-        instance_id: 实例 ID，格式为 G{gen}T{ind}，用于隔离容器
-        log_dir: 日志目录
-        max_ledger_seq: 最大账本序列号
-        seed: 随机种子
-        encoding: 编码（延迟策略）
-        config: 策略配置
-        base_network_config: 基础网络配置
-        port_offset: 端口偏移量，用于隔离网络端口
-        output_screen: 如果为 True，将把 rocket 的 stdout/stderr 打印到屏幕；否则重定向到日志文件
-    """
-    # allow caller to pass directories or recompute them lazily
-    if dirs is None:
-        dirs = get_dirs(__file__)
-    os.chdir(dirs["rocket_dir"])
-    py = sys.executable
-
-    # 计算 gRPC 端口（使用 port_offset 而不是 instance_id）
-    # grpc_base_port is provided via the global configuration dict; default
-    # to 50051 for backward compatibility.  individual workers will add their
-    # own port_offset (derived from their index) to this base.
-    grpc_base = config.get("grpc_base_port", 50051)
-    grpc_port = grpc_base + port_offset
-
-    # 清理该实例的旧容器
-    cleanup_instance_docker_containers(instance_id)
-
-    byzz_min_seq = config.get("byzz_min_seq", 5)
-    byzz_max_seq = config.get("byzz_max_seq", 10)
-    timeout_sec_per_seq = config.get("timeout_sec_per_seq", 30)
-    
-    # 生成实例专属的网络配置（使用 port_offset 计算端口偏移）
-    instance_network_config = generate_instance_network_config(port_offset, base_network_config)
-    
-    # 确保临时目录存在
-    tmp_dir = dirs["tmp_dir"]
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    
-    # 写入实例专属的网络配置文件（放到 tmp 目录）
-    instance_network_yaml = tmp_dir / f"network_{instance_id}.yaml"
-    with open(instance_network_yaml, "w") as f:
-        yaml.dump(instance_network_config, f)
-
-    strategy_name = get_strategy_name(config.get("strategy", "EvoDelayStrategy"))
-    strategy_yaml = tmp_dir / f"{strategy_name}_{instance_id}.yaml"
-    with open(strategy_yaml, "w") as f:
-        yaml.dump(
-            {
-                "seed": seed,
-                "encoding": encoding,
-                "byzz_min_seq": byzz_min_seq,
-                "byzz_max_seq": byzz_max_seq,
-                "min_delay_ms": config["min_delay_ms"],
-                "max_delay_ms": config["max_delay_ms"],
-                "timeout_sec_per_seq": timeout_sec_per_seq,
-            },
-            f,
-        )
-
-    cmd = [
-        py,
-        "-m",
-        "rocket_controller",
-        strategy_name,
-        "--config",
-        str(strategy_yaml),
-        "--network_config",
-        str(instance_network_yaml),
-        "--log-dir",
-        log_dir,
-        "--max-iteration",
-        str(1),
-        "--max-ledger-seq",
-        str(max_ledger_seq),
-        "--grpc-port",
-        str(grpc_port),
-        "--instance-id",
-        str(instance_id),
-        "--rippled-img",
-        str(config.get("ripple-image", "")),
-    ]
-
-    if output_screen:
-        print(f"[{instance_id}] \n\tRunning command: {' '.join(cmd)}\n\toutput: (printed to screen)")
-    else:
-        print(f"[{instance_id}] \n\tRunning command: {' '.join(cmd)}\n\tstderr saved to {dirs['logs_dir'] / log_dir / 'rocket_stderr.log'}")
-    env = os.environ.copy()
-    env["RUST_BACKTRACE"] = "full"
-    env["RUST_LOG"] = config.get("rust_log_level", "")
-    
-    # 将输出重定向到 log 文件夹，或直接打印到屏幕
-    full_log_dir = dirs["logs_dir"] / log_dir
-    full_log_dir.mkdir(parents=True, exist_ok=True)
-    stdout_log = full_log_dir / "rocket_stdout.log"
-    stderr_log = full_log_dir / "rocket_stderr.log"
-
-    if output_screen:
-        # Print to terminal (inherit parent's stdout/stderr)
-        retcode = subprocess.call(cmd, env=env)
-    else:
-        with open(stdout_log, "w") as stdout_f, open(stderr_log, "w") as stderr_f:
-            retcode = subprocess.call(cmd, env=env, stdout=stdout_f, stderr=stderr_f)
-
-    if retcode != 0:
-        print(f"[{instance_id}] Rocket exited with code {retcode}")
-    else:
-        print(f"[{instance_id}] Rocket finished successfully")
-
-    os.chdir(dirs["cur_dir"])
-    
-    # 清理临时配置文件
-    try:
-        instance_network_yaml.unlink()
-        strategy_yaml.unlink()
-    except:
-        pass
-
-
 def evaluate_individual_worker(args):
-    """工作进程中评估个体的函数
-    
-    这个函数在单独的进程中运行，用于并行评估
+    """Worker function executed inside a separate process.
+
+    The caller prepares a tuple containing all of the information needed to
+    invoke ``run_rocket_and_evaluate``.  The worker computes a per‑run base
+    port number from the ``base_port_population`` supplied in the
+    configuration, then forwards the rest of the arguments directly.  The
+    return value mirrors the structure that the evolution loop expects.
+
+    ``run_rocket_and_evaluate`` is imported from ``evo.run_rocket`` and
+    encapsulates all of the Docker/container/port/logging setup we need for
+    an individual evaluation.  By centralising the call here we avoid
+    duplicating that logic in both the sequential and parallel runners.
     """
     (
         individual_genes,
         generation,
         individual_id,
-        port_offset,
         config,
         base_network_config,
-        test_log_id,
+        test_log_dir,
         max_ledger_seq,
         seed,
         fitness_function,
-        byzz_nodes,
         logs_dir,
         output_screen,
+        base_port_number,
     ) = args
-    
-    # 生成 log 目录和 instance_id。若提供了 run_id，则将其作为前缀，
-    # 这样容器名里会携带 run_id 以实现跨进程隔离。
-    run_id = config.get("run_id", "")
+
+    # build cluster/log identifiers exactly as before
     base_id = f"G{generation}T{individual_id}-F-{fitness_function}-S-{config['strategy']}"
-    instance_id = f"{run_id}-{base_id}" if run_id else base_id
-    log_dir = f"{test_log_id}/{instance_id}/"
-    
-    # 运行 Rocket
-    run_rocket_instance(
-        instance_id=instance_id,
-        log_dir=log_dir,
+    cluster_id = base_id
+    full_log_dir = Path(logs_dir) / str(test_log_dir) / cluster_id
+
+    # call shared helper; it will take care of container cleanup, network
+    # config file generation, and evaluation of the log.
+    result = run_rocket_and_evaluate(
+        log_dir=full_log_dir,
+        cluster_id=cluster_id,
         max_ledger_seq=max_ledger_seq,
         seed=seed,
         encoding=individual_genes,
-        config=config,
-        base_network_config=base_network_config,
-        port_offset=port_offset,
+        rocket_dir=get_dirs(__file__)["rocket_dir"],
+        tmp_dir=get_dirs(__file__)["tmp_dir"],
+        byzz_min_seq=config.get("byzz_min_seq", 5),
+        byzz_max_seq=config.get("byzz_max_seq", 10),
         output_screen=output_screen,
+        timeout_sec_per_seq=config.get("timeout_per_seq", 30),
+        network_yaml=get_dirs(__file__)["cur_dir"] / config.get("base_network_config_yaml", "network.yaml"),
+        base_port_number=base_port_number,
+        strategy_name=get_strategy_name(config.get("strategy", "")),
+        min_delay_ms=config.get("min_delay_ms"),
+        max_delay_ms=config.get("max_delay_ms"),
+        ripple_image=config.get("ripple_image", ""),
+        rust_log_level=config.get("rust_log_level", "info"),
+        fitness_function=fitness_function,
     )
 
-    # 评估结果
-    eval_result = evaluate_log(Path(logs_dir) / log_dir, byzz_nodes=byzz_nodes)
-    
-    if fitness_function in eval_result:
-        fitness = eval_result[fitness_function] if eval_result[fitness_function] else 0.0
-    else:
-        fitness = 0.0
-    
-    print(f"[{instance_id}] Fitness: {fitness}")
+    fitness = result.get("fitness", 0.0)
+    eval_result = result.get("eval_result", {})
+    print(f"[{cluster_id}] Fitness: {fitness}")
 
     return {
         "generation": generation,
         "individual_id": individual_id,
         "fitness": fitness,
         "eval_result": eval_result,
-        "log_dir": log_dir,
+        "log_dir": str(full_log_dir),
         "genes": individual_genes,
     }
 
@@ -297,42 +183,58 @@ def parallel_evaluate_population(
     max_workers,
 ):
     """并行评估种群
-    
+ 
     Args:
         population: 需要评估的个体列表
         generation: 当前代数
-        其他参数: 配置信息
+        config: 全部配置字典；其中 ``base_port_population`` 将被用来
+            计算每个个体的 ``base_port_number`` 参数，从而为每次调用
+            ``run_rocket_and_evaluate`` 分配独立的端口范围。
+        base_network_config: 网络配置
+        test_log_dir: 用于放置单个测试日志的顶层目录
+        max_ledger_seq: 传递给 rocket 的最大账本次数
+        seed: 随机种子
+        fitness_function: 当前使用的适应度函数名
+        byzz_nodes: （未使用）拜占庭节点列表，保留参数兼容
+        logs_dir: 顶层日志目录
         max_workers: 最大并行工作进程数
     
     Returns:
         results: 评估结果列表
     """
-    # test_log_dir is a Path like .../logs/<datetime>
-    # use only the run-directory name (the datetime identifier) as the test_log_id
-    # (previous code used test_log_dir.parent which caused instance logs to be
-    # written to logs/ instead of logs/<datetime>/)
     test_log_dir = Path(test_log_dir)
-    test_log_id = test_log_dir.name
-    print(f"test_log_id: {test_log_id} (run dir: {test_log_dir})")
+    # keep full path string for worker processes
+    test_log_dir_str = str(test_log_dir)
+    print(f"using test_log_dir: {test_log_dir_str}")
     # 准备任务参数
+    # figure out how many ports each evaluation will consume so that we can
+    # hand out non‑overlapping ranges.  ``run_rocket_and_evaluate`` expects a
+    # single base port and will internally space peer/ws/ws_admin/rpc and
+    # grpc as 0..4*num_nodes.
+    num_nodes = base_network_config.get("number_of_nodes", 0) or 1
+    ports_per_test = 1 + num_nodes * 4
+    base_pop = config.get("base_port_population", 60000)
+    population_size = config.get("population_size", len(population))
+
     tasks = []
     output_screen_flag = True if max_workers == 1 else False
     for idx, ind in enumerate(population):
-        port_offset = idx % max_workers  # 用于端口隔离
+        # ensure that each evaluation gets its own slice of the port space.
+        offset_index = generation * population_size + idx
+        base_port_number = base_pop + offset_index * ports_per_test
         tasks.append((
-            ind.to_dict(),  # 个体基因
+            ind.to_dict(),
             generation,
-            idx + 1,  # individual_id 从 1 开始
-            port_offset,
+            idx + 1,
             config,
             base_network_config,
-            test_log_id,
+            test_log_dir_str,
             max_ledger_seq,
             seed,
             fitness_function,
-            byzz_nodes,
             str(logs_dir),
             output_screen_flag,
+            base_port_number,
         ))
     
     results = []
@@ -347,26 +249,28 @@ def parallel_evaluate_population(
         print(f"\n=== Evaluating batch {batch_start//batch_size + 1} (individuals {batch_start+1}-{batch_end}) ===")
         
         with ProcessPoolExecutor(max_workers=min(len(batch_tasks), max_workers)) as executor:
-            futures = {executor.submit(evaluate_individual_worker, t): i for i, t in enumerate(batch_tasks)}
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                    results.append(result)
-                    
-                    # 实时写入 CSV
-                    # `test_log_dir` is passed as an argument to this function
-                    EvoLogger.write_result_to_csv(result, fitness_function, Path(test_log_dir) / "evo_result.csv")
-                    
-                except Exception as e:
-                    print(f"Error evaluating individual: {e}")
-                    import traceback
-                    traceback.print_exc()
-    
+            # ``map`` 提交所有任务并按顺序返回结果，我们只需
+            # 遍历它并记录输出即可；如果某个评估抛出异常，
+            # 该异常会在迭代时重新抛出，方便上层处理。
+            for result in executor.map(evaluate_individual_worker, batch_tasks):
+                 try:
+                     results.append(result)
+                     EvoLogger.write_result_to_csv(
+                         result, fitness_function, Path(test_log_dir) / "evo_result.csv"
+                     )
+                 except Exception as e:
+                     # in practice the only danger here is if the result
+                     # itself is None or malformed; most evaluation errors are
+                     # raised above.  log and keep going.
+                     print(f"Error processing evaluation result: {e}")
+                     import traceback
+                     traceback.print_exc()
+  
     return results
 
 def get_encoding_cls(strategy: str):
     cls_name = f"{strategy}Encoding"
-    return getattr(encodings, cls_name)
+    return getattr(encoding, cls_name)
 
 def sample_individual(configs: dict):
     strategy = configs["strategy"]
