@@ -29,16 +29,16 @@ class TestSpecCheckLogger(unittest.TestCase):
         path = directory / "spec_check_log.csv"
 
         logger = SpecCheckLogger(base_dir / timestamp_str)
-        logger.log_spec_check(1, True, True, True)
-        logger.log_spec_check(2, False, True, True)
-        logger.log_spec_check(3, "timeout reached before startup", "-", "-")
+        logger.log_spec_check(1, True, True, True, True)
+        logger.log_spec_check(2, False, True, True, False)
+        logger.log_spec_check(3, "timeout reached before startup", "-", "-", "-")
 
         with open(path) as file:
             csv_reader = csv.reader(file)
             assert next(csv_reader) == spec_check_columns
-            assert next(csv_reader) == ["1", "True", "True", "True"]
-            assert next(csv_reader) == ["2", "False", "True", "True"]
-            assert next(csv_reader) == ["3", "timeout reached before startup", "-", "-"]
+            assert next(csv_reader) == ["1", "True", "True", "True", "True"]
+            assert next(csv_reader) == ["2", "False", "True", "True", "False"]
+            assert next(csv_reader) == ["3", "timeout reached before startup", "-", "-", "-"]
 
         os.remove(path)
         os.rmdir(directory)
