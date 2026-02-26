@@ -97,10 +97,15 @@ class ValidatorNode:
         self.validator_key_data = validator_key_data
         self.id = id
 
-    def get_container_name(self, instance_id: str = "") -> str:
-        if instance_id == "":
+    def get_container_name(self, cluster_id: str = "") -> str:
+        """Return a docker container name for this validator.
+
+        The optional ``cluster_id`` string is prepended to the base name.  We
+        keep the empty-string default.
+        """
+        if cluster_id == "":
             return f"validator_{self.id}"
-        return f"{instance_id}_validator_{self.id}"
+        return f"{cluster_id}_validator_{self.id}"
 
     @override
     def __str__(self):

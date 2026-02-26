@@ -15,11 +15,14 @@ from loguru import logger
 class InterceptorManager:
     """Class for interacting with the network packet interceptor subprocess."""
 
-    def __init__(self, grpc_port: int = 50051, instance_id: str = "", rippled_img: str | None = None):
+    def __init__(self, grpc_port: int = 50051, cluster_id: str = "", rippled_img: str | None = None):
         """Initialize the InterceptorManager, with None for the process variable."""
         self.process: Popen | None = None
         self.grpc_port = grpc_port
-        self.instance_id = instance_id
+        # store the cluster identifier; this will be written into the
+        # ROCKET_ environment variable when launching the
+        # interceptor so CLUSTER_ID is available for the Rust side.
+        self.cluster_id = cluster_id
         self.rippled_img = rippled_img if rippled_img is not None else "xrpllabsofficial/xrpld:2.3.0" # use the same default as in the interceptor
         logger.info(f"Using rippled image: {self.rippled_img}")
     @staticmethod
@@ -90,8 +93,7 @@ class InterceptorManager:
         logger.info("Starting interceptor")
         process_env = os.environ.copy()
         process_env["ROCKET_GRPC_PORT"] = str(self.grpc_port)
-        process_env["ROCKET_INSTANCE_ID"] = self.instance_id
-        process_env["RIPPLE_IMAGE"] = self.rippled_img
+        process_env["ROCKET_CLUSTER_ID"] = self.cluster_id
         try:
             self.process = Popen(
                 [f"./{file}"],

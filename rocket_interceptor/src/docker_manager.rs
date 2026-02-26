@@ -126,7 +126,7 @@ impl DockerNetwork {
     /// * 'config' - the config to be used to set up the network.
     pub fn new(config: proto::Config) -> DockerNetwork {
         // instance id: if not in env, set to empty string
-        let instance_id = std::env::var("ROCKET_INSTANCE_ID")
+        let instance_id = std::env::var("ROCKET_CLUSTER_ID")
             .unwrap_or_else(|_| "".to_string());
         DockerNetwork {
             config,

@@ -97,7 +97,7 @@ def run_rocket(
         str(max_ledger_seq),
         "--grpc-port",
         str(grpc_port),
-        "--instance-id",
+        "--cluster-id",
         str(cluster_id),
         "--rippled-img",
         str(ripple_image),

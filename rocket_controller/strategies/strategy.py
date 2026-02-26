@@ -45,7 +45,7 @@ class Strategy(ABC):
         max_iteration: int | None = None,
         max_ledger_seq: int | None = None,
         grpc_port: int | None = None,
-        instance_id: str = "",
+        cluster_id: str = "",
         rippled_img: str | None = None,
     ):
         """
@@ -102,10 +102,10 @@ class Strategy(ABC):
 
         self.start_datetime: datetime = datetime.now()
         self.log_dir = log_dir if log_dir is not None else Path(format_datetime(self.strategy.start_datetime))
-        # logger.error(f"Strategy set log dir to {self.log_dir}")
+        logger.info(f"Strategy set log dir to {self.log_dir}")
         self.max_ledger_seq = max_ledger_seq if max_ledger_seq is not None else 10
         timeout_sec_per_seq = self.params.get("timeout_sec_per_seq", 30)
-        self.instance_id = instance_id if instance_id is not None else ""
+        self.cluster_id = cluster_id if cluster_id is not None else ""
         self.rippled_img = rippled_img
         self.iteration_type = (
             LedgerBasedIteration(
@@ -114,7 +114,7 @@ class Strategy(ABC):
                 ledger_timeout_seconds=self.max_ledger_seq*timeout_sec_per_seq,
                 strategy_stopper=self.strategy_stopper,
                 grpc_port=grpc_port,
-                instance_id=self.instance_id,
+                cluster_id=self.cluster_id,
                 rippled_img=self.rippled_img,
             )
             if iteration_type is None
@@ -248,10 +248,10 @@ class Strategy(ABC):
     def _save_validator_log_background(self, validator_node_list: List[ValidatorNode]):
         import os
         import subprocess
-        instance_id = self.instance_id
+        cluster_id = self.cluster_id
         def _worker(node: ValidatorNode):
             out_dir = self.log_dir / f"iteration-{self.iteration_type.cur_iteration}" / "validator_live_logs"
-            container_name = node.get_container_name(instance_id)
+            container_name = node.get_container_name(cluster_id)
             os.makedirs(out_dir, exist_ok=True)
             fname = f"validator_{node.id}_log"
             log_file_path = os.path.join(out_dir, fname + ".txt")

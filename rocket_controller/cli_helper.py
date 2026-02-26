@@ -107,12 +107,13 @@ def parse_args() -> argparse.Namespace:
         metavar="PORT",
     )
     parser.add_argument(
-        "--instance-id",
+        "--cluster-id",
         type=str,
         default="",
-        help="An optional identifier for this instance of the node cluster",
+        help="(renamed from --instance-id) an optional identifier for this node cluster",
         metavar="ID",
     )
+
     parser.add_argument(
         "--rippled-img",
         type=str,
@@ -219,8 +220,8 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
         params_dict["max_ledger_seq"] = args.max_ledger_seq
     if args.grpc_port:
         params_dict["grpc_port"] = args.grpc_port
-    if args.instance_id:
-        params_dict["instance_id"] = args.instance_id
+    if getattr(args, "cluster_id", None):
+        params_dict["cluster_id"] = args.cluster_id
     if args.rippled_img:
         params_dict["rippled_img"] = args.rippled_img
 
