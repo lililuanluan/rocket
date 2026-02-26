@@ -3,69 +3,58 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-
-
-# This script launches a batch of evotest_parallel.py runs with different
-# combinations of rippled image, strategy and fitness function.  It ensures
-# that the base ports and gRPC ports for each invocation do not overlap by
-# assigning them disjoint ranges based on a simple index.  Logs are placed in
-# a hierarchy that includes the image/strategy/fitness to make later analysis
-# easier.
+from utils import get_dirs
 
 
 def main():
+    dirs = get_dirs(__file__)
     images = ["xrpllabsofficial/xrpld:2.6.0"]
     strategies = ["EvoDelayStrategy", "RandomDelayByzzStrategy"]
     # choose real fitness names from the allowed list; "fitness_function" was
     # a placeholder and not a valid choice for the CLI parser
     fitnesses = ["mean_validation_time", "num_getledger_messages"]
 
-    # compute a unique timestamp for this batch so all processes share a
-    # common parent log directory
-    batch_id = datetime.now().strftime("%Y_%m_%d_%Hh%Mm_%Ss")
+    log_dir = Path(dirs["logs_dir"]) / datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    # 创建日志目录
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     procs = []
     idx = 0
-    for img in images:
-        for strategy in strategies:
-            for fitness in fitnesses:
-                # allocate non‑overlapping port ranges.  we give each process a
-                # block of 1000 for the ripple ports and a block of 10 for gRPC.
-                base_peer = 60000 + idx * 1000
-                base_ws = 61000 + idx * 1000
-                base_ws_admin = 62000 + idx * 1000
-                base_rpc = 63000 + idx * 1000
-                grpc_base = 50051 + idx * 10
+    port_start = 60000
+    max_num_nodes = 10
+    population_size = 10
+    # 关于端口：每个测试需要占用 1+num_nodes*4，所以最多有 1+10*4=41 个端口占用。
+    # 每个population要运行 population_size 个测试，所以每个population需要 41*population_size=410 个端口。
+    # 多个generation之前串行，所以不影响
+    population_port_range = (1 + max_num_nodes * 4) * population_size
+    for i, img in enumerate(images):
+        for j, strategy in enumerate(strategies):
+            for k, fitness in enumerate(fitnesses):
 
-                log_dir = f"{batch_id}/{img.replace(':','_')}/{strategy}/{fitness}"
+                logs_group_dir = f"{log_dir}/{img.replace(':','_')}/{strategy}/{fitness}"
+
+                # 计算端口起始位置
+                base_port_population = port_start + idx * population_port_range
+                
+
+                # 运行evotest_parallel.py，evotest_parallel.py会给run_rocket_and_evaluate传入 log_dir参数为 logs_group_dir/GiTi...
 
                 cmd = [
                     sys.executable,
                     "-m",
                     "evo.evotest_parallel",
+                    "--logs-group-dir",
+                    logs_group_dir,
                     "--ripple-image",
                     img,
                     "--strategy",
                     strategy,
                     "--fitness-function",
                     fitness,
-                    "--run-id",
-                    batch_id,
-                    "--grpc-base-port",
-                    str(grpc_base),
-                    "--base-port-peer",
-                    str(base_peer),
-                    "--base-port-ws",
-                    str(base_ws),
-                    "--base-port-ws-admin",
-                    str(base_ws_admin),
-                    "--base-port-rpc",
-                    str(base_rpc),
+                    "--base-port-population",
+                    str(base_port_population),
                     "--max-parallel-workers",
                     str(5),
-                    # logs dir and test-log-dir are computed inside the
-                    # called script based on run-id; no need to pass them
-                    # explicitly
                 ]
 
                 print("Starting", " ".join(cmd))
