@@ -1,6 +1,7 @@
 """Tests for CSVLogger."""
 
 import csv
+from pathlib import Path
 import os
 import unittest
 
@@ -8,7 +9,7 @@ import pytest
 
 from rocket_controller.csv_logger import CSVLogger
 
-test_dir = "TEST_LOG_DIR"
+test_dir = Path("TEST_LOG_DIR")
 
 
 class TestCSVLogger(unittest.TestCase):
@@ -17,7 +18,7 @@ class TestCSVLogger(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Remove test directories."""
-        os.rmdir("./logs/" + test_dir)
+        os.rmdir(Path("./logs") / test_dir)
         if len(os.listdir("./logs/")) == 0:
             os.rmdir("./logs/")
 
@@ -26,7 +27,7 @@ class TestCSVLogger(unittest.TestCase):
     def test_construction(self):
         """Test CSVLogger construction."""
         _logger = CSVLogger("TEST", [], test_dir)
-        path = "./logs/" + test_dir + "/TEST.csv"
+        path = Path("./logs") / test_dir / "TEST.csv"
         assert os.path.isfile(path)
         os.remove(path)
 
@@ -35,7 +36,7 @@ class TestCSVLogger(unittest.TestCase):
         cols = ["col1", "col2"]
         _logger = CSVLogger("TEST_COLS", cols, test_dir)
 
-        path = "./logs/" + test_dir + "/TEST_COLS.csv"
+        path = Path("./logs") / test_dir / "TEST_COLS.csv"
         with open(path) as file:
             csv_reader = csv.reader(file)
             first_line = next(csv_reader)
@@ -50,7 +51,7 @@ class TestCSVLogger(unittest.TestCase):
         logger.log_row(["1"])
         logger.log_rows([["2"], ["3"]])
 
-        path = "./logs/" + test_dir + "/TEST_ROWS.csv"
+        path = Path("./logs") / test_dir / "TEST_ROWS.csv"
         with open(path) as file:
             csv_reader = csv.reader(file)
             next(csv_reader)
@@ -68,5 +69,5 @@ class TestCSVLogger(unittest.TestCase):
         with pytest.raises(ValueError):
             logger.log_row(["1", "2"])
 
-        path = "./logs/" + test_dir + "/TEST_INVALID.csv"
+        path = Path("./logs") / test_dir / "TEST_INVALID.csv"
         os.remove(path)

@@ -10,6 +10,7 @@ def test_constructor():
     assert node_0.ws_public.port == 20
     assert node_0.rpc.host == "test-rpc"
     assert node_0.validator_key_data.validation_private_key == "K3YZER"
+    assert node_0.id == 0
 
 
 def test_to_string():

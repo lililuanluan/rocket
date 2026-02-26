@@ -13,6 +13,7 @@ node_0 = ValidatorNode(
     SocketAddress("test-ws-adm", 30),
     SocketAddress("test-rpc", 40),
     ValidatorKeyData("status0", "keyZER", "K3YZER", "PUBZER", "T3STZER"),
+    0,  # id for test node
 )
 
 node_1 = ValidatorNode(
@@ -21,6 +22,7 @@ node_1 = ValidatorNode(
     SocketAddress("test-ws-adm", 31),
     SocketAddress("test-rpc", 41),
     ValidatorKeyData("status1", "keyNE", "K3YNE", "PUBNE", "T3STNE"),
+    1,
 )
 
 node_2 = ValidatorNode(
@@ -29,6 +31,7 @@ node_2 = ValidatorNode(
     SocketAddress("test-ws-adm", 32),
     SocketAddress("test-rpc", 42),
     ValidatorKeyData("status2", "keyTW", "K3YTW", "PUBTW", "T3STTW"),
+    2,
 )
 
 node_3 = ValidatorNode(
@@ -37,6 +40,7 @@ node_3 = ValidatorNode(
     SocketAddress("test-ws-adm", 33),
     SocketAddress("test-rpc", 43),
     ValidatorKeyData("status3", "keyTHREE", "K3YTHREE", "PUBTHREE", "T3STTHREE"),
+    3,
 )
 
 configs = (

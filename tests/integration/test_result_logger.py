@@ -4,6 +4,7 @@ import csv
 import datetime
 import os
 import unittest
+from pathlib import Path
 
 from rocket_controller.csv_logger import (
     ResultLogger,
@@ -26,16 +27,16 @@ class TestResultLogger(unittest.TestCase):
         time = datetime.datetime(2024, 1, 2, 3, 4, 5, 6)
         timestamp_str = format_datetime(time)
 
-        base_dir = "./logs/TEST_RESULT_LOG_DIR"
-        directory = f"{base_dir}/{timestamp_str}"
-        path_results = f"{base_dir}/{timestamp_str}/result_log.csv"
+        base_dir = Path("./logs/TEST_RESULT_LOG_DIR")
+        directory = base_dir / timestamp_str
+        path = directory / "result_log.csv"
 
-        logger = ResultLogger("TEST_RESULT_LOG_DIR/" + timestamp_str)
+        logger = ResultLogger(base_dir / timestamp_str)
         logger.log_result(0, 1, 5, 3.00, 1234, "hash123", 1)
         logger.log_result(0, 2, 5, 3.00, 2234, "hash123", 2)
         logger.log_result(0, 3, 5, 3.00, 3234, "hash123", 3)
 
-        with open(path_results) as file:
+        with open(path) as file:
             csv_reader = csv.reader(file)
             assert next(csv_reader) == result_log_columns
             assert next(csv_reader) == [
@@ -66,6 +67,6 @@ class TestResultLogger(unittest.TestCase):
                 "3",
             ]
 
-        os.remove(path_results)
+        os.remove(path)
         os.rmdir(directory)
         os.rmdir(base_dir)

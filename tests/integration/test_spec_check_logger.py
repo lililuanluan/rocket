@@ -4,6 +4,7 @@ import csv
 import datetime
 import os
 import unittest
+from pathlib import Path
 
 from rocket_controller.csv_logger import SpecCheckLogger, spec_check_columns
 from rocket_controller.helper import format_datetime
@@ -23,22 +24,22 @@ class TestSpecCheckLogger(unittest.TestCase):
         time = datetime.datetime(2024, 1, 2, 3, 4, 5, 6)
         timestamp_str = format_datetime(time)
 
-        base_dir = "./logs/TEST_SPEC_CHECK_LOG_DIR"
-        directory = f"{base_dir}/{timestamp_str}"
-        path_spec_checks = f"{base_dir}/{timestamp_str}/spec_check_log.csv"
+        base_dir = Path("./logs/TEST_SPEC_CHECK_LOG_DIR")
+        directory = base_dir / timestamp_str
+        path = directory / "spec_check_log.csv"
 
-        logger = SpecCheckLogger("TEST_SPEC_CHECK_LOG_DIR/" + timestamp_str)
+        logger = SpecCheckLogger(base_dir / timestamp_str)
         logger.log_spec_check(1, True, True, True)
         logger.log_spec_check(2, False, True, True)
         logger.log_spec_check(3, "timeout reached before startup", "-", "-")
 
-        with open(path_spec_checks) as file:
+        with open(path) as file:
             csv_reader = csv.reader(file)
             assert next(csv_reader) == spec_check_columns
             assert next(csv_reader) == ["1", "True", "True", "True"]
             assert next(csv_reader) == ["2", "False", "True", "True"]
             assert next(csv_reader) == ["3", "timeout reached before startup", "-", "-"]
 
-        os.remove(path_spec_checks)
+        os.remove(path)
         os.rmdir(directory)
         os.rmdir(base_dir)

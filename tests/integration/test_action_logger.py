@@ -4,6 +4,7 @@ import csv
 import datetime
 import os
 import unittest
+from pathlib import Path
 
 from rocket_controller.csv_logger import ActionLogger, action_log_columns
 from rocket_controller.helper import MAX_U32, format_datetime
@@ -24,12 +25,12 @@ class TestActionLogger(unittest.TestCase):
         time = datetime.datetime(2024, 1, 2, 3, 4, 5, 6)
         timestamp_str = format_datetime(time)
 
-        base_dir = "./logs/TEST_ACTION_LOG_DIR"
-        directory = f"{base_dir}/{timestamp_str}"
-        path_actions = f"{base_dir}/{timestamp_str}/action_log.csv"
-        path_nodes = f"{base_dir}/{timestamp_str}/node_info.csv"
+        base_dir = Path("./logs/TEST_ACTION_LOG_DIR")
+        directory = base_dir / timestamp_str
+        path_actions = directory / "action_log.csv"
+        path_nodes = directory / "node_info.csv"
 
-        logger = ActionLogger("TEST_ACTION_LOG_DIR/" + timestamp_str, [node_0])
+        logger = ActionLogger(base_dir / timestamp_str, [node_0])
         logger.log_action(0, 1, 0, 1, "propose", "orig data", "new data")
         logger.log_action(3, 1, 0, 1, "validata", "orig data", "new data")
         logger.log_action(MAX_U32, 1, 0, 1, "close", "orig data", "new data")

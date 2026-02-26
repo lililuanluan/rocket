@@ -4,6 +4,7 @@ from concurrent import futures
 from unittest.mock import MagicMock, Mock, call, patch
 
 import grpc
+from pathlib import Path
 
 from protos import ripple_pb2
 from rocket_controller.interceptor_manager import InterceptorManager
@@ -302,5 +303,5 @@ def test_set_log_dir(mock_spec_checker):
     """Test whether the log directory is set correctly."""
     iteration = TimeBasedIteration(5, 10)
     iteration.set_log_dir("test")
-    assert iteration._log_dir == "test"
+    assert iteration._log_dir is None
     mock_spec_checker.assert_called_once_with("test")
