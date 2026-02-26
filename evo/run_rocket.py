@@ -24,7 +24,6 @@ def run_rocket_and_evaluate(
     max_ledger_seq: int,
     seed: int,
     encoding: dict,  # 由外部生成的一个encoding字典，供controller读取
-    grpc_port: int,
     rocket_dir: Path,
     tmp_dir: Path,
     byzz_min_seq: int,
@@ -32,10 +31,7 @@ def run_rocket_and_evaluate(
     output_screen: bool,  # 是否打印到屏幕输出
     timeout_sec_per_seq: int,
     network_yaml: Path,  # 例如，network.yaml，绝对路径
-    base_port_peer: int,
-    base_port_ws: int,
-    base_port_ws_admin: int,
-    base_port_rpc: int,
+    base_port_number: int, # 每个cluster实例占用5个端口
     strategy_name: str,  # 策略类名称，例如 "RandomDelayByzzPartitionStrategy"
     min_delay_ms: int,
     max_delay_ms: int,
@@ -56,12 +52,14 @@ def run_rocket_and_evaluate(
     with open(network_yaml, "r") as f:
         network_config = yaml.safe_load(f)
 
-    (
-        network_config["base_port_peer"],
-        network_config["base_port_ws"],
-        network_config["base_port_ws_admin"],
-        network_config["base_port_rpc"],
-    ) = (base_port_peer, base_port_ws, base_port_ws_admin, base_port_rpc)
+    # 一次运行需要占用 1+num_nodes*4 个端口，如果7个节点，则有29个端口占用
+    num_nodes = network_config.get("number_of_nodes", 0) or 1
+    network_config["base_port_peer"] = base_port_number
+    network_config["base_port_ws"] = base_port_number + num_nodes
+    network_config["base_port_ws_admin"] = base_port_number + 2 * num_nodes
+    network_config["base_port_rpc"] = base_port_number + 3 * num_nodes
+    # grpc port sits after all categories
+    grpc_port = base_port_number + 4 * num_nodes
 
     with open(instance_network_yaml, "w") as f:
         yaml.dump(network_config, f)
@@ -160,17 +158,16 @@ def run_rocket_and_evaluate(
 
 
 if __name__ == "__main__":
-
-    
-
+    # 系统端口号最大65535，不要使用 0‑1023 这些 “well‑known” 端口
+    # “60000” 之所以常见只因为：大多数 Linux 发行版的 ephemeral range 是 32768‑60999， 所以 60000 以上几乎不会被内核用作临时出站端口，它在多数防火墙/路由器配置里也不是默认被拦截的。
+    # 注意60000是6万，所以至少还有五千个自由端口
     dirs = get_dirs(__file__)
-    offset = 100
+    
+    
 
     build_interceptor(interceptor_dir=dirs["interceptor_dir"], cargo_clean=False)
 
     eval_res = run_rocket_and_evaluate(
-        # ``datetime`` is already imported from ``datetime`` so use
-        # ``datetime.now()`` rather than ``datetime.datetime``.
         log_dir=dirs["logs_dir"]
         / format_datetime(datetime.now())
         / "WhateverStrategy"
@@ -179,7 +176,6 @@ if __name__ == "__main__":
         max_ledger_seq=15,
         seed=42,
         encoding={"partition_seq": 5, "partition_duration": 1000},
-        grpc_port=50051,
         rocket_dir=dirs["rocket_dir"],
         tmp_dir=dirs["tmp_dir"],
         byzz_min_seq=0,
@@ -187,10 +183,7 @@ if __name__ == "__main__":
         output_screen=True,
         timeout_sec_per_seq=30,
         network_yaml=dirs["cur_dir"] / "network.yaml",
-        base_port_peer=60000 + offset,
-        base_port_ws=61000 + offset,
-        base_port_ws_admin=62000 + offset,
-        base_port_rpc=63000 + offset,
+        base_port_number=60000,
         strategy_name="RandomDelayByzzPartitionStrategy",
         min_delay_ms=0,
         max_delay_ms=100,
