@@ -4,13 +4,20 @@ import sys
 from cleanup import cleanup_instance_docker_containers
 import yaml
 import subprocess
-from utils import get_dirs
+from utils import build_interceptor, get_dirs
+from datetime import datetime
+
+
+repo_root = Path(__file__).resolve().parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+from rocket_controller.helper import format_datetime
 
 
 # 一个独立的函数，运行一个rocket实例
 def run_rocket(
-    log_dir: str,  # 生成的日志在 logs/log_dir/ 下，有log_dir/iteration_1, log_dir/spec_check_log.json等
-    logs_dir: Path,  # <rocket_dir>/logs/，供controller读取
+    log_dir: Path,  # 绝对路径或相对于rocket的相对路径
     cluster_id: str,  # 生成的docker容器名称前缀，容器名为 prefix_validator_1等，这个prefix是一个cluster的唯一标识
     max_ledger_seq: int,
     seed: int,
@@ -97,7 +104,7 @@ def run_rocket(
     ]
 
     # 将输出重定向到 log 文件夹，或直接打印到屏幕
-    full_log_dir = logs_dir / log_dir
+    full_log_dir = log_dir
     full_log_dir.mkdir(parents=True, exist_ok=True)
     stdout_log = full_log_dir / "rocket_stdout.log"
     stderr_log = full_log_dir / "rocket_stderr.log"
@@ -135,14 +142,22 @@ def run_rocket(
 
 if __name__ == "__main__":
 
+    
+
     dirs = get_dirs(__file__)
     offset = 100
 
+    build_interceptor(interceptor_dir=dirs["interceptor_dir"], cargo_clean=False)
+
     run_rocket(
-        log_dir=Path("EvoDelayStrategy") / "G0T1",
-        logs_dir=dirs["logs_dir"],
+        # ``datetime`` is already imported from ``datetime`` so use
+        # ``datetime.now()`` rather than ``datetime.datetime``.
+        log_dir=dirs["logs_dir"]
+        / format_datetime(datetime.now())
+        / "WhateverStrategy"
+        / "GxTx",
         cluster_id="whatever_unique_id",
-        max_ledger_seq=100,
+        max_ledger_seq=15,
         seed=42,
         encoding={"partition_seq": 5, "partition_duration": 1000},
         grpc_port=50051,
@@ -152,7 +167,7 @@ if __name__ == "__main__":
         byzz_max_seq=10,
         output_screen=True,
         timeout_sec_per_seq=30,
-        network_yaml=dirs["cur_dir"]/"network.yaml",
+        network_yaml=dirs["cur_dir"] / "network.yaml",
         base_port_peer=60000 + offset,
         base_port_ws=61000 + offset,
         base_port_ws_admin=62000 + offset,
