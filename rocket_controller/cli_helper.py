@@ -2,6 +2,7 @@
 
 import argparse
 import ast
+from pathlib import Path
 import sys
 from typing import Any, Dict, List, Type
 
@@ -211,7 +212,7 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
     if args.overrides and len(args.overrides.keys()) > 0:
         params_dict["strategy_overrides"] = args.overrides
     if args.log_dir:
-        params_dict["log_dir"] = args.log_dir
+        params_dict["log_dir"] = Path(args.log_dir)
     if args.max_iteration:
         params_dict["max_iteration"] = args.max_iteration
     if args.max_ledger_seq:

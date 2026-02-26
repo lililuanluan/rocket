@@ -24,6 +24,7 @@ from rocket_controller.ws_subscriber import WSSubscriber
 import threading
 import socket
 import time
+from pathlib import Path
 
 
 class Strategy(ABC):
@@ -40,7 +41,7 @@ class Strategy(ABC):
         iteration_type: TimeBasedIteration | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
-        log_dir: str | None = None,
+        log_dir: Path | None = None,
         max_iteration: int | None = None,
         max_ledger_seq: int | None = None,
         grpc_port: int | None = None,
@@ -100,7 +101,8 @@ class Strategy(ABC):
         )
 
         self.start_datetime: datetime = datetime.now()
-        self.log_dir = log_dir if log_dir is not None else self.start_datetime
+        self.log_dir = log_dir if log_dir is not None else Path(format_datetime(self.strategy.start_datetime))
+        # logger.error(f"Strategy set log dir to {self.log_dir}")
         self.max_ledger_seq = max_ledger_seq if max_ledger_seq is not None else 10
         timeout_sec_per_seq = self.params.get("timeout_sec_per_seq", 30)
         self.instance_id = instance_id if instance_id is not None else ""
@@ -233,7 +235,7 @@ class Strategy(ABC):
         self.iteration_type.set_validator_nodes(validator_node_list)
         self.setup()
 
-        self._ws_subscriber = WSSubscriber(validator_node_list, log_dir=self.log_dir + f"iteration-{self.iteration_type.cur_iteration}", enqueue_func=self._ws_event_queue.put)
+        self._ws_subscriber = WSSubscriber(validator_node_list, log_dir=self.log_dir / f"iteration-{self.iteration_type.cur_iteration}", enqueue_func=self._ws_event_queue.put)
         self.start_ws_subscriber(validator_node_list)
         self._save_validator_log_flag.set()
         self._save_validator_log_background(validator_node_list)
@@ -248,7 +250,7 @@ class Strategy(ABC):
         import subprocess
         instance_id = self.instance_id
         def _worker(node: ValidatorNode):
-            out_dir = os.path.join("./logs/" + self.log_dir, f"iteration-{self.iteration_type.cur_iteration}", "validator_live_logs")
+            out_dir = self.log_dir / f"iteration-{self.iteration_type.cur_iteration}" / "validator_live_logs"
             container_name = node.get_container_name(instance_id)
             os.makedirs(out_dir, exist_ok=True)
             fname = f"validator_{node.id}_log"

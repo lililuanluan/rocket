@@ -20,6 +20,7 @@ from rocket_controller.csv_logger import TransactionLogger
 
 import time
 import random
+from pathlib import Path
 
 
 class LedgerValidationInfo(TypedDict):
@@ -70,7 +71,7 @@ class TimeBasedIteration:
             rippled_img=self.rippled_img,
         )
         self._validator_nodes: List[ValidatorNode] | None = None
-        self._log_dir: str | None = None
+        self._log_dir: Path | None = None
 
         self._max_ledger_seq = max_ledger_seq
         self.ledger_validation_map: Dict[int, LedgerValidationInfo] = {}
@@ -270,7 +271,7 @@ class TimeBasedIteration:
             self.ledger_validation_history = {node.id: {} for node in validator_nodes}
             self._validator_nodes = validator_nodes
 
-    def set_log_dir(self, log_dir: str, byzantine_node_ids: Iterable[int] | None = None):
+    def set_log_dir(self, log_dir: Path, byzantine_node_ids: Iterable[int] | None = None):
         """
         Setter for the log_dir variable and instantiate the SpecChecker.
 
@@ -278,6 +279,7 @@ class TimeBasedIteration:
             log_dir: New log directory.
         """
         self._log_dir = log_dir
+        # logger.error(f"IterationType set log dir to {self._log_dir}")
         # Record byzantine/excluded node ids for later spec checks
         self._byzantine_nodes = set(byzantine_node_ids) if byzantine_node_ids is not None else set()
         self._spec_checker = SpecChecker(log_dir)
@@ -314,8 +316,8 @@ class TimeBasedIteration:
             if self._validator_nodes:
                 for node in self._validator_nodes:
                     container_name = node.get_container_name(self.instance_id)
-                    log_file_path = os.path.join("./logs/" + self._log_dir, f"iteration-{self.cur_iteration - 1}", "validator_logs", f"{container_name}_log.txt")
-                    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+                    log_file_path = self._log_dir / f"iteration-{self.cur_iteration - 1}" / "validator_logs" / f"{container_name}_log.txt"
+                    log_file_path.parent.mkdir(parents=True, exist_ok=True)
                     try:
                         with open(log_file_path, 'w') as f:
                             subprocess.run(['docker', 'logs', container_name], stdout=f, stderr=f, check=True, text=True)
@@ -326,7 +328,7 @@ class TimeBasedIteration:
         if self.cur_iteration <= self._max_iterations:
             self._interceptor_manager.stop()
             self._ledger_results.new_result_logger(self._log_dir, self.cur_iteration)
-            self._tx_logger = TransactionLogger(f"{self._log_dir}/iteration-{self.cur_iteration}", self.cur_iteration)
+            self._tx_logger = TransactionLogger(self._log_dir / f"iteration-{self.cur_iteration}", self.cur_iteration)
             logger.info(f"Starting iteration {self.cur_iteration}")
             self._interceptor_manager.start_new()
             self._start_timeout_timer()
@@ -647,6 +649,6 @@ class NoneIteration(TimeBasedIteration):
         """Override the method since none iteration does not need to keep track of ledgers."""
         pass
 
-    def set_log_dir(self, log_dir: str):
+    def set_log_dir(self, log_dir: Path):
         """Override the method since none iteration does not need do any spec checking."""
         pass

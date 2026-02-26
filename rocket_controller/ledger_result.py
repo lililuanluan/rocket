@@ -1,5 +1,6 @@
 """This module contains an implementation to log ledger results."""
 
+from pathlib import Path
 from time import sleep
 import threading
 from typing import Any, List
@@ -24,7 +25,7 @@ class LedgerResult:
         """Initialize the LedgerResult object."""
         self.result_logger: ResultLogger | None = None
 
-    def new_result_logger(self, log_dir: str, iteration: int):
+    def new_result_logger(self, log_dir: Path, iteration: int):
         """
         Create a new LedgerResult.
 
@@ -33,7 +34,7 @@ class LedgerResult:
             iteration: The current iteration number.
         """
         self.result_logger = ResultLogger(
-            f"{log_dir}/iteration-{iteration}", f"result-{iteration}"
+            log_dir / f"iteration-{iteration}", f"result-{iteration}"
         )
 
     def _fetch_ledger(

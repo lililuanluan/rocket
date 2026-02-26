@@ -30,14 +30,14 @@ def _get_last_row(file_path: str) -> List[Any]:
 class SpecChecker:
     """Class to perform specification checks on the results of the iterations."""
 
-    def __init__(self, log_dir: str):
+    def __init__(self, log_dir: Path):
         """Initialize the SpecChecker object.
 
         Args:
             log_dir: The directory where the spec check results will be stored.
         """
         self.spec_check_logger: SpecCheckLogger = SpecCheckLogger(log_dir)
-        self.log_dir: str = log_dir
+        self.log_dir: Path = log_dir
 
     def spec_check(self, iteration: int, exclude_node_ids: Optional[Iterable[int]] = None):
         """
@@ -46,13 +46,10 @@ class SpecChecker:
         Args:
             iteration: The current iteration.
         """
-        result_file_path = (
-            f"logs/{self.log_dir}/iteration-{iteration}/result-{iteration}.csv"
-        )
+        result_file_path = self.log_dir / f"iteration-{iteration}" / f"result-{iteration}.csv"
 
         byzantine_nodes: Set[int] = set(exclude_node_ids) if exclude_node_ids is not None else set()
         honest_nodes: Set[int] = set()
-        
         logger.info(f"spec checking iteration {iteration}, excluding nodes: {byzantine_nodes}")
 
         ledgers_data = defaultdict(list)
@@ -138,8 +135,8 @@ class SpecChecker:
 
     def aggregate_spec_checks(self):
         """Aggregate the spec check results and write them to a final file."""
-        spec_check_file_path = f"logs/{self.log_dir}/spec_check_log.csv"
-        agg_spec_check_file_path = f"logs/{self.log_dir}/aggregated_spec_check_log.json"
+        spec_check_file_path = self.log_dir / "spec_check_log.csv"
+        agg_spec_check_file_path = self.log_dir / "aggregated_spec_check_log.json"
 
         try:
             with open(spec_check_file_path, newline="") as file:
@@ -199,7 +196,6 @@ class SpecChecker:
             }
 
             logger.info(f"Aggregated spec check results: {aggregated_data}")
-
 
             with open(Path(__file__).parent / "../evo/out/error.log", "a") as error_log:
                 if aggregated_data["correct_runs"] != total_iterations:

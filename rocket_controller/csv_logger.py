@@ -8,6 +8,8 @@ from typing import Any
 
 from rocket_controller.validator_node_info import ValidatorNode
 
+from loguru import logger
+
 action_log_columns = [
     "timestamp",
     "action",
@@ -50,20 +52,23 @@ node_info_columns = [
 class CSVLogger:
     """CSVLogger class which can be utilized to log to a csv file."""
 
-    def __init__(self, filename: str, columns: list[Any], directory: str = ""):
+    def __init__(self, filename: str | Path, columns: list[Any], directory: Path = Path("")):
         """
         Initialize CSVLogger class.
 
         Args:
-            filename: The name of the log file.
+            filename: The name of the log file (can be `str` or `Path`).
             columns: The columns to be used in the log.
-            directory: The directory to store the log file in.
+            directory: The directory to store the log file in. use absolute path
         """
-        Path("./logs/" + directory).mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True)
+        # logger.error(f"CSVLogger set log dir to {directory}")
 
+        # coerce to string so we can call string methods and keep the API easy
+        filename = str(filename)
         filename = filename if filename.endswith(".csv") else filename + ".csv"
 
-        self.filepath = "./logs/" + directory + "/" + filename
+        self.filepath = directory / filename
         self.columns = [col.__str__ for col in columns]
 
         self._lock = threading.Lock()
@@ -108,10 +113,10 @@ class ActionLogger(CSVLogger):
 
     def __init__(
         self,
-        sub_directory: str,
+        sub_directory: Path,
         validator_node_list: list[ValidatorNode],
-        action_log_filename: str | None = None,
-        node_log_filename: str | None = None,
+        action_log_filename: str | Path | None = None,
+        node_log_filename: str | Path | None = None,
     ):
         """
         Initialize ActionLogger class.
@@ -119,8 +124,8 @@ class ActionLogger(CSVLogger):
         Args:
             sub_directory: Sub-directory to store the log files under.
             validator_node_list: List of validator nodes in the network.
-            action_log_filename: Name of the action log file.
-            node_log_filename: Name of the node log file.
+            action_log_filename: Name of the action log file (str or Path).
+            node_log_filename: Name of the node log file (str or Path).
         """
         final_filename = (
             action_log_filename if action_log_filename is not None else "action_log.csv"
@@ -132,7 +137,7 @@ class ActionLogger(CSVLogger):
             if node_log_filename is not None
             else "node_info",
             columns=node_info_columns,
-            directory=directory,
+            directory=directory.resolve(),
         )
         for node in validator_node_list:
             node_logger.log_row([node.id, node.validator_key_data.validation_private_key, node.validator_key_data.validation_public_key, str(node)])
@@ -193,15 +198,15 @@ class ResultLogger(CSVLogger):
 
     def __init__(
         self,
-        sub_directory: str,
-        result_log_filename: str | None = None,
+        sub_directory: Path,
+        result_log_filename: str | Path | None = None,
     ):
         """
         Initialize ResultLogger class.
 
         Args:
             sub_directory: The subdirectory to store the results in.
-            result_log_filename: The name of the log file to store the results in.
+            result_log_filename: The name of the log file to store the results in (str or Path).
         """
         final_filename = (
             result_log_filename if result_log_filename is not None else "result_log.csv"
@@ -253,7 +258,7 @@ class SpecCheckLogger(CSVLogger):
 
     def __init__(
         self,
-        sub_directory: str,
+        sub_directory: Path,
     ):
         """
         Initialize SpecCheckLogger class.
@@ -305,7 +310,7 @@ subsribe_event_collumns = [
 class SubscribeEventLogger(CSVLogger):
     def __init__(
         self,
-        sub_directory: str,
+        sub_directory: Path,
     ):
         """
         Initialize SubscribeEventLogger class.
@@ -357,7 +362,7 @@ transaction_log_columns = [
 class TransactionLogger(CSVLogger):
     """CSVLogger child class dedicated to handling transaction validation logging."""
 
-    def __init__(self, sub_directory: str, iteration: int):
+    def __init__(self, sub_directory: Path, iteration: int):
         """
         Initialize TransactionLogger class.
 
@@ -399,4 +404,4 @@ class TransactionLogger(CSVLogger):
                 writer = csv.writer(file)
                 writer.writerow(
                     [node_id, sender_alias, receiver_alias, amount, tx_hash, sequence, validated]
-                )      
+                )

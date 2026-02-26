@@ -2,6 +2,7 @@
 
 import random
 from typing import Any, Dict, Tuple
+from pathlib import Path
 
 from protos import packet_pb2
 from rocket_controller.helper import MAX_U32
@@ -21,7 +22,7 @@ class RandomFuzzer(Strategy):
         iteration_type: TimeBasedIteration | None = None,
         network_overrides: Dict[str, Any] | None = None,
         strategy_overrides: Dict[str, Any] | None = None,
-        log_dir: str | None = None,
+        log_dir: Path | str | None = None,
         max_iteration: int | None = None,
         max_ledger_seq: int | None = None,
     ):

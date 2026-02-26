@@ -3,6 +3,7 @@
 import datetime
 from concurrent import futures
 from typing import List
+from pathlib import Path
 
 import grpc
 from typeguard import TypeCheckError, check_type  # type: ignore
@@ -139,12 +140,12 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         self.strategy.update_network(validator_node_list)
 
         if self.strategy.keep_action_log:
-            log_dir = format_datetime(self.strategy.start_datetime) if self.strategy.log_dir is None else self.strategy.log_dir
+            log_dir = Path(format_datetime(self.strategy.start_datetime)) if self.strategy.log_dir is None else self.strategy.log_dir
             self.logger = ActionLogger(
-                f"{log_dir}/iteration-{self.strategy.iteration_type.cur_iteration}",
-                validator_node_list,
-                f"action-{self.strategy.iteration_type.cur_iteration}",
-                f"node_info-{self.strategy.iteration_type.cur_iteration}",
+                sub_directory=log_dir / f"iteration-{self.strategy.iteration_type.cur_iteration}",
+                validator_node_list=validator_node_list,
+                action_log_filename=log_dir / f"action-{self.strategy.iteration_type.cur_iteration}",
+                node_log_filename=log_dir / f"node_info-{self.strategy.iteration_type.cur_iteration}",
             )
 
         return packet_pb2.ValidatorNodeInfoAck(status="Received validator node info")

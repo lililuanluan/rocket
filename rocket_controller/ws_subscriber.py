@@ -23,14 +23,14 @@ import time
 from datetime import datetime
 
 from rocket_controller.validator_node_info import ValidatorNode
-
+from pathlib import Path
 
 # WebSocket subscriber for validator nodes
 class WSSubscriber:
     def __init__(
         self,
         validator_nodes: List[ValidatorNode],
-        log_dir: str,
+        log_dir: Path,
         enqueue_func: Callable[[Any], None],
     ) -> None:
         """Create a WS subscriber.
