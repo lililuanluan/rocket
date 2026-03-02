@@ -248,23 +248,19 @@ def extend_configs(args: argparse.Namespace) -> dict:
     # expose the path to the base network yaml for helpers that need it
     configs["network_yaml"] = configs["cur_dir"] / configs["base_network_config_yaml"]
 
-    # determine where logs will go.  if the caller specified an explicit
-    # directory, use that; otherwise fall back to the default logs directory.
-    # the previous implementation generated a timestamp identifier and
-    # appended it to the path; that behaviour created a kind of "run id"
-    # which is inconvenient when an external script (e.g. run_evotests.py)
-    # wants to manage multiple configurations itself.  we no longer add
-    # any extra identifier here.
+    # determine where logs will go.  if the caller supplied an explicit
+    # directory, we respect it verbatim; it is assumed to already include
+    # whatever grouping (strategy/fitness/image/etc.) the caller desires.
+    # when no directory is provided we fall back to the normal logs
+    # directory and append the strategy name so that standalone invocations
+    # continue to separate outputs by strategy.
     if configs.get("logs_group_dir"):
-        # user supplied a root for all logs; we will place strategy-specific
-        # subdirectories under this path but do **not** invent a timestamp
-        # or run identifier.  the caller (e.g. run_evotests.py) can create
-        # separate directories as needed.
-        parent = Path(configs["logs_group_dir"])
+        # user gave a path to use for this specific test run – do not
+        # modify it further.
+        configs["test_log_dir"] = Path(configs["logs_group_dir"])
     else:
-        # no explicit group given, just use the standard logs directory
         parent = configs["logs_dir"]
-    configs["test_log_dir"] = parent / str(configs.get("strategy", ""))
+        configs["test_log_dir"] = parent / str(configs.get("strategy", ""))
 
     return configs
 

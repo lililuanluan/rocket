@@ -8,13 +8,13 @@ from utils import get_dirs
 
 def main():
     dirs = get_dirs(__file__)
-    images = ["xrpllabsofficial/xrpld:2.6.0"]
-    strategies = ["EvoDelayStrategy", "RandomDelayByzzStrategy"]
+    images = ["xrpllabsofficial/xrpld:2.6.0", "xrpllabsofficial/xrpld:3.1.0"]
+    strategies = ["EvoDelayStrategy", "RandomDelayByzzStrategy"]#
     # choose real fitness names from the allowed list; "fitness_function" was
     # a placeholder and not a valid choice for the CLI parser
-    fitnesses = ["mean_validation_time", "num_getledger_messages"]
+    fitnesses = ["mean_validation_time", "num_getledger_messages"]#
 
-    log_dir = Path(dirs["logs_dir"]) / datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    log_dir = Path(dirs["logs_dir"]) / datetime.now().strftime("%Y_%m_%d_%Hh%Mm")
     # 创建日志目录
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -31,13 +31,18 @@ def main():
         for j, strategy in enumerate(strategies):
             for k, fitness in enumerate(fitnesses):
 
-                logs_group_dir = f"{log_dir}/{img.replace(':','_')}/{strategy}/{fitness}"
+                logs_group_dir = f"{log_dir}/{img.replace(':','_').replace('/', '_')}/{strategy}/{fitness}"
 
                 # 计算端口起始位置
                 base_port_population = port_start + idx * population_port_range
                 
 
-                # 运行evotest_parallel.py，evotest_parallel.py会给run_rocket_and_evaluate传入 log_dir参数为 logs_group_dir/GiTi...
+                # run_evotest_parallel接受 a logs_group_dir argument which the
+                # child will treat as *the* directory for this configuration.
+                # It no longer appends the strategy name itself, so callers
+                # (including this helper script) are responsible for any
+                # grouping they require.  We already include image/strategy/
+                # fitness in our constructed path.
 
                 cmd = [
                     sys.executable,
@@ -54,7 +59,7 @@ def main():
                     "--base-port-population",
                     str(base_port_population),
                     "--max-parallel-workers",
-                    str(5),
+                    str(1),
                 ]
 
                 print("Starting", " ".join(cmd))

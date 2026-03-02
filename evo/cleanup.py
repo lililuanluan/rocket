@@ -68,8 +68,8 @@ def cleanup_instance_docker_containers(instance_id):
         if out:
             names = [n for n in out.splitlines() if n]
             for name in names:
-                # 匹配包含 _i{instance_id} 后缀的容器
-                if f"_i{instance_id_str}" in name:
+
+                if name.startswith(instance_id_str):
                     try:
                         subprocess.run(["docker", "rm", "-f", name], check=True,
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

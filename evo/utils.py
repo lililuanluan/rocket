@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import subprocess
 import json
+import re
 
 
 def get_last_log_dir():
@@ -89,6 +90,61 @@ def get_strategy_name(strategy):
         )
 
     return strategy
+
+
+def sanitize_cluster_id(s: str) -> str:
+    """Return a string safe to use as a Docker container prefix.
+
+    Docker only permits names matching ``[A-Za-z0-9][A-Za-z0-9_.-]+``;
+    any other character (including path separators or spaces) will cause
+    the daemon to reject the name with a ``400`` error.  This helper
+    replaces all invalid characters with underscores and ensures the
+    result starts with an alphanumeric character by prepending ``c`` if
+    necessary.
+
+    The normalization is intentionally conservative: we don't attempt to
+    preserve interesting parts of long paths, only to guarantee a valid
+    identifier that is still human‑readable.
+    """
+
+    # replace anything not in the allowed character set with '_'
+    sanitized = re.sub(r"[^A-Za-z0-9_.-]", "_", s)
+
+    if not sanitized:
+        return "c"
+    if not sanitized[0].isalnum():
+        sanitized = "c" + sanitized
+    return sanitized
+
+
+def make_cluster_id(logs_dir: str, test_log_dir: str, individual_id: str) -> str:
+    """Generate a unique, docker-safe cluster ID for an evaluation.
+
+    The previous approach simply used the individual identifier (e.g.
+    ``G0T1``), which worked when only one test ran at a time.  When
+    ``run_evotests.py`` launches several configurations in parallel the
+    same individual IDs recur and different processes attempt to create
+    containers with identical names, causing ``409 Conflict`` errors.
+
+    To avoid this we include a short representation of the ``test_log_dir``
+    (relative to ``logs_dir`` if possible) in the cluster ID.  This
+    ensures that distinct configurations always produce distinct IDs while
+    keeping names reasonably short.  The resulting string is then fed
+    through :func:`sanitize_cluster_id` to remove any remaining invalid
+    characters.
+    """
+
+    logs_path = Path(logs_dir)
+    test_path = Path(test_log_dir)
+    try:
+        rel = test_path.relative_to(logs_path)
+    except Exception:
+        rel = test_path
+
+    prefix = "_".join(rel.parts)
+    raw = f"{prefix}_{individual_id}" if prefix else individual_id
+    return sanitize_cluster_id(raw)
+
 
 def aggregate_logs(log_dir=None):
     if log_dir is None:

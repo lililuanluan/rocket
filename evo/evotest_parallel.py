@@ -17,13 +17,7 @@ import subprocess
 import shutil
 from datetime import datetime
 import random
-try:
-    import numpy as np
-except ModuleNotFoundError as e:
-    raise ImportError(
-        "Numpy is required for evotest_parallel. "
-        "Activate the virtualenv or install dependencies (`pip install -r requirements.txt`)."
-    ) from e
+import numpy as np
 import csv
 import signal
 import atexit
@@ -125,9 +119,11 @@ def evaluate_individual_worker(args):
     ) = args
 
     # build cluster/log identifiers exactly as before
-    base_id = f"G{generation}T{individual_id}-F-{fitness_function}-S-{config['strategy']}"
-    cluster_id = base_id
-    full_log_dir = Path(logs_dir) / str(test_log_dir) / cluster_id
+    ind_id = f"G{generation}T{individual_id}"
+    full_log_dir = Path(logs_dir) / str(test_log_dir) / ind_id
+
+
+    cluster_id = make_cluster_id(logs_dir, str(test_log_dir), ind_id)
 
     # call shared helper; it will take care of container cleanup, network
     # config file generation, and evaluation of the log.
