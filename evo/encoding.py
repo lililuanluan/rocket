@@ -1,10 +1,5 @@
-try:
-    import numpy as np
-except ModuleNotFoundError as e:
-    raise ImportError(
-        "The 'numpy' package is required by evo.encoding. "
-        "Ensure you are using the project's virtual environment or install it with `pip install -r requirements.txt`."
-    ) from e
+from pathlib import Path
+import numpy as np
 from deap import tools
 import sys
 import random

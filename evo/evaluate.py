@@ -1,14 +1,9 @@
 import sys
 import os
 import pandas as pd
-try:
-    import numpy as np
-except ModuleNotFoundError as e:
-    raise ImportError(
-        "The 'numpy' package is required to run this script. "
-        "Make sure you activate the project's virtual environment (e.g. `source .venv/bin/activate`) "
-        "or install requirements with `pip install -r requirements.txt`."
-    ) from e
+import numpy as np
+    
+
 import json
 import re
 import codecs
