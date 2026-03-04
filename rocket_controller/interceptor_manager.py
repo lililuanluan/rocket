@@ -94,6 +94,7 @@ class InterceptorManager:
         process_env = os.environ.copy()
         process_env["ROCKET_GRPC_PORT"] = str(self.grpc_port)
         process_env["ROCKET_CLUSTER_ID"] = self.cluster_id
+        process_env["RIPPLE_IMAGE"] = self.rippled_img
         try:
             self.process = Popen(
                 [f"./{file}"],
