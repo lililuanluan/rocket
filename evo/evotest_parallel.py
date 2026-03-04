@@ -30,7 +30,11 @@ import copy
 from deap import base, creator, tools, algorithms
 from utils import *
 from configs import get_configs
-from cleanup import cleanup_all_interceptor_processes, cleanup_all_docker_containers, cleanup_instance_docker_containers
+from cleanup import (
+    cleanup_all_interceptor_processes,
+    cleanup_all_docker_containers,
+    cleanup_instance_docker_containers,
+)
 from evologger import EvoLogger
 
 
@@ -43,14 +47,13 @@ dictionary containing all parameters.  We avoid any global `dirs` variable and
 do not use the EvotestConfig class at all.  """
 
 
-
-
 def signal_handler(signum, frame):
     """处理 Ctrl+C 信号"""
     print("\n\n⚠️  Received interrupt signal (Ctrl+C)")
     cleanup_all_interceptor_processes()
     cleanup_all_docker_containers()
     sys.exit(130)
+
 
 def setup_deap_types():
     """设置 DEAP 的类型系统"""
@@ -65,63 +68,27 @@ def setup_deap_types():
             evaluation_result=None,
         )
 
-def generate_instance_network_config(instance_id: int, base_config: dict) -> dict:
-    """为每个实例生成独立的网络配置
-
-    NOTE: the first parameter is *not* a literal identifier but the
-    numerical port offset assigned by the caller (usually idx % max_workers).
-
-    Args:
-        instance_id: integer offset used to shift all base ports (0, 1, 2, ...).
-        base_config: 基础网络配置
-
-    Returns:
-        修改后的网络配置，端口偏移了 instance_id * 100
-    """
-    config = copy.deepcopy(base_config)
-    offset = instance_id * 100
-    
-    config['base_port_peer'] = base_config.get('base_port_peer', 60000) + offset
-    config['base_port_ws'] = base_config.get('base_port_ws', 61000) + offset
-    config['base_port_ws_admin'] = base_config.get('base_port_ws_admin', 62000) + offset
-    config['base_port_rpc'] = base_config.get('base_port_rpc', 63000) + offset
-    
-    return config
-
 
 def evaluate_individual_worker(args):
-    """Worker function executed inside a separate process.
-
-    The caller prepares a tuple containing all of the information needed to
-    invoke ``run_rocket_and_evaluate``.  The worker computes a per‑run base
-    port number from the ``base_port_population`` supplied in the
-    configuration, then forwards the rest of the arguments directly.  The
-    return value mirrors the structure that the evolution loop expects.
-
-    ``run_rocket_and_evaluate`` is imported from ``evo.run_rocket`` and
-    encapsulates all of the Docker/container/port/logging setup we need for
-    an individual evaluation.  By centralising the call here we avoid
-    duplicating that logic in both the sequential and parallel runners.
-    """
     (
         individual_genes,
         generation,
         individual_id,
         config,
-        base_network_config,
         test_log_dir,
         max_ledger_seq,
-        seed,
         fitness_function,
         logs_dir,
         output_screen,
         base_port_number,
     ) = args
 
+    # choose a fresh seed per evaluation, ignore whatever was in config
+    seed = random.randrange(2**31)
+
     # build cluster/log identifiers exactly as before
     ind_id = f"G{generation}T{individual_id}"
     full_log_dir = Path(logs_dir) / str(test_log_dir) / ind_id
-
 
     cluster_id = make_cluster_id(logs_dir, str(test_log_dir), ind_id)
 
@@ -139,7 +106,8 @@ def evaluate_individual_worker(args):
         byzz_max_seq=config.get("byzz_max_seq", 10),
         output_screen=output_screen,
         timeout_sec_per_seq=config.get("timeout_per_seq", 30),
-        network_yaml=get_dirs(__file__)["cur_dir"] / config.get("base_network_config_yaml", "network.yaml"),
+        network_yaml=get_dirs(__file__)["cur_dir"]
+        / config.get("base_network_config_yaml", "network.yaml"),
         base_port_number=base_port_number,
         strategy_name=get_strategy_name(config.get("strategy", "")),
         min_delay_ms=config.get("min_delay_ms"),
@@ -163,50 +131,24 @@ def evaluate_individual_worker(args):
     }
 
 
-
-
 def parallel_evaluate_population(
     population,
     generation,
     config,
-    base_network_config,
-    test_log_dir,
-    max_ledger_seq,
-    seed,
-    fitness_function,
-    byzz_nodes,
-    logs_dir,
-    max_workers,
 ):
-    """并行评估种群
- 
-    Args:
-        population: 需要评估的个体列表
-        generation: 当前代数
-        config: 全部配置字典；其中 ``base_port_population`` 将被用来
-            计算每个个体的 ``base_port_number`` 参数，从而为每次调用
-            ``run_rocket_and_evaluate`` 分配独立的端口范围。
-        base_network_config: 网络配置
-        test_log_dir: 用于放置单个测试日志的顶层目录
-        max_ledger_seq: 传递给 rocket 的最大账本次数
-        seed: 随机种子
-        fitness_function: 当前使用的适应度函数名
-        byzz_nodes: （未使用）拜占庭节点列表，保留参数兼容
-        logs_dir: 顶层日志目录
-        max_workers: 最大并行工作进程数
-    
-    Returns:
-        results: 评估结果列表
-    """
-    test_log_dir = Path(test_log_dir)
-    # keep full path string for worker processes
+    # extract parameters from config dictionary (seed ignored)
+    base_network_config = config.get("base_network_config", {})
+    test_log_dir = Path(config.get("test_log_dir", ""))
+    max_ledger_seq = config.get("max_ledger_seq")
+    fitness_function = config.get("fitness_function")
+    logs_dir = config.get("logs_dir")
+    max_workers = config.get("max_parallel_workers")
+
+    # normalise test_log_dir for workers
     test_log_dir_str = str(test_log_dir)
     print(f"using test_log_dir: {test_log_dir_str}")
-    # 准备任务参数
-    # figure out how many ports each evaluation will consume so that we can
-    # hand out non‑overlapping ranges.  ``run_rocket_and_evaluate`` expects a
-    # single base port and will internally space peer/ws/ws_admin/rpc and
-    # grpc as 0..4*num_nodes.
+
+    # prepare task parameters
     num_nodes = base_network_config.get("number_of_nodes", 0) or 1
     ports_per_test = 1 + num_nodes * 4
     base_pop = config.get("base_port_population", 60000)
@@ -218,55 +160,57 @@ def parallel_evaluate_population(
         # ensure that each evaluation gets its own slice of the port space.
         offset_index = generation * population_size + idx
         base_port_number = base_pop + offset_index * ports_per_test
-        tasks.append((
-            ind.to_dict(),
-            generation,
-            idx + 1,
-            config,
-            base_network_config,
-            test_log_dir_str,
-            max_ledger_seq,
-            seed,
-            fitness_function,
-            str(logs_dir),
-            output_screen_flag,
-            base_port_number,
-        ))
-    
+        # seed value passed but ignored by worker
+        tasks.append(
+            (
+                ind.to_dict(),
+                generation,
+                idx + 1,
+                config,
+                test_log_dir_str,
+                max_ledger_seq,
+                fitness_function,
+                str(logs_dir),
+                output_screen_flag,
+                base_port_number,
+            )
+        )
+
     results = []
-    
+
     # 使用进程池并行评估
     # 注意：由于 Docker 资源限制，我们按批次处理
     batch_size = max_workers
     for batch_start in range(0, len(tasks), batch_size):
         batch_end = min(batch_start + batch_size, len(tasks))
         batch_tasks = tasks[batch_start:batch_end]
-        
-        print(f"\n=== Evaluating batch {batch_start//batch_size + 1} (individuals {batch_start+1}-{batch_end}) ===")
-        
-        with ProcessPoolExecutor(max_workers=min(len(batch_tasks), max_workers)) as executor:
-            # ``map`` 提交所有任务并按顺序返回结果，我们只需
-            # 遍历它并记录输出即可；如果某个评估抛出异常，
-            # 该异常会在迭代时重新抛出，方便上层处理。
+
+        print(
+            f"\n=== Evaluating batch {batch_start//batch_size + 1} (individuals {batch_start+1}-{batch_end}) ==="
+        )
+
+        with ProcessPoolExecutor(
+            max_workers=min(len(batch_tasks), max_workers)
+        ) as executor:
             for result in executor.map(evaluate_individual_worker, batch_tasks):
-                 try:
-                     results.append(result)
-                     EvoLogger.write_result_to_csv(
-                         result, fitness_function, Path(test_log_dir) / "evo_result.csv"
-                     )
-                 except Exception as e:
-                     # in practice the only danger here is if the result
-                     # itself is None or malformed; most evaluation errors are
-                     # raised above.  log and keep going.
-                     print(f"Error processing evaluation result: {e}")
-                     import traceback
-                     traceback.print_exc()
-  
+                try:
+                    results.append(result)
+                    EvoLogger.write_result_to_csv(
+                        result, fitness_function, Path(test_log_dir) / "evo_result.csv"
+                    )
+                except Exception as e:
+                    print(f"Error processing evaluation result: {e}")
+                    import traceback
+
+                    traceback.print_exc()
+
     return results
+
 
 def get_encoding_cls(strategy: str):
     cls_name = f"{strategy}Encoding"
     return getattr(encoding, cls_name)
+
 
 def sample_individual(configs: dict):
     strategy = configs["strategy"]
@@ -275,7 +219,7 @@ def sample_individual(configs: dict):
 
 
 def main(configs: dict):
-    
+
     EvoLogger.init_log(configs["test_log_dir"])
 
     # 重置全局变量
@@ -293,28 +237,12 @@ def main(configs: dict):
     setup_docker_images(configs["ripple_image"], configs["rocket_dir"])
     setup_deap_types()
 
-    # 读取配置
-    random.seed(configs["seed"])
-    np.random.seed(configs["seed"])
-
-
-
     lambda_ = configs["population_size"]
     mu = min(lambda_, configs["mu"])
     max_generation = configs["max_generation"]
-    fitness_function = configs["fitness_function"]
-
-    num_nodes = configs.get("number_of_nodes")
-    encoding_len = num_nodes * (num_nodes - 1) * 7
-    # use the CLI parameter names directly (no intermediate mapping)
-    delay_min = configs.get("min_delay_ms")
-    delay_max = configs.get("max_delay_ms")
-
 
     strategy = configs["strategy"]
     encoding_cls = get_encoding_cls(strategy)
-    
-
 
     # 设置 DEAP toolbox
     toolbox = base.Toolbox()
@@ -322,7 +250,6 @@ def main(configs: dict):
     # 注册遗传算法操作
     toolbox.register("individual", sample_individual, configs)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-
 
     toolbox.register("mate", encoding_cls.mate)
     toolbox.register("mutate", encoding_cls.mutate)
@@ -350,15 +277,7 @@ def main(configs: dict):
     results = parallel_evaluate_population(
         population,
         generation=0,
-        config=configs,  # now use entire dict instead of a nested `config` attr
-        base_network_config=configs.get("base_network_config"),
-        test_log_dir=configs.get("test_log_dir"),
-        max_ledger_seq=configs.get("max_ledger_seq"),
-        seed=configs.get("seed"),
-        fitness_function=fitness_function,
-        byzz_nodes=configs.get("byzz_nodes"),
-        logs_dir=configs.get("logs_dir"),
-        max_workers=configs.get("max_parallel_workers"),
+        config=configs,
     )
 
     evaluation_cnt += len(results)
@@ -395,14 +314,6 @@ def main(configs: dict):
                 invalid_ind,
                 generation=gen,
                 config=configs,
-                base_network_config=configs.get("base_network_config"),
-                test_log_dir=configs.get("test_log_dir"),
-                max_ledger_seq=configs.get("max_ledger_seq"),
-                seed=configs.get("seed"),
-                fitness_function=fitness_function,
-                byzz_nodes=configs.get("byzz_nodes"),
-                logs_dir=configs.get("logs_dir"),
-                max_workers=configs.get("max_parallel_workers"),
             )
 
             evaluation_cnt += len(results)
@@ -430,7 +341,9 @@ def main(configs: dict):
     best_ind = hof[0]
     print(f"\nBest individual:")
     print(f"  Fitness: {best_ind.fitness.values[0]}")
-    print(f"  Log directory: {best_ind.log_dir if hasattr(best_ind, 'log_dir') else 'N/A'}")
+    print(
+        f"  Log directory: {best_ind.log_dir if hasattr(best_ind, 'log_dir') else 'N/A'}"
+    )
     print(f"  Encoding (first 10 genes): {list(best_ind)[:10]}...")
 
     if hasattr(best_ind, "evaluation_result") and best_ind.evaluation_result:
@@ -452,5 +365,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error during evolution: {e}")
         import traceback
+
         traceback.print_exc()
         raise e
