@@ -73,8 +73,18 @@ def setup_docker_images(ripple_image, rocket_dir):
     build_target = ripple_image.split(":")[-1]
     if "local" in ripple_image:
         print(f"Building local Docker image: {ripple_image} with target {build_target}")
-        subprocess.run(["make", build_target], check=True)
-        print("✓ Local images built successfully")
+        # use the new setup.py helper in images/ to build, which handles
+        # dockerfile generation, parallelism and caching control
+        cmd = ["python3", "setup.py", "--build", build_target]
+
+        # first attempt, retry once with no-cache on failure
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError:
+            print("Initial build failed, retrying with --no-cache flag...")
+            retry_cmd = cmd + ["-f"]
+            subprocess.run(retry_cmd, check=True)
+        print("✓ Local images built successfully (via setup.py)")
     os.chdir(original_cwd)
 
 
