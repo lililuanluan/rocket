@@ -2,7 +2,7 @@ import yaml
 from datetime import datetime
 import argparse
 from pathlib import Path
-from utils import get_dirs
+from utils import get_dirs, get_date_time_strf
 
 
 def parse_args() -> argparse.Namespace:
@@ -163,9 +163,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--individual-timeout-sec",
         type=int,
-        default=300,
+        default=None,
         metavar="IND_TIMEOUT",
-        help="maximum number of seconds allowed for one individual evaluation (default: 300)",
+        help=(
+            "maximum seconds allowed for one individual evaluation; "
+            "if omitted, defaults to max_ledger_seq * timeout_per_seq * 2"
+        ),
     )
 
     # logging options
@@ -223,7 +226,7 @@ def extend_configs(args: argparse.Namespace) -> dict:
     dirs = get_dirs(__file__)
     configs = {**configs, **dirs}
 
-    _start_datetime = datetime.now().strftime("%Y_%m_%d_%Hh%Mm_%Ss")
+
 
     with open(configs["cur_dir"] / configs["base_network_config_yaml"], "r") as f:
         network_config = yaml.safe_load(f)
@@ -245,22 +248,27 @@ def extend_configs(args: argparse.Namespace) -> dict:
     # 推导max_generation
     configs["max_generation"] = configs["total_num_tests"] // configs["population_size"]
 
+    # derive individual timeout when the user did not provide one explicitly
+    if configs.get("individual_timeout_sec") is None:
+        max_ledger_seq = int(configs.get("max_ledger_seq", 15) or 15)
+        timeout_per_seq = int(configs.get("timeout_per_seq", 30) or 30)
+        configs["individual_timeout_sec"] = max_ledger_seq * timeout_per_seq * 2
+
     # expose the path to the base network yaml for helpers that need it
     configs["network_yaml"] = configs["cur_dir"] / configs["base_network_config_yaml"]
 
-    # determine where logs will go.  if the caller supplied an explicit
+    # determine where logs will go. if the caller supplied an explicit
     # directory, we respect it verbatim; it is assumed to already include
     # whatever grouping (strategy/fitness/image/etc.) the caller desires.
-    # when no directory is provided we fall back to the normal logs
-    # directory and append the strategy name so that standalone invocations
-    # continue to separate outputs by strategy.
+    # when no directory is provided we create logs under:
+    #   logs/<datetime>/<folder>
+    # where <folder> defaults to the strategy name.
     if configs.get("logs_group_dir"):
         # user gave a path to use for this specific test run – do not
         # modify it further.
         configs["test_log_dir"] = Path(configs["logs_group_dir"])
     else:
-        parent = configs["logs_dir"]
-        configs["test_log_dir"] = parent / str(configs.get("strategy", ""))
+        configs["test_log_dir"] = Path(configs["logs_dir"]) / get_date_time_strf()
 
     return configs
 
