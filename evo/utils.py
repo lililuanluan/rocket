@@ -1,8 +1,15 @@
+from datetime import datetime
 import os
 from pathlib import Path
 import subprocess
 import json
 import re
+import signal
+import time
+
+
+def get_date_time_strf():
+    return datetime.now().strftime("%Y_%m_%d_%Hh%Mm_%Ss")
 
 
 def get_last_log_dir():
@@ -148,6 +155,65 @@ def make_cluster_id(logs_dir: str, test_log_dir: str, individual_id: str) -> str
     prefix = "_".join(rel.parts)
     raw = f"{prefix}_{individual_id}" if prefix else individual_id
     return sanitize_cluster_id(raw)
+
+
+def terminate_process_group(
+    pgid: int,
+    *,
+    term_timeout_sec: float = 5.0,
+    kill_timeout_sec: float = 2.0,
+) -> bool:
+    """Terminate a Unix process group with TERM then KILL escalation.
+
+    Args:
+        pgid: Process group id to stop.
+        term_timeout_sec: Seconds to wait after SIGTERM.
+        kill_timeout_sec: Seconds to wait after SIGKILL.
+
+    Returns:
+        True if the process group is gone (or never existed), False otherwise.
+    """
+    if pgid <= 0:
+        return True
+
+    def _group_alive(group_id: int) -> bool:
+        try:
+            os.killpg(group_id, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # Treat as alive; caller likely cannot signal it.
+            return True
+
+    # Already gone.
+    if not _group_alive(pgid):
+        return True
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+
+    deadline = time.monotonic() + max(0.0, term_timeout_sec)
+    while time.monotonic() < deadline:
+        if not _group_alive(pgid):
+            return True
+        time.sleep(0.1)
+
+    # Escalate.
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        return True
+
+    deadline = time.monotonic() + max(0.0, kill_timeout_sec)
+    while time.monotonic() < deadline:
+        if not _group_alive(pgid):
+            return True
+        time.sleep(0.1)
+
+    return not _group_alive(pgid)
 
 
 def aggregate_logs(log_dir=None):
