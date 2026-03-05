@@ -33,12 +33,6 @@ def get_dirs(script_path) -> dict:
         "tmp_dir": tmp_dir,
     }
 
-
-
-def get_configs():
-    pass
-
-
 def build_interceptor(interceptor_dir, cargo_clean=False):
     """设置 interceptor"""
     original_cwd = os.getcwd()
