@@ -20,8 +20,7 @@ import random
 import numpy as np
 import csv
 import signal
-import atexit
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 import multiprocessing as mp
 import tempfile
 import copy
@@ -30,16 +29,12 @@ import copy
 from deap import base, creator, tools, algorithms
 from utils import *
 from configs import get_configs
-from cleanup import (
-    cleanup_all_interceptor_processes,
-    cleanup_all_docker_containers,
-    cleanup_instance_docker_containers,
-)
 from evologger import EvoLogger
 
 
 from evo import encoding
 from evo.run_rocket import run_rocket_and_evaluate
+import threading
 
 
 """The `main` function will call :func:`get_configs` and receive a single
@@ -47,12 +42,29 @@ dictionary containing all parameters.  We avoid any global `dirs` variable and
 do not use the EvotestConfig class at all.  """
 
 
+stop_event = threading.Event()
+_signal_count = 0
+
+
 def signal_handler(signum, frame):
-    """处理 Ctrl+C 信号"""
-    print("\n\n⚠️  Received interrupt signal (Ctrl+C)")
-    cleanup_all_interceptor_processes()
-    cleanup_all_docker_containers()
-    sys.exit(130)
+    """Handle SIGINT/SIGTERM by requesting a graceful stop."""
+    global _signal_count
+    _signal_count += 1
+    stop_event.set()
+    if _signal_count >= 2:
+        print(f"\nReceived signal {signum} again, forcing immediate exit.")
+        raise SystemExit(130)
+
+
+def _force_terminate_executor(executor: ProcessPoolExecutor):
+    # Best-effort hard stop for running worker processes.
+    procs = getattr(executor, "_processes", {}) or {}
+    for p in procs.values():
+        try:
+            if p.is_alive():
+                p.terminate()
+        except Exception:
+            pass
 
 
 def setup_deap_types():
@@ -115,6 +127,7 @@ def evaluate_individual_worker(args):
         ripple_image=config.get("ripple_image", ""),
         rust_log_level=config.get("rust_log_level", "info"),
         fitness_function=fitness_function,
+        individual_timeout_sec=config.get("individual_timeout_sec", 300),
     )
 
     fitness = result.get("fitness", 0.0)
@@ -182,6 +195,9 @@ def parallel_evaluate_population(
     # 注意：由于 Docker 资源限制，我们按批次处理
     batch_size = max_workers
     for batch_start in range(0, len(tasks), batch_size):
+        if stop_event.is_set():
+            print("Stop requested, no more batches will be scheduled.")
+            break
         batch_end = min(batch_start + batch_size, len(tasks))
         batch_tasks = tasks[batch_start:batch_end]
 
@@ -189,20 +205,36 @@ def parallel_evaluate_population(
             f"\n=== Evaluating batch {batch_start//batch_size + 1} (individuals {batch_start+1}-{batch_end}) ==="
         )
 
-        with ProcessPoolExecutor(
-            max_workers=min(len(batch_tasks), max_workers)
-        ) as executor:
-            for result in executor.map(evaluate_individual_worker, batch_tasks):
-                try:
-                    results.append(result)
-                    EvoLogger.write_result_to_csv(
-                        result, fitness_function, Path(test_log_dir) / "evo_result.csv"
-                    )
-                except Exception as e:
-                    print(f"Error processing evaluation result: {e}")
-                    import traceback
+        executor = ProcessPoolExecutor(max_workers=min(len(batch_tasks), max_workers))
+        futures = [executor.submit(evaluate_individual_worker, task) for task in batch_tasks]
+        try:
+            pending = set(futures)
+            while pending:
+                if stop_event.is_set():
+                    break
+                done, pending = wait(
+                    pending, timeout=0.5, return_when=FIRST_COMPLETED
+                )
+                for future in done:
+                    try:
+                        result = future.result()
+                        results.append(result)
+                        EvoLogger.write_result_to_csv(
+                            result, fitness_function, Path(test_log_dir) / "evo_result.csv"
+                        )
+                    except Exception as e:
+                        print(f"Error processing evaluation result: {e}")
+                        import traceback
 
-                    traceback.print_exc()
+                        traceback.print_exc()
+        finally:
+            if stop_event.is_set():
+                for f in futures:
+                    f.cancel()
+                _force_terminate_executor(executor)
+                executor.shutdown(wait=False, cancel_futures=True)
+            else:
+                executor.shutdown(wait=True)
 
     return results
 
@@ -219,6 +251,7 @@ def sample_individual(configs: dict):
 
 
 def main(configs: dict):
+    stop_event.clear()
 
     EvoLogger.init_log(configs["test_log_dir"])
 
@@ -226,12 +259,11 @@ def main(configs: dict):
     evaluation_cnt = 0
     # (the entire configuration is already in the `configs` dict)
 
-    # register signal handlers / atexit only in the main process
+    # register signal handlers only in the main process
     # (worker processes must not install these handlers)
     if mp.current_process().name == "MainProcess":
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
-        atexit.register(cleanup_all_interceptor_processes)
 
     # build_interceptor(interceptor_dir=configs["interceptor_dir"], cargo_clean=False) # TODO build outside, otherwise race
     setup_docker_images(configs["ripple_image"], configs["rocket_dir"])
@@ -279,6 +311,9 @@ def main(configs: dict):
         generation=0,
         config=configs,
     )
+    if stop_event.is_set():
+        print("Stop requested during generation 0.")
+        return population, None, hof
 
     evaluation_cnt += len(results)
 
@@ -300,6 +335,9 @@ def main(configs: dict):
 
     # 主进化循环
     for gen in range(1, max_generation + 1):
+        if stop_event.is_set():
+            print("Stop requested. Exiting evolution loop.")
+            break
         print(f"\n=== Generation {gen} ===")
 
         # 生成子代
@@ -315,6 +353,9 @@ def main(configs: dict):
                 generation=gen,
                 config=configs,
             )
+            if stop_event.is_set():
+                print("Stop requested during offspring evaluation.")
+                break
 
             evaluation_cnt += len(results)
 
@@ -362,6 +403,9 @@ if __name__ == "__main__":
     try:
         cfg = get_configs()
         main(cfg)
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
+        raise SystemExit(130)
     except Exception as e:
         print(f"Error during evolution: {e}")
         import traceback
