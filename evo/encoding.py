@@ -469,7 +469,7 @@ if __name__ == "__main__":
         "partition_seq": 5,
         "partition_duration": 3000,
         "number_of_nodes": 7,
-        "min_delay_ms": 100,
+        "min_delay_ms": 0,
         "max_delay_ms": 1000,
         "byzz_min_seq": 5,
         "byzz_max_seq": 10,
