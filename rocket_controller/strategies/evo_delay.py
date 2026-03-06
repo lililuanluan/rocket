@@ -113,7 +113,7 @@ class EvoDelayStrategy(Strategy):
                 self.old_transactions.append(tx)
 
 
-    def get_delay(self, message_type: int, packet: packet_pb2.Packet, current_ledger: int) -> int:
+    def get_delay(self, message_type: int, packet: packet_pb2.Packet, current_ledger: int, message_cls: type) -> int:
         sender_node_id = self.network.port_to_id(packet.from_port)
         receiver_node_id = self.network.port_to_id(packet.to_port)
         # To get type index -> subtract 30, for validation, subtract 35
@@ -145,6 +145,9 @@ class EvoDelayStrategy(Strategy):
     ) -> str:
         method = self.byzz_mutator.get_mutation_method_50_percent(message)
         return method
+    
+    def are_partitioned(self, sender_node_id, receiver_node_id):
+        return False
 
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
@@ -160,6 +163,7 @@ class EvoDelayStrategy(Strategy):
         # Code taken from packet decoder
         message, message_type = PacketEncoderDecoder.decode_packet(packet)
         sender_node_id = self.network.port_to_id(packet.from_port)
+        to_node_id = self.network.port_to_id(packet.to_port)
 
         try:
             self.cache_old_messages(message) # parse validation may fail
@@ -168,7 +172,8 @@ class EvoDelayStrategy(Strategy):
             return packet.data, 0, 1
 
         if message_type not in set(range(30, 36)).union({41}):
-            return packet.data, self.get_partition_delay(time.time()), 1
+            delay = self.get_partition_delay(time.time()) if self.are_partitioned(sender_node_id, to_node_id) else 0
+            return packet.data, delay, 1
 
         # Types used in evolutionary paper: https://doi.org/10.1109/ICSE-SEIP58684.2023.00009
         # 30: ripple_pb2.TMTransaction
@@ -184,7 +189,7 @@ class EvoDelayStrategy(Strategy):
         except ValueError as e: # byzz_node seq is not in map
             current_ledger = self.iteration_type.get_ledger_sequence_cur_max()     
 
-        configed_delay = self.get_delay(message_type, packet, current_ledger)
+        configed_delay = self.get_delay(message_type, packet, current_ledger, type(message))
 
         # # Debug logging for message routing
         # if isinstance(message, ripple_pb2.TMProposeSet):
