@@ -117,6 +117,7 @@ def parse_args() -> argparse.Namespace:
         # TODO: 自动获取rocket_controller.strategies模块下的所有strategy的子类
         choices=[
             "EvoDelayStrategy",
+            "EvoDelayByzzPartitionStrategy",
             "RandomDelayByzzStrategy",
             "RandomByzzStrategy",
             "RandomDelayStrategy",
