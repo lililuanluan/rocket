@@ -41,8 +41,8 @@ class EvoDelayByzzPartitionStrategy(EvoDelayStrategy):
         self.byzz_rule_table: Dict[Tuple[int, int, str], str] = {}
         self._load_rules_from_encoding()
 
-        logger.error(self.delay_rule_table)
-        logger.error(self.byzz_rule_table)
+        # logger.error(self.delay_rule_table)
+        # logger.error(self.byzz_rule_table)
 
     def are_partitioned(self, sender_node_id, receiver_node_id):
         return self.partition[sender_node_id] != self.partition[receiver_node_id]
@@ -139,19 +139,14 @@ class EvoDelayByzzPartitionStrategy(EvoDelayStrategy):
         packet: packet_pb2.Packet | None = None,
         current_ledger: int | None = None,
     ) -> str:
+        to_node_id = self.network.port_to_id(packet.to_port)
+        msg_type = type(message)
+        keys = (current_ledger, to_node_id, msg_type)
+        if keys in self.byzz_rule_table:
+            method = self.byzz_rule_table[keys]
+            # logger.error("byzz rule hit: key={}, method={}", keys, method)
+            return method
         return "do_nothing"
-        if packet is None or current_ledger is None:
-            return "do_nothing"
-        try:
-            receiver_node_id = self.network.port_to_id(packet.to_port)
-        except Exception:
-            return "do_nothing"
-
-        key = (current_ledger, receiver_node_id, type(message).__name__)
-        method = self.byzz_rule_table.get(key, "do_nothing")
-        if method != "do_nothing":
-            logger.info("byzz rule hit: key={}, method={}", key, method)
-        return method
 
 
 # random delay, random byzz
