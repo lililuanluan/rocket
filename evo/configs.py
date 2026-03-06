@@ -196,6 +196,12 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--output-screen",
+        action="store_true", # 这里表示这是个flag，如果出现则为true
+        help="if set, controller stdout/stderr are printed to the screen instead of being redirected",
+    )
+
+    parser.add_argument(
         "--grpc-base-port",
         type=int,
         default=50051,
@@ -257,6 +263,10 @@ def extend_configs(args: argparse.Namespace) -> dict:
 
     # expose the path to the base network yaml for helpers that need it
     configs["network_yaml"] = configs["cur_dir"] / configs["base_network_config_yaml"]
+
+    # output behaviour for individual runs (mostly for debugging small
+    # populations).  default is False unless caller explicitly asked for it.
+    configs["output_screen"] = configs.get("output_screen", False)
 
     # determine where logs will go. if the caller supplied an explicit
     # directory, we respect it verbatim; it is assumed to already include

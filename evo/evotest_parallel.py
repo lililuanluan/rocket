@@ -36,6 +36,8 @@ from evo import encoding
 from evo.run_rocket import run_rocket_and_evaluate
 import threading
 
+from loguru import logger
+
 
 """The `main` function will call :func:`get_configs` and receive a single
 dictionary containing all parameters.  We avoid any global `dirs` variable and
@@ -168,7 +170,7 @@ def parallel_evaluate_population(
     population_size = config.get("population_size", len(population))
 
     tasks = []
-    output_screen_flag = True if max_workers == 1 else False
+    output_screen_flag = config["output_screen"]
     for idx, ind in enumerate(population):
         # ensure that each evaluation gets its own slice of the port space.
         offset_index = generation * population_size + idx
