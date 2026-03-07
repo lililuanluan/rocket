@@ -156,20 +156,20 @@ class EvoDelayByzzPartitionStrategyEncoding(BaseEncoding):
 
     @staticmethod
     def _crossover_rules(rules1, rules2):
-        """
-        基于集合的规则交叉
-        从两个父代的规则集合中随机分割并组合，生成两个子代
-        """
-        rules_list_1 = list(rules1)
-        rules_list_2 = list(rules2)
+        # 只交换一条规则
+        # start with simple copies
+        child1 = set(rules1)
+        child2 = set(rules2)
 
-        # 随机分割第一个父代的规则
-        split_idx_1 = random.randint(0, len(rules_list_1)) if rules_list_1 else 0
-        child1 = set(rules_list_1[:split_idx_1]) | set(rules_list_2[split_idx_1:])
-
-        # 随机分割第二个父代的规则
-        split_idx_2 = random.randint(0, len(rules_list_2)) if rules_list_2 else 0
-        child2 = set(rules_list_2[:split_idx_2]) | set(rules_list_1[split_idx_2:])
+        # only perform a swap when both parents have at least one rule
+        if child1 and child2:
+            r1 = random.choice(list(child1))
+            r2 = random.choice(list(child2))
+            # swap the two rules
+            child1.remove(r1)
+            child2.remove(r2)
+            child1.add(r2)
+            child2.add(r1)
 
         return child1, child2
 
