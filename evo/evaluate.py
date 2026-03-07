@@ -2,7 +2,7 @@ import sys
 import os
 import pandas as pd
 import numpy as np
-    
+
 
 import json
 import re
@@ -407,7 +407,22 @@ def get_node_info(log_dir: Path):
     }
 
 
+FITNESS_FUNCTIONS = [
+    "num_propose_set",
+    "num_getledger_hashes",
+    "num_getledger_messages",
+    "mean_validation_time",
+    "var_validation_time",
+    "validation_distribution_entropy",
+    "message_entropy_integral",
+    "message_entropy_average",
+    "markov_matrix_non_similarity",
+]
+
+
 def evaluate_log(log_dir: Path, byzz_nodes: list):
+
+    res = {i: None for i in FITNESS_FUNCTIONS}
 
     node_info = get_node_info(log_dir)
     print(f"Node info: {node_info}")
@@ -419,7 +434,8 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
         return None
     df_action = pd.read_csv(action_log_path)
     # 计算 "message_type"为"TMProposeSet" 的行数
-    propose_set_count = get_prop_set_count(df_action)
+    num_propose_set = get_prop_set_count(df_action)
+    res["num_propose_set"] = num_propose_set
 
     result_log_path = log_dir / "iteration-1" / "result-1.csv"
     if not result_log_path.exists():
@@ -429,10 +445,15 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
     validation_times = get_validation_times(df_result, node_info)
     # print(f"Validation times: {validation_times}")
     mean_validation_time = get_avg_validation_time(validation_times)
+    res["mean_validation_time"] = mean_validation_time
 
     var_validation_time = get_validation_time_var(validation_times)
+    res["var_validation_time"] = var_validation_time
 
     requested_ledger_hashes, num_getledger_messages = get_getledger_stats(df_action)
+    num_getledger_hashes = len(requested_ledger_hashes)
+    res["num_getledger_hashes"] = num_getledger_hashes
+    res["num_getledger_messages"] = num_getledger_messages
 
     validation_distribution = get_validation_distribution(
         df_action, node_info, byzz_nodes
@@ -441,16 +462,20 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
         validation_distribution
     )
     print(f"Validation distribution entropy: {validation_distribution_entropy}")
+    res["validation_distribution_entropy"] = validation_distribution_entropy
 
     message_entropy_integral, message_entropy_average = get_message_entropy_integration(
         df_action
     )
+    res["message_entropy_integral"] = message_entropy_integral
+    res["message_entropy_average"] = message_entropy_average
     print(f"Message entropy integral: {message_entropy_integral}")
     print(f"Message entropy average: {message_entropy_average}")
 
     markov_matrix_non_similarity = get_msg_sending_markov_matrix_non_similarity(
         df_action
     )
+    res["markov_matrix_non_similarity"] = markov_matrix_non_similarity
     print(f"Markov matrix non-similarity: {markov_matrix_non_similarity}")
 
     # 读取 aggregated_spec_check_log.json（注意：这是一个对象，不是数组）
@@ -474,19 +499,6 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
 
     test_duration = get_test_total_time(df_action)
 
-    # fitness part
-    res = {
-        "num_propose_set": propose_set_count,
-        "num_getledger_hashes": len(requested_ledger_hashes),
-        "num_getledger_messages": num_getledger_messages,
-        "mean_validation_time": mean_validation_time,
-        "var_validation_time": var_validation_time,
-        "validation_distribution_entropy": validation_distribution_entropy,
-        "message_entropy_integral": message_entropy_integral,
-        "message_entropy_average": message_entropy_average,
-        "markov_matrix_non_similarity": markov_matrix_non_similarity,
-    }
-
     res.update(
         {
             "test_duration": test_duration,
@@ -502,6 +514,9 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
 
 
 if __name__ == "__main__":
-    res = evaluate_log(Path("/home/luanli/rocket/logs/2026_02_26_14h56m/WhateverStrategy/GxTx"), byzz_nodes=[3])
+    res = evaluate_log(
+        Path("/home/luanli/rocket/logs/2026_02_26_14h56m/WhateverStrategy/GxTx"),
+        byzz_nodes=[3],
+    )
     for k, v in res.items():
         print(f"{k}: {v}")

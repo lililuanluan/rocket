@@ -1,5 +1,14 @@
 from pathlib import Path
 import csv
+from evaluate import FITNESS_FUNCTIONS
+
+fieldnames = [
+    "generation",
+    "individual_id",
+    "fitness_type",
+    "fitness",
+    "total_failures",
+] + FITNESS_FUNCTIONS  # add all fitness function names as columns
 
 
 class EvoLogger:
@@ -9,15 +18,6 @@ class EvoLogger:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(output_path, "w", newline="") as csvfile:
-            fieldnames = [
-                "generation",
-                "individual_id",
-                "fitness_type",
-                "fitness",
-                "mean_validation_time",
-                "num_propose_set",
-                "total_failures",
-            ]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
 
@@ -30,33 +30,26 @@ class EvoLogger:
             return
 
         with open(output_path, "a", newline="") as csvfile:
-            fieldnames = [
-                "generation",
-                "individual_id",
-                "fitness_type",
-                "fitness",
-                "mean_validation_time",
-                "num_propose_set",
-                "total_failures",
-            ]
+
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            eval_result = result["eval_result"]
-            fitness_formatted = round(result["fitness"], 3)
-            mean_time_formatted = (
-                round(eval_result["mean_validation_time"], 3)
-                if eval_result["mean_validation_time"]
-                else 0.0
-            )
+            eval_result = result.get("eval_result", {})
+            fitness_formatted = round(result.get("fitness", 0.0), 3)
+            total_failures = eval_result.get("total_failures", 0)
 
-            writer.writerow(
-                {
-                    "generation": result["generation"],
-                    "individual_id": result["individual_id"],
-                    "fitness_type": fitness_function,
-                    "fitness": fitness_formatted,
-                    "mean_validation_time": mean_time_formatted,
-                    "num_propose_set": eval_result["num_propose_set"],
-                    "total_failures": eval_result["total_failures"],
-                }
-            )
+            to_write = {
+                "generation": result["generation"],
+                "individual_id": result["individual_id"],
+                "fitness_type": fitness_function,
+                "fitness": fitness_formatted,
+                "total_failures": total_failures,
+            }
+            # 加入所有fitness值
+            for func_name in FITNESS_FUNCTIONS:
+                fit = eval_result.get(func_name, None)
+                if fit is not None:
+                    to_write[func_name] = round(fit, 3)
+                else:
+                    to_write[func_name] = "-"
+
+            writer.writerow(to_write)
