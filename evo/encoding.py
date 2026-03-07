@@ -113,12 +113,13 @@ class EvoDelayByzzPartitionStrategyEncoding(BaseEncoding):
         ]
         if len(choices) < to_add:
             for c in choices:
-                method = random.choice(BYZZ_MUTATE_METHODS[c[2]])
+                # 在所有mutation中选，但是去掉do_nothing
+                method = random.choice([m for m in BYZZ_MUTATE_METHODS[c[2]] if m != "do_nothing"])
                 self.byzz_rules.add((*c, method))
         else:
             selected = random.sample(choices, to_add)
             for c in selected:
-                method = random.choice(BYZZ_MUTATE_METHODS[c[2]])
+                method = random.choice([m for m in BYZZ_MUTATE_METHODS[c[2]] if m != "do_nothing"])
                 self.byzz_rules.add((*c, method))
 
     def to_dict(self):
