@@ -53,9 +53,9 @@ def signal_handler(signum, frame):
     global _signal_count
     _signal_count += 1
     stop_event.set()
-    if _signal_count >= 2:
-        print(f"\nReceived signal {signum} again, forcing immediate exit.")
-        raise SystemExit(130)
+    # if _signal_count >= 2:
+    #     print(f"\nReceived signal {signum} again, forcing immediate exit.")
+    #     raise SystemExit(130)
 
 
 def _force_terminate_executor(executor: ProcessPoolExecutor):
@@ -249,7 +249,22 @@ def get_encoding_cls(strategy: str):
 def sample_individual(configs: dict):
     strategy = configs["strategy"]
     encoding_cls = get_encoding_cls(strategy)
-    return encoding_cls.sample(configs)
+    # create a raw encoding instance and then attach the attributes that
+    # DEAP expects on an "Individual".  Historically we used a creator
+    # subclass of list, but our encodings are now plain classes, so we
+    # simply give them a fitness container and any extra fields we will
+    # assign later (log_dir, evaluation_result).  This keeps the rest of
+    # the code (e.g. toolbox.register calls, selection routines) working
+    # without further changes.
+
+    ind = encoding_cls.sample(configs)
+    # attach a fresh fitness object; weights are already configured by
+    # ``setup_deap_types`` when the FitnessMax type was created.
+    ind.fitness = creator.FitnessMax()
+    # include optional attributes referenced elsewhere
+    ind.log_dir = None
+    ind.evaluation_result = None
+    return ind
 
 
 def main(configs: dict):
