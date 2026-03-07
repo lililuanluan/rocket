@@ -41,6 +41,13 @@ def normalize_pubhex(val: Any) -> str:
 
 BYZZ_MUTATE_METHODS = {
     # TODO: add mutation for TMGetLedger and TMLedgerData, transaction
+    ripple_pb2.TMGetLedger: [
+        "do_nothing",
+        "replace_ledger_hash_with_dummy",
+        "replace_ledger_sequence_with_high",
+        "clear_nodeIDs",
+        "replace_cookie_with_prev",
+    ],
     ripple_pb2.TMProposeSet: [
         "do_nothing",
         "replace_tx_hash",
@@ -73,12 +80,14 @@ BYZZ_MUTATE_METHODS = {
 
 
 class ByzzMutator:
-    def __init__(self, strategy: Strategy): # use EvodealyStrategy would cause circular import
+    def __init__(
+        self, strategy: Strategy
+    ):  # use EvodealyStrategy would cause circular import
         self.strategy = strategy
         self.byzz_mutate_methods = BYZZ_MUTATE_METHODS
         self.lock = Lock()
         # TODO 确保strategy对象有一些属性，比如old_proposals, dummy_proposal等
-        
+
         self.log_debug = False
 
     def debug(self, *args):
@@ -119,7 +128,9 @@ class ByzzMutator:
 
         if random.random() < 0.5:
             return "do_nothing"
-        return random.choice([i for i in self.byzz_mutate_methods[type(message)] if i != "do_nothing"])
+        return random.choice(
+            [i for i in self.byzz_mutate_methods[type(message)] if i != "do_nothing"]
+        )
 
     def mutate_propose_set(
         self, message: ripple_pb2.TMProposeSet, method: str
@@ -270,6 +281,50 @@ class ByzzMutator:
             logger.error(f"Unsupported mutation method for TMTransaction: {method}")
             raise ValueError(f"Unsupported mutation method for TMTransaction: {method}")
 
+    def mutate_get_ledger(
+        self, message: ripple_pb2.TMGetLedger, method: str
+    ) -> Tuple[Any, Any, Any]:
+        # if method != "do_nothing":
+        #     logger.error(f"Mutating TMGetLedger with method: {method}")
+        if method == "do_nothing":
+            # logger.error(f"[TMGetLedger] do_nothing, original: ledgerHash={getattr(message, 'ledgerHash', None)}, ledgerSeq={getattr(message, 'ledgerSeq', None)}, nodeIDs={list(getattr(message, 'nodeIDs', []))}, requestCookie={getattr(message, 'requestCookie', None)}")
+            return None, None, None
+        elif method == "replace_ledger_hash_with_dummy":
+            msg_copy = copy.deepcopy(message)
+            msg_copy.ledgerHash = bytes.fromhex(self.strategy.dummy_hash)
+            # logger.debug(f"[TMGetLedger] replace_ledger_hash_with_dummy: ledgerHash={msg_copy.ledgerHash.hex()}")
+            return msg_copy, None, None
+        elif method == "replace_ledger_sequence_with_high":
+            msg_copy = copy.deepcopy(message)
+            msg_copy.ledgerSeq = MAX_U32
+            # logger.debug(f"[TMGetLedger] replace_ledger_sequence_with_high: ledgerSeq={msg_copy.ledgerSeq}")
+            return msg_copy, None, None
+        elif method == "clear_nodeIDs":
+            msg_copy = copy.deepcopy(message)
+            before = list(msg_copy.nodeIDs)
+            del msg_copy.nodeIDs[:]
+            # logger.debug(f"[TMGetLedger] clear_nodeIDs: before={before}, after={list(msg_copy.nodeIDs)}")
+            return msg_copy, None, None
+        elif method == "replace_cookie_with_prev":
+            msg_copy = copy.deepcopy(message)
+            with self.lock:
+                prev_cookie = (
+                    self.strategy.old_get_ledger[-1][1]
+                    if self.strategy.old_get_ledger
+                    else None
+                )
+                if prev_cookie is not None:
+                    msg_copy.requestCookie = prev_cookie
+                else:
+                    msg_copy.requestCookie = random.randint(1, MAX_U32)
+            # logger.debug(
+            #     f"[TMGetLedger] replace_cookie_with_prev: requestCookie={msg_copy.requestCookie}"
+            # )
+            return msg_copy, None, None
+        else:
+            logger.error(f"Unsupported mutation method for TMGetLedger: {method}")
+            raise ValueError(f"Unsupported mutation method for TMGetLedger: {method}")
+
     def mutate(self, message, method=None) -> Tuple[Any, Any, Any]:
         """
         return: mutated|None, delay|None, repeat|None
@@ -285,6 +340,8 @@ class ByzzMutator:
             return self.mutate_have_transaction_set(message, method)
         elif isinstance(message, ripple_pb2.TMTransaction):
             return self.mutate_transaction(message, method)
+        elif isinstance(message, ripple_pb2.TMGetLedger):
+            return self.mutate_get_ledger(message, method)
         else:
             logger.error(f"Unsupported message type for mutation: {type(message)}")
             raise ValueError(f"Unsupported message type for mutation: {type(message)}")
