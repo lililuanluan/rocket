@@ -61,6 +61,8 @@ class EvoDelayStrategy(Strategy):
         self.old_proposals = {-1: set([self.dummy_proposal,])} # seq -> set of proposals
         self.old_validation_hashes = {-1: set([self.dummy_validation,])} # seq -> set of validations
         self.old_transactions = []
+        
+        self.old_get_ledger = []
 
         self.byzz_mutate_methods = BYZZ_MUTATE_METHODS
         self.byzz_mutator = ByzzMutator(self)
@@ -111,6 +113,11 @@ class EvoDelayStrategy(Strategy):
             tx = message.rawTransaction.hex()
             if tx not in self.old_transactions:
                 self.old_transactions.append(tx)
+        elif isinstance(message, ripple_pb2.TMGetLedger):
+            # cache old get_ledger requests for possible mutation methods that replace with old values
+            gl_tuple = (message.ledgerHash.hex(), message.requestCookie, message.queryType)
+            if gl_tuple not in self.old_get_ledger:
+                self.old_get_ledger.append(gl_tuple)
 
 
     def get_delay(self, message_type: int, packet: packet_pb2.Packet, current_ledger: int, message_cls: type) -> int:
@@ -269,6 +276,12 @@ class EvoDelayStrategy(Strategy):
             elif isinstance(message, ripple_pb2.TMTransaction):
                 method = self.get_mutation_method(message, packet, current_ledger)
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
+                return handle_mutated_message(mutated_message, delay, repeat)
+            elif isinstance(message, ripple_pb2.TMGetLedger):
+                method = self.get_mutation_method(message, packet, current_ledger)
+                mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
+                
+                # logger.error(f"mutation res: {mutated_message}, delay: {delay}, repeat: {repeat}") if method != "do_nothing" else None
                 return handle_mutated_message(mutated_message, delay, repeat)
             else:
                 # logger.debug(f"[OtherMessage] type={message_type}, delay={configed_delay}ms")

@@ -41,6 +41,8 @@ def normalize_pubhex(val: Any) -> str:
 
 BYZZ_MUTATE_METHODS = {
     # TODO: add mutation for TMGetLedger and TMLedgerData, transaction
+    # TMStatusChange
+    # TMLedgerData
     ripple_pb2.TMGetLedger: [
         "do_nothing",
         "replace_ledger_hash_with_dummy",
@@ -51,6 +53,7 @@ BYZZ_MUTATE_METHODS = {
     ripple_pb2.TMProposeSet: [
         "do_nothing",
         "replace_tx_hash",
+        # TODO: replace prev ledger hash
         "increment_propose_seq",
         # "repeat_5",
         "drop",
