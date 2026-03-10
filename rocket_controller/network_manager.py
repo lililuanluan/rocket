@@ -387,13 +387,25 @@ class NetworkManager:
         Returns:
             int: The corresponding peer ID
 
-        Raises:
-            ValueError: If port is not in port_dict.
+        Notes:
+            If the port is not already known, we create a new mapping rather than
+            raising an exception.  This prevents the controller from panicking
+            in the face of unexpected but harmless connections (e.g. race
+            conditions during startup).  A warning is logged so the condition
+            can be investigated later.
         """
-        try:
-            return self.port_to_id_dict[port]
-        except KeyError as err:
-            raise ValueError(f"Port {port} not found in port_to_id_dict") from err
+        # allow unknown ports by assigning them a fresh id
+        if port not in self.port_to_id_dict:
+            new_id = len(self.port_to_id_dict)
+            logger.warning(
+                "port_to_id_dict missing port %d; assigning new id %d",
+                port,
+                new_id,
+            )
+            self.port_to_id_dict[port] = new_id
+            self.id_to_port_dict[new_id] = port
+            return new_id
+        return self.port_to_id_dict[port]
 
     def id_to_port(self, peer_id: int) -> int:
         """
