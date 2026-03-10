@@ -5,6 +5,7 @@ from cleanup import cleanup_instance_docker_containers
 import yaml
 import subprocess
 import signal
+from socket import socket, AF_INET, SOCK_STREAM
 
 from utils import build_interceptor, get_dirs, terminate_process_group
 from datetime import datetime
@@ -64,6 +65,35 @@ def run_rocket_and_evaluate(
 
         # 一次运行需要占用 1+num_nodes*4 个端口，如果7个节点，则有29个端口占用
         num_nodes = network_config.get("number_of_nodes", 0) or 1
+
+        # helper to test a range of consecutive ports
+        def ports_free(start: int, count: int) -> bool:
+            # try to bind each port on localhost; close immediately
+            for p in range(start, start + count):
+                with socket(AF_INET, SOCK_STREAM) as s:
+                    try:
+                        s.bind(("", p))
+                    except Exception:
+                        return False
+            return True
+
+        required = 1 + num_nodes * 4
+        # adjust base_port_number if there is a conflict
+        orig_base = base_port_number
+        max_port = 65535 - required
+        while not ports_free(base_port_number, required):
+            if base_port_number > max_port:
+                raise RuntimeError(
+                    f"unable to find free port block of size {required} starting at {orig_base}"
+                )
+            # push forward by required (non-overlapping block)
+            base_port_number += required
+        if base_port_number != orig_base:
+            print(
+                f"[run_rocket] bumped base_port_number from {orig_base} "
+                f"to {base_port_number} to avoid occupation"
+            )
+
         network_config["base_port_peer"] = base_port_number
         network_config["base_port_ws"] = base_port_number + num_nodes
         network_config["base_port_ws_admin"] = base_port_number + 2 * num_nodes
