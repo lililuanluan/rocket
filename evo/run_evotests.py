@@ -38,11 +38,22 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     dirs = get_dirs(__file__)
-    images = ["xrpllabsofficial/xrpld:2.6.0"]  # , "xrpllabsofficial/xrpld:3.1.0"
-    strategies = ["EvoDelayStrategy", "RandomDelayByzzStrategy"]  #
+    images = [
+        f"xrpld:2.6.0-bug{i}-local" for i in range(11, 16)
+    ]  # "xrpllabsofficial/xrpld:2.6.0", "xrpllabsofficial/xrpld:3.1.0"
+    strategies = [
+        "EvoDelayByzzPartitionStrategy",
+        # "RandomDelayByzzPartitionStrategy",
+    ]  # "RandomDelayByzzPartitionStrategy"
     # choose real fitness names from the allowed list; "fitness_function" was
     # a placeholder and not a valid choice for the CLI parser
-    fitnesses = ["mean_validation_time", "num_getledger_messages"]  #
+    fitnesses = [
+        "mean_validation_time",
+        # "num_getledger_messages",
+        # "message_entropy_integral",
+        # "markov_matrix_non_similarity",
+        # "var_validation_time",
+    ]  #  "num_getledger_messages"
 
     log_dir = Path(dirs["logs_dir"]) / get_date_time_strf()
     # 创建日志目录
@@ -66,9 +77,10 @@ def main():
     # 每个population要运行 population_size 个测试，所以每个population需要 41*population_size=410 个端口。
     # 多个generation之前串行，所以不影响
     population_port_range = (1 + max_num_nodes * 4) * population_size
-    for i, img in enumerate(images):
-        for j, strategy in enumerate(strategies):
-            for k, fitness in enumerate(fitnesses):
+
+    for j, strategy in enumerate(strategies):
+        for k, fitness in enumerate(fitnesses):
+            for i, img in enumerate(images):
 
                 logs_group_dir = f"{log_dir}/{img.replace(':','_').replace('/', '_')}/{strategy}/{fitness}"
 
@@ -97,7 +109,13 @@ def main():
                     "--base-port-population",
                     str(base_port_population),
                     "--max-parallel-workers",
-                    str(2),
+                    str(5),
+                    "--total-num-tests",
+                    str(500),
+                    "--population-size",
+                    str(population_size),
+                    "--individual-timeout-sec",
+                    str(180),
                 ]
 
                 print("Starting", " ".join(cmd))
@@ -113,10 +131,11 @@ def main():
                 proc = subprocess.Popen(cmd, env=env, start_new_session=True)
                 procs.append(proc)
                 idx += 1
+                proc.wait()
 
     # wait for all children to exit
-    for p in procs:
-        p.wait()
+    # for p in procs:
+    #     p.wait()
 
 
 if __name__ == "__main__":
