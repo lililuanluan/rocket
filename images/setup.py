@@ -31,7 +31,8 @@ def clone_repository_if_not_here():
 def get_bug_i_branches():
     # 检测rippled目录下所有的 bug{i} 的分支
     result = subprocess.run(
-        ["git", "branch", "-r"],
+        # ["git", "branch", "-r"], # 这里是只检查远端的
+        ["git", "branch", "--list", "bug*"],
         cwd=rippled_dir,
         capture_output=True,
         text=True,
@@ -39,12 +40,20 @@ def get_bug_i_branches():
     )
     branches = result.stdout.splitlines()
 
-    buggy_branches = []
+    buggy_branches = set()
     for branch in branches:
         b = branch.strip()
+        # 'git branch' prefixes the current branch with '*', remove it
+        if b.startswith("*"):
+            b = b[1:].strip()
         if re.match(r"origin/bug\d+$", b):
-            buggy_branches.append(b.split("/")[-1])
-    return buggy_branches
+            buggy_branches.add(b.split("/")[-1])
+        else:
+            # 在本地的bugi分支也算
+            if re.match(r"bug\d+$", b):
+                buggy_branches.add(b)
+    print(f"Found buggy branches: {buggy_branches}")
+    return list(buggy_branches)
 
 
 def generate_dockerfiles(bug_i_branches):
@@ -61,6 +70,17 @@ def generate_dockerfiles(bug_i_branches):
         content = content.replace(
             "RUN git checkout 2.6.0", f"RUN git checkout {buggy_branch}"
         )
+        # if user specified jobs, replace the cmake parallel invocation
+        if args.jobs is not None:
+            # replace the line "cmake --build . --parallel" with explicit count
+            content = content.replace(
+                "cmake --build . --parallel",
+                f"cmake --build . --parallel {args.jobs}",
+            )
+            content = content.replace(
+                "tools.build:jobs=$(nproc)",
+                f"tools.build:jobs={args.jobs}",
+            )
         new_dockerfile = Path(__file__).parent / docker_file_name
         with open(new_dockerfile, "w") as f:
             f.write(content)
@@ -130,17 +150,32 @@ parser.add_argument(
     action="store_true",
     help="If set, pass --no-cache to docker build (force rebuild)",
 )
+
+parser.add_argument(
+    "--max-workers",
+    type=int,
+    default=1,                   # 默认 1
+    help="Maximum parallel docker builds (default: 1)",
+)
+# new jobs argument
+parser.add_argument(
+    "-j",
+    "--jobs",
+    type=int,
+    default=None,
+    help="Number of build jobs to use inside generated Dockerfiles (replaces --parallel).",
+)
 args = parser.parse_args()
 
 
-def build_images(img_dockerfiles, selected, force: bool = False):
+def build_images(img_dockerfiles, selected, force: bool = False, max_workers: int = 1):
     # prepare list of arguments for each build
     to_build = [(t, img_dockerfiles[t], force) for t in selected]
 
     # execute builds in parallel with a pool of workers
     # imported and running_procs defined at module level
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(_run_build_task, args) for args in to_build]
         for fut in as_completed(futures):
             try:
@@ -172,12 +207,13 @@ def main():
             for img in args.build:
                 if img not in img_dockerfiles:
                     print(f"Error: Image {img} not found in generated dockerfiles.")
+                    print(f"Available images: {list(img_dockerfiles.keys())}")
                     return
                 selected.append(img)
 
     if selected:
         try:
-            build_images(img_dockerfiles, selected, force=args.force)
+            build_images(img_dockerfiles, selected, force=args.force, max_workers=args.max_workers)
         except KeyboardInterrupt:
             print("\nInterrupted by user, terminating ongoing builds...")
             # kill any running docker build subprocesses
