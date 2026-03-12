@@ -1,0 +1,112 @@
+# ============================================================================
+# PARALLEL MODE CONFIGURATION
+# ============================================================================
+# serial: Run evotest_parallel instances sequentially (safe for WSL2)
+# parallel: Run evotest_parallel instances concurrently (faster for servers)
+parallel_mode: serial  # serial or "parallel"
+
+# ============================================================================
+# RIPPLE IMAGES
+# ============================================================================
+ripple_images:
+  - xrpld:2.6.0-bug11-local
+  - xrpld:2.6.0-bug12-local
+  - xrpld:2.6.0-bug13-local
+  - xrpld:2.6.0-bug14-local
+  - xrpld:2.6.0-bug15-local
+
+# ============================================================================
+# STRATEGIES
+# ============================================================================
+# List of test strategies to apply. Each combination of image × strategy × fitness
+# will generate separate tests.
+strategies:
+  - EvoDelayByzzPartitionStrategy
+  # - RandomDelayByzzPartitionStrategy
+  # - EvoDelayStrategy
+  # - RandomDelayStrategy
+
+# ============================================================================
+# FITNESS FUNCTIONS
+# ============================================================================
+# List of fitness metrics to optimize for. Each fitness function will result in
+# separate evolutionary runs.
+fitness_functions:
+  - mean_validation_time
+  # - var_validation_time
+  # - num_getledger_messages
+  # - message_entropy_integral
+  # - markov_matrix_non_similarity
+  # - validation_distribution_entropy
+
+# ============================================================================
+# PORT CONFIGURATION
+# ============================================================================
+# Starting port for port allocation. Each test needs 1 + num_nodes*4 ports.
+# Ensure the range doesn't conflict with other services.
+port_start: 10000   # must be below the OS ephemeral range (32768-60999 on this host)
+
+# ============================================================================
+# PARALLEL WORKERS
+# ============================================================================
+# Maximum number of parallel workers within each evotest_parallel instance.
+# This controls the parallelism WITHIN a single image's test run, not across images.
+# 
+# Recommendation:
+#   WSL2:         3-5 (limited resources)
+#   Linux server: 5-15 (more resources)
+#   Powerful server: 15-20 (abundant resources)
+#
+# Note: This is independent of parallel_mode. Even in serial mode, each instance
+# will use max_parallel_workers internally.
+max_parallel_workers: 5
+
+# ============================================================================
+# TEST CONFIGURATION
+# ============================================================================
+# Number of tests per evotest_parallel run
+total_num_tests: 500
+
+# Population size for genetic algorithm
+population_size: 10
+
+# Maximum ledger sequence to run
+max_ledger_seq: 15
+
+# Individual test timeout in seconds
+individual_timeout_sec: 180
+
+# ============================================================================
+# BYZANTINE CONFIGURATION
+# ============================================================================
+byzz_min_seq: 5
+byzz_max_seq: 10
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+# Rust log level for rippled
+rust_log_level: info  # or "debug" for more verbose output
+
+# ============================================================================
+# NOTES
+# ============================================================================
+# 1. Combinations: Each ripple_image × strategy × fitness_function combination
+#    will result in a separate evotest_parallel run.
+#    Total runs = len(ripple_images) × len(strategies) × len(fitness_functions)
+#
+#    In this config: 5 images × 1 strategy × 1 fitness = 5 runs
+#
+# 2. Port allocation:
+#    - Each run needs (1 + num_nodes*4) × population_size ports
+#    - With 7 nodes: 29 × 10 = 290 ports per image
+#    - With 5 images: 1450 ports total (60000 - 61449)
+#
+# 3. Parallel Mode:
+#    - SERIAL (default): Safer, especially on WSL2. Total time = 5 × (single run time)
+#    - PARALLEL: Faster on servers. Total time ≈ 1 × (single run time)
+#
+# 4. Max Parallel Workers:
+#    - This is PER evotest_parallel instance, not across instances
+#    - In serial mode: Only one instance runs at a time
+#    - In parallel mode: Multiple instances can run, each with max_parallel_workers
