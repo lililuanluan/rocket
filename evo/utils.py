@@ -61,12 +61,25 @@ def build_interceptor(interceptor_dir, cargo_clean=False):
 
 
 
+def _image_exists_locally(image_name: str) -> bool:
+    """Check whether a Docker image already exists in the local daemon."""
+    result = subprocess.run(
+        ["docker", "image", "inspect", image_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
 def setup_docker_images(ripple_image, rocket_dir):
     # 打印当前本地所有的docker镜像
     """拉取/构建 Docker 镜像"""
     if "local" not in ripple_image:
-        print(f"Pulling Docker image: {ripple_image}")
-        subprocess.run(["docker", "pull", ripple_image], check=True)
+        if _image_exists_locally(ripple_image):
+            print(f"Docker image already exists locally: {ripple_image} — skipping pull")
+        else:
+            print(f"Pulling Docker image: {ripple_image}")
+            subprocess.run(["docker", "pull", ripple_image], check=True)
 
     original_cwd = os.getcwd()
     os.chdir(rocket_dir / "images")
