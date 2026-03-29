@@ -12,10 +12,17 @@ def get_date_time_strf():
     return datetime.now().strftime("%Y_%m_%d_%Hh%Mm_%Ss")
 
 
+def get_logs_root(rocket_dir: Path) -> Path:
+    """Return the configured logs root, defaulting to <rocket_dir>/logs."""
+    log_root_env = os.environ.get("ROCKET_LOG_ROOT")
+    return Path(log_root_env) if log_root_env else (rocket_dir / "logs")
+
+
 def get_last_log_dir():
     # 获取 __file__/../logs/ 目录下最新的日志文件夹
 
-    log_dir = Path(__file__).resolve().parent.parent / "logs"
+    rocket_dir = Path(__file__).resolve().parent.parent
+    log_dir = get_logs_root(rocket_dir)
     if not log_dir.exists():
         raise FileNotFoundError(f"log {log_dir} does not exist.")
 
@@ -30,7 +37,7 @@ def get_dirs(script_path) -> dict:
     cur_dir = Path(script_path).parent
     rocket_dir = cur_dir.parent
     interceptor_dir = rocket_dir / "rocket_interceptor"
-    logs_dir = rocket_dir / "logs"
+    logs_dir = get_logs_root(rocket_dir)
     tmp_dir = cur_dir / "tmp"
     return {
         "cur_dir": cur_dir,

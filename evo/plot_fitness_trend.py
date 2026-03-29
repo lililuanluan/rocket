@@ -6,10 +6,12 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib.backends.backend_pdf import PdfPages
 from pathlib import Path
 from typing import Iterable
+from utils import get_logs_root
 
 def find_latest_log_dir() -> Path | None:
     """Locate the newest child directory under ../logs relative to this file."""
-    logs_root = Path(__file__).resolve().parent.parent / "logs"
+    rocket_dir = Path(__file__).resolve().parent.parent
+    logs_root = get_logs_root(rocket_dir)
     if not logs_root.exists():
         return None
 
