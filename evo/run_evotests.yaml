@@ -9,11 +9,7 @@ parallel_mode: serial  # serial or "parallel"
 # RIPPLE IMAGES
 # ============================================================================
 ripple_images:
-  - xrpld:2.6.0-bug11-local
-  - xrpld:2.6.0-bug12-local
-  - xrpld:2.6.0-bug13-local
-  - xrpld:2.6.0-bug14-local
-  - xrpld:2.6.0-bug15-local
+  - xrpllabsofficial/xrpld:2.6.0
 
 # ============================================================================
 # STRATEGIES
