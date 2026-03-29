@@ -148,6 +148,12 @@ def sanitize_cluster_id(s: str) -> str:
     return sanitized
 
 
+def get_user_prefix() -> str:
+    """Return the current username as a docker-safe prefix when available."""
+    username = os.environ.get("USER") or os.environ.get("LOGNAME") or ""
+    return sanitize_cluster_id(username) if username else ""
+
+
 def make_cluster_id(logs_dir: str, test_log_dir: str, individual_id: str) -> str:
     """Generate a unique, docker-safe cluster ID for an evaluation.
 
@@ -173,7 +179,9 @@ def make_cluster_id(logs_dir: str, test_log_dir: str, individual_id: str) -> str
         rel = test_path
 
     prefix = "_".join(rel.parts)
-    raw = f"{prefix}_{individual_id}" if prefix else individual_id
+    user_prefix = get_user_prefix()
+    parts = [p for p in [user_prefix, prefix, individual_id] if p]
+    raw = "_".join(parts)
     return sanitize_cluster_id(raw)
 
 
