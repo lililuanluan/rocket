@@ -58,7 +58,6 @@ python-dateutil==2.9.0.post0
 pytz==2025.2
 PyYAML==6.0.3
 requests==2.31.0
--e git+ssh://git@github.com/lililuanluan/rocket.git@59a5e5dba58b613fc977062566dc6ca1b22bc539#egg=ripple_serialize&subdirectory=serialize
 ruff==0.4.2
 setuptools==80.9.0
 six==1.17.0
