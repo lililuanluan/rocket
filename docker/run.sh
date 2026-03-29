@@ -1,0 +1,50 @@
+#!/bin/bash
+
+
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/.." && pwd)"
+
+# 默认使用环境变量 ROCKET_IMAGE_NAME 指定的镜像名称，如果没有设置则使用 rocket-evo:latest
+image_name="${ROCKET_IMAGE_NAME:-rocket-evo:latest}"
+dockerfile="${repo_root}/docker/Dockerfile"
+# 缓存目录挂到容器的 HOME，这样 ~/.cargo 和 pip 的缓存都一起持久化，而且不需要改 entrypoint.sh 的逻辑
+cache_root="${ROCKET_CACHE_ROOT:-${repo_root}/.docker-cache/home}"
+container_home="${ROCKET_CONTAINER_HOME:-/tmp/rocket-home}"
+
+# 检测是否有 /data/workspace/lli21 路径，如果存在则使用它作为日志目录，否则使用 repo_root/logs
+if [ -d /data/workspace/lli21 ]; then
+    ROCKET_LOG_ROOT="/data/workspace/lli21/logs"
+fi
+
+log_root="${ROCKET_LOG_ROOT:-${repo_root}/logs}"
+build_jobs="${ROCKET_BUILD_JOBS:-$(nproc)}"
+
+mkdir -p "${log_root}" "${cache_root}"
+
+docker build -f "${dockerfile}" -t "${image_name}" "${repo_root}"
+
+
+exec docker run --rm \
+    --network host \
+    --user "$(id -u):$(id -g)" \
+    --group-add "$(stat -c '%g' /var/run/docker.sock)" \
+    --name "evo-runner" \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v "${repo_root}:${repo_root}" \
+    -v "${log_root}:${log_root}" \
+    -v "${cache_root}:${container_home}" \
+    -w "${repo_root}" \
+    -e HOME="${container_home}" \
+    -e ROCKET_WORKSPACE="${repo_root}" \
+    -e ROCKET_BUILD_JOBS="${build_jobs}" \
+    -e ROCKET_LOG_ROOT="${log_root}" \
+    -e USER="$(id -un)" \
+    "${image_name}" \
+    python evo/run_evotests.py "$@"
+
+# 杀死所有容器（放在这里防止忘了）
+docker rm -f evo-runner || true
+docker ps --format '{{.Names}}' | grep -E "^${USER}_.*(validator_[0-9]+|key_generator)$" | xargs -r docker rm -f # 根据前缀杀死
+# docker ps --format '{{.Names}}' | grep -E '(^validator_|_validator_|^key_generator$|_key_generator$)' | xargs -r docker rm -f

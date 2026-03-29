@@ -199,7 +199,8 @@ class SpecChecker:
 
             logger.info(f"Aggregated spec check results: {aggregated_data}")
 
-            with open(Path(__file__).parent / "../evo/out/error.log", "a") as error_log:
+            error_log_path = self.log_dir / "error.log"
+            with open(error_log_path, "a") as error_log:
                 if aggregated_data["correct_runs"] != total_iterations:
                     error_log.write(f"FAILED RUN, final agreement failed: {failed_final_agreement}\n")
                 else:
