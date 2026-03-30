@@ -79,34 +79,31 @@ def _image_exists_locally(image_name: str) -> bool:
 
 
 def setup_docker_images(ripple_image, rocket_dir):
-    # 打印当前本地所有的docker镜像
-    """拉取/构建 Docker 镜像"""
+    """Ensure the requested Docker image exists.
+
+    Remote images are pulled on demand.
+    Local images (those whose tag contains ``local``) are never auto-built:
+    they must already exist in the local daemon, otherwise execution aborts
+    with a clear error so the user can build them manually.
+    """
     if "local" not in ripple_image:
         if _image_exists_locally(ripple_image):
             print(f"Docker image already exists locally: {ripple_image} — skipping pull")
         else:
             print(f"Pulling Docker image: {ripple_image}")
             subprocess.run(["docker", "pull", ripple_image], check=True)
+        return
 
-    original_cwd = os.getcwd()
-    os.chdir(rocket_dir / "images")
-    # 去掉ripple_image中前面 "xrpld:" 的部分
-    build_target = ripple_image.split(":")[-1]
-    if "local" in ripple_image:
-        print(f"Building local Docker image: {ripple_image} with target {build_target}")
-        # use the new setup.py helper in images/ to build, which handles
-        # dockerfile generation, parallelism and caching control
-        cmd = ["python3", "setup.py", "--build", build_target]
+    if _image_exists_locally(ripple_image):
+        print(f"Using existing local Docker image: {ripple_image}")
+        return
 
-        # first attempt, retry once with no-cache on failure
-        try:
-            subprocess.run(cmd, check=True)
-        except subprocess.CalledProcessError:
-            print("Initial build failed, retrying with --no-cache flag...")
-            retry_cmd = cmd + ["-f"]
-            subprocess.run(retry_cmd, check=True)
-        print("✓ Local images built successfully (via setup.py)")
-    os.chdir(original_cwd)
+    raise RuntimeError(
+        "Required local Docker image not found: "
+        f"{ripple_image}\n"
+        "Automatic image building has been disabled. "
+        "Please build the image manually first, then rerun the experiment."
+    )
 
 
 def get_strategy_name(strategy):
