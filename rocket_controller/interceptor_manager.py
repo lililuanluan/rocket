@@ -6,6 +6,7 @@ from sys import platform
 from threading import Thread
 import sys
 import os
+from pathlib import Path
 
 import docker
 from docker import DockerClient
@@ -25,6 +26,38 @@ class InterceptorManager:
         self.cluster_id = cluster_id
         self.rippled_img = rippled_img if rippled_img is not None else "xrpllabsofficial/xrpld:2.3.0" # use the same default as in the interceptor
         logger.info(f"Using rippled image: {self.rippled_img}")
+
+    @staticmethod
+    def _get_volumes_root() -> str:
+        """Return the root directory used for validator runtime data.
+
+        Prefer an explicit env var. Otherwise, keep runtime data under the
+        configured temporary directory so local/server runs do not fill Docker's
+        default storage root under ``/var/lib/docker``.
+        """
+        configured = os.environ.get("ROCKET_VOLUMES_ROOT")
+        if configured:
+            return str(Path(configured).resolve())
+
+        tmp_root = os.environ.get("ROCKET_TMPDIR") or os.environ.get("TMPDIR")
+        if tmp_root:
+            return str((Path(tmp_root).resolve() / "volumes"))
+
+        return "/tmp/rocket-tmp/volumes"
+
+    @staticmethod
+    def _get_network_root() -> str:
+        """Return the root directory used for generated interceptor configs."""
+        configured = os.environ.get("ROCKET_NETWORK_ROOT")
+        if configured:
+            return str(Path(configured).resolve())
+
+        tmp_root = os.environ.get("ROCKET_TMPDIR") or os.environ.get("TMPDIR")
+        if tmp_root:
+            return str((Path(tmp_root).resolve() / "network"))
+
+        return "/tmp/rocket-tmp/network"
+
     @staticmethod
     def __stream_reader(pipe, stream):
         """Read a process stream line-by-line and log it immediately."""
@@ -95,6 +128,10 @@ class InterceptorManager:
         process_env["ROCKET_GRPC_PORT"] = str(self.grpc_port)
         process_env["ROCKET_CLUSTER_ID"] = self.cluster_id
         process_env["RIPPLE_IMAGE"] = self.rippled_img
+        process_env["ROCKET_VOLUMES_ROOT"] = self._get_volumes_root()
+        process_env["ROCKET_NETWORK_ROOT"] = self._get_network_root()
+        process_env.setdefault("ROCKET_HOST_UID", str(os.getuid()))
+        process_env.setdefault("ROCKET_HOST_GID", str(os.getgid()))
         try:
             self.process = Popen(
                 [f"./{file}"],

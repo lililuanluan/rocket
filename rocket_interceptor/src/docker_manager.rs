@@ -5,6 +5,7 @@ use std::env::current_dir;
 use std::fs;
 use std::io::Read;
 use std::io::Write;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use bollard::container::{CreateContainerOptions, RemoveContainerOptions};
@@ -134,6 +135,94 @@ impl DockerNetwork {
             docker: Docker::connect_with_local_defaults().unwrap(),
             instance_id,
         }
+    }
+
+    /// Root directory inside the repository that stores static interceptor
+    /// assets such as the base rippled config and ledger file.
+    fn get_static_network_root(&self) -> PathBuf {
+        current_dir()
+            .expect("Could not determine current directory")
+            .join("network")
+    }
+
+    /// Root directory on the host where generated validator/key-generator
+    /// configs are stored for a run.
+    fn get_generated_network_root(&self) -> PathBuf {
+        if let Ok(root) = std::env::var("ROCKET_NETWORK_ROOT") {
+            return PathBuf::from(root);
+        }
+
+        if let Ok(tmp_root) = std::env::var("ROCKET_TMPDIR") {
+            return PathBuf::from(tmp_root).join("network");
+        }
+
+        if let Ok(tmp_root) = std::env::var("TMPDIR") {
+            return PathBuf::from(tmp_root).join("network");
+        }
+
+        PathBuf::from("/tmp/rocket-tmp/network")
+    }
+
+    /// Root directory on the host where validator runtime data is stored.
+    ///
+    /// We prefer an explicit env var so outer runner containers can point to a
+    /// path that exists identically on host and inside the runner container.
+    /// When missing, default under the temporary directory so validator runtime
+    /// data does not accumulate in Docker's global storage root.
+    fn get_volumes_root(&self) -> PathBuf {
+        if let Ok(root) = std::env::var("ROCKET_VOLUMES_ROOT") {
+            return PathBuf::from(root);
+        }
+
+        if let Ok(tmp_root) = std::env::var("ROCKET_TMPDIR") {
+            return PathBuf::from(tmp_root).join("volumes");
+        }
+
+        if let Ok(tmp_root) = std::env::var("TMPDIR") {
+            return PathBuf::from(tmp_root).join("volumes");
+        }
+
+        PathBuf::from("/tmp/rocket-tmp/volumes")
+    }
+
+    /// Create the runtime directories for one container under the shared
+    /// volumes root and return the host paths for its DB and log directories.
+    fn ensure_runtime_dirs(&self, container_name: &str) -> (PathBuf, PathBuf) {
+        let container_root = self.get_volumes_root().join(container_name);
+        let db_dir = container_root.join("db");
+        let log_dir = container_root.join("log");
+
+        fs::create_dir_all(&db_dir).expect("Could not create validator db directory");
+        fs::create_dir_all(&log_dir).expect("Could not create validator log directory");
+
+        (db_dir, log_dir)
+    }
+
+    fn ensure_key_generator_config_dir(&self, container_name: &str) -> PathBuf {
+        let config_dir = self
+            .get_generated_network_root()
+            .join(container_name)
+            .join("config");
+        fs::create_dir_all(&config_dir).expect("Could not create key_generator config directory");
+        config_dir
+    }
+
+    fn ensure_validator_config_dir(&self, container_name: &str) -> PathBuf {
+        let config_dir = self
+            .get_generated_network_root()
+            .join("validators")
+            .join(container_name)
+            .join("config");
+        fs::create_dir_all(&config_dir).expect("Could not create validator config directory");
+        config_dir
+    }
+
+    /// Run inner containers as the same uid:gid as the outer runner user when
+    /// available, so bind-mounted files stay user-writable on the host.
+    fn get_container_user(&self) -> Option<String> {
+        let uid = std::env::var("ROCKET_HOST_UID").ok()?;
+        let gid = std::env::var("ROCKET_HOST_GID").ok()?;
+        Some(format!("{uid}:{gid}"))
     }
 
     /// Initializes the docker network by generating keys for each configured node, and starting
@@ -313,6 +402,9 @@ impl DockerNetwork {
     /// * If the Docker container who runs the validator could not be created or started.
     async fn start_validator(&self, container: &mut DockerContainer) {
         let image = self.get_image_from_env();
+        let (db_dir, log_dir) = self.ensure_runtime_dirs(container.name.as_str());
+        let config_dir = self.ensure_validator_config_dir(container.name.as_str());
+        let container_user = self.get_container_user();
         let mut port_map = PortMap::new();
         port_map.insert(
             String::from("51235/tcp"),
@@ -343,20 +435,31 @@ impl DockerNetwork {
 
         let container_config = bollard::container::Config {
             image: Some(image.as_str()),
+            user: container_user.as_deref(),
             env: Some(vec!["ENV_ARGS=--start --ledgerfile /config/ledger.json"]),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
                 port_bindings: Some(port_map),
-                mounts: Some(vec![Mount {
-                    target: Some(String::from("/config")),
-                    source: Some(format!(
-                        "{}/network/validators/{}/config",
-                        current_dir().unwrap().to_str().unwrap(),
-                        container.name.as_str()
-                    )),
-                    typ: Some(MountTypeEnum::BIND),
-                    ..Default::default()
-                }]),
+                mounts: Some(vec![
+                    Mount {
+                        target: Some(String::from("/config")),
+                        source: Some(config_dir.to_string_lossy().to_string()),
+                        typ: Some(MountTypeEnum::BIND),
+                        ..Default::default()
+                    },
+                    Mount {
+                        target: Some(String::from("/var/lib/rippled/db")),
+                        source: Some(db_dir.to_string_lossy().to_string()),
+                        typ: Some(MountTypeEnum::BIND),
+                        ..Default::default()
+                    },
+                    Mount {
+                        target: Some(String::from("/var/log/rippled")),
+                        source: Some(log_dir.to_string_lossy().to_string()),
+                        typ: Some(MountTypeEnum::BIND),
+                        ..Default::default()
+                    },
+                ]),
                 ..Default::default()
             }),
             ..Default::default()
@@ -400,10 +503,9 @@ impl DockerNetwork {
         } else {
             format!("{}_key_generator", self.instance_id)
         };
-
-        // Create the config directory for key_generator container (required for bind mount)
-        let config_dir = format!("network/{}/config", container_name.as_str());
-        fs::create_dir_all(&config_dir).expect("Could not create key_generator config directory");
+        let (db_dir, log_dir) = self.ensure_runtime_dirs(container_name.as_str());
+        let config_dir = self.ensure_key_generator_config_dir(container_name.as_str());
+        let container_user = self.get_container_user();
 
 
         let create_options = CreateContainerOptions {
@@ -414,18 +516,29 @@ impl DockerNetwork {
         let image = self.get_image_from_env();
         let container_config = bollard::container::Config {
             image: Some(image.as_str()),
+            user: container_user.as_deref(),
             host_config: Some(HostConfig {
                 auto_remove: Some(true),
-                mounts: Some(vec![Mount {
-                    target: Some(String::from("/config")),
-                    source: Some(format!(
-                        "{}/network/{}/config",
-                        current_dir().unwrap().to_str().unwrap(),
-                        container_name.as_str()
-                    )),
-                    typ: Some(MountTypeEnum::BIND),
-                    ..Default::default()
-                }]),
+                mounts: Some(vec![
+                    Mount {
+                        target: Some(String::from("/config")),
+                        source: Some(config_dir.to_string_lossy().to_string()),
+                        typ: Some(MountTypeEnum::BIND),
+                        ..Default::default()
+                    },
+                    Mount {
+                        target: Some(String::from("/var/lib/rippled/db")),
+                        source: Some(db_dir.to_string_lossy().to_string()),
+                        typ: Some(MountTypeEnum::BIND),
+                        ..Default::default()
+                    },
+                    Mount {
+                        target: Some(String::from("/var/log/rippled")),
+                        source: Some(log_dir.to_string_lossy().to_string()),
+                        typ: Some(MountTypeEnum::BIND),
+                        ..Default::default()
+                    },
+                ]),
                 ..Default::default()
             }),
             ..Default::default()
@@ -521,15 +634,16 @@ impl DockerNetwork {
         &self,
         keys: &[ValidatorKeyData],
     ) -> Vec<(String, ValidatorKeyData)> {
-        let base_config_path = "network/rippled_base.cfg";
-        let ledger_json_path = "network/ledger.json";
-        let base_config_file = fs::File::open(base_config_path);
+        let static_network_root = self.get_static_network_root();
+        let base_config_path = static_network_root.join("rippled_base.cfg");
+        let ledger_json_path = static_network_root.join("ledger.json");
+        let base_config_file = fs::File::open(&base_config_path);
 
         let mut base_config_contents = String::new();
         base_config_file
             .unwrap()
             .read_to_string(&mut base_config_contents)
-            .unwrap_or_else(|_| panic!("Could not read file {}", base_config_path));
+            .unwrap_or_else(|_| panic!("Could not read file {}", base_config_path.display()));
 
         let mut ret: Vec<(String, ValidatorKeyData)> = Vec::new();
         for (i, key) in keys.iter().enumerate() {
@@ -542,17 +656,14 @@ impl DockerNetwork {
                 .clone()
                 .replace("{validation_seed}", key.validation_seed.as_str());
 
-            let config_dir = format!("network/validators/{}/config", container_name.clone());
-            fs::create_dir_all(config_dir.as_str()).expect("Could not create directory.");
+            let config_dir = self.ensure_validator_config_dir(container_name.as_str());
 
-            let mut config_file =
-                fs::File::create(format!("{}/rippled.cfg", config_dir.as_str())).unwrap();
+            let mut config_file = fs::File::create(config_dir.join("rippled.cfg")).unwrap();
             config_file
                 .write_all(new_config_contents.as_bytes())
                 .expect("Could not write to config file");
 
-            let mut validators_file =
-                fs::File::create(format!("{}/validators.txt", config_dir)).unwrap();
+            let mut validators_file = fs::File::create(config_dir.join("validators.txt")).unwrap();
 
             let unl_public_keys: Vec<String> = keys
                 .iter()
@@ -567,7 +678,7 @@ impl DockerNetwork {
                 .write_all(format!("[validators]\n{}", unl_public_keys.join("\n")).as_bytes())
                 .expect("Could not write to config file");
 
-            fs::copy(ledger_json_path, format!("{}/ledger.json", config_dir)).unwrap();
+            fs::copy(ledger_json_path.as_path(), config_dir.join("ledger.json")).unwrap();
 
             ret.push((container_name, key.clone()));
         }
@@ -662,23 +773,25 @@ mod integration_tests_docker {
         assert_eq!(configs[1].1, keys[1]);
 
         // check if the files for the first validator are created
-        let dir1 = "./network/validators/validator_0/config/";
+        let dir1 = docker_network
+            .get_generated_network_root()
+            .join("validators")
+            .join("validator_0")
+            .join("config");
         assert!(
-            fs::metadata(format!("{}{}", &dir1, "ledger.json")).is_ok(),
-            "File not found, path: {}{}",
-            &dir1,
-            "ledger.json"
+            fs::metadata(dir1.join("ledger.json")).is_ok(),
+            "File not found, path: {:?}",
+            dir1.join("ledger.json")
         );
         assert!(
-            fs::metadata(format!("{}{}", &dir1, "rippled.cfg")).is_ok(),
-            "File not found, path: {}{}",
-            &dir1,
-            "rippled.cfg"
+            fs::metadata(dir1.join("rippled.cfg")).is_ok(),
+            "File not found, path: {:?}",
+            dir1.join("rippled.cfg")
         );
-        let validators_txt_file_path1 = format!("{}{}", &dir1, "validators.txt");
+        let validators_txt_file_path1 = dir1.join("validators.txt");
         assert!(
             fs::metadata(&validators_txt_file_path1).is_ok(),
-            "File not found, path: {}",
+            "File not found, path: {:?}",
             &validators_txt_file_path1
         );
         let mut file = fs::File::open(&validators_txt_file_path1).unwrap();
@@ -690,23 +803,25 @@ mod integration_tests_docker {
         );
 
         // check if the files for the second validator are created
-        let dir2 = "./network/validators/validator_1/config/";
+        let dir2 = docker_network
+            .get_generated_network_root()
+            .join("validators")
+            .join("validator_1")
+            .join("config");
         assert!(
-            fs::metadata(format!("{}{}", &dir2, "ledger.json")).is_ok(),
-            "File not found, path: {}{}",
-            &dir2,
-            "ledger.json"
+            fs::metadata(dir2.join("ledger.json")).is_ok(),
+            "File not found, path: {:?}",
+            dir2.join("ledger.json")
         );
         assert!(
-            fs::metadata(format!("{}{}", &dir2, "rippled.cfg")).is_ok(),
-            "File not found, path: {}{}",
-            &dir2,
-            "rippled.cfg"
+            fs::metadata(dir2.join("rippled.cfg")).is_ok(),
+            "File not found, path: {:?}",
+            dir2.join("rippled.cfg")
         );
-        let validators_txt_file_path2 = format!("{}{}", &dir2, "validators.txt");
+        let validators_txt_file_path2 = dir2.join("validators.txt");
         assert!(
             fs::metadata(&validators_txt_file_path2).is_ok(),
-            "File not found, path: {}",
+            "File not found, path: {:?}",
             &validators_txt_file_path2
         );
         let mut file = fs::File::open(&validators_txt_file_path2).unwrap();

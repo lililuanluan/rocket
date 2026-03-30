@@ -5,10 +5,12 @@ set -euo pipefail
 workspace="${ROCKET_WORKSPACE:-$PWD}"
 home_dir="${HOME:-/tmp/rocket-home}"
 build_jobs="${ROCKET_BUILD_JOBS:-$(nproc)}"
+tmp_dir="${TMPDIR:-${HOME}/tmp}"
 
-mkdir -p "${home_dir}" "${workspace}"
+mkdir -p "${home_dir}" "${workspace}" "${tmp_dir}"
 
 export HOME="${home_dir}"
+export TMPDIR="${tmp_dir}"
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 export CARGO_HOME="${HOME}/.cargo"
 export CARGO_REGISTRIES_CRATES_IO_PROTOCOL="${CARGO_REGISTRIES_CRATES_IO_PROTOCOL:-sparse}"
