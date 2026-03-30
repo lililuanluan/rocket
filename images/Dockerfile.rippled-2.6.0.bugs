@@ -1,0 +1,93 @@
+
+# docker的multi- stage构建，这一阶段时构建，基于ubuntu，后面就可以从这个阶段拷贝构建产物 COPY --from=builder
+FROM ubuntu:22.04 AS builder
+
+# 让apt在安装软件时不弹交互界面，自动用默认选项继续执行
+ENV DEBIAN_FRONTEND=noninteractive 
+
+# ARG是Dockerfile中的构建参数，可以在构建镜像时通过--build-arg传入值，这里定义了一个BUG_ID参数，默认值是none，可以在构建时指定为bug1或bug2来注入不同的bug
+ARG BUG_ID=none
+# git 分支
+ARG GIT_REF=buglab 
+
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    ninja-build \
+    pkg-config \
+    python3 \
+    python3-pip \
+    gcc-12 \
+    g++-12 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+
+
+RUN pip3 install conan
+
+WORKDIR /opt
+COPY rippled ./rippled
+WORKDIR /opt/rippled
+
+RUN git checkout ${GIT_REF}
+
+# - 让 Conan 自动探测当前机器的编译环境，生成默认 profile。
+# - 把默认 profile 里的 C++ 标准改成 C++20，也就是：compiler.cppstd=20
+# - 把 GNU C++ 标准库 ABI 设置成：compiler.libcxx=libstdc++11
+RUN conan profile detect \
+    && sed -i 's|^compiler\\.cppstd=.*$|compiler.cppstd=20|' $(conan config home)/profiles/default \
+    && sed -i 's|^compiler\\.libcxx=.*$|compiler.libcxx=libstdc++11|' $(conan config home)/profiles/default
+
+# 添加 XRPL Conan remote（获取 patched recipes）
+RUN conan remote add --index 0 xrplf "https://conan.ripplex.io" || true
+
+
+# 安装依赖等，并配置cmake构建系统
+RUN mkdir -p .build && cd .build \
+    && conan install .. --output-folder . --build missing --settings build_type=Release \
+       -c tools.build:jobs=$(nproc)
+
+# 构建rippled，传入bug flag
+RUN cd .build \
+    && cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=build/generators/conan_toolchain.cmake \
+             -DCMAKE_BUILD_TYPE=Release \
+             -Dxrpld=ON \
+             -Dtests=OFF \
+             -DCMAKE_CXX_FLAGS="-DROCKET_${BUG_ID}" \
+             -G Ninja \
+             .. \
+    && cmake --build . --parallel
+
+
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 将之前构建好的rippled拷贝过来
+COPY --from=builder /opt/rippled/.build/rippled /usr/local/bin/rippled
+
+# 拷贝config文件等，准备运行
+RUN mkdir -p /opt/ripple/etc
+COPY rippled_default_2.6.0.cfg /opt/ripple/etc/rippled.cfg
+COPY validators_default_2.6.0.txt /opt/ripple/etc/validators.txt
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /usr/local/bin/rippled /entrypoint.sh
+
+RUN mkdir -p /config/db /var/lib/rippled/db /var/log/rippled
+
+WORKDIR /config
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD []
+
+
+# docker自定义健康检查，每30秒检查一次，超时时间10秒，启动后60秒才开始检查，检查命令是curl访问本地5005端口，如果失败就返回1，成功返回0
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+  CMD curl -f http://localhost:5005 || exit 1
