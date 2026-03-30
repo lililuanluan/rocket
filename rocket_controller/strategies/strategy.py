@@ -249,6 +249,26 @@ class Strategy(ABC):
         import os
         import subprocess
         cluster_id = self.cluster_id
+        def _write_snapshot_or_append_error(file_path: str, command: list[str]) -> None:
+            """Overwrite with the latest snapshot, but append container-missing errors.
+
+            This preserves previously captured validator output when a container
+            has already exited and Docker starts returning "No such container".
+            """
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            content = (completed.stdout or "") + (completed.stderr or "")
+            mode = "a" if "Error: No such container:" in content else "w"
+            with open(file_path, mode) as f:
+                if mode == "a" and os.path.getsize(file_path) > 0:
+                    if not content.startswith("\n"):
+                        f.write("\n")
+                f.write(content)
+
         def _worker(node: ValidatorNode):
             out_dir = self.log_dir / f"iteration-{self.iteration_type.cur_iteration}" / "validator_live_logs"
             container_name = node.get_container_name(cluster_id)
@@ -258,25 +278,28 @@ class Strategy(ABC):
                 
             while self._save_validator_log_flag.is_set():
                 try:
-                    with open(log_file_path, "w") as f:
-                        try:
-                            subprocess.run(['docker', 'logs', container_name], stdout=f, stderr=f, check=False, text=True)
-                        except Exception as e:
-                            logger.debug(f"_save_validator_log_async: docker logs failed for {container_name}: {e}")
+                    try:
+                        _write_snapshot_or_append_error(
+                            log_file_path, ['docker', 'logs', container_name]
+                        )
+                    except Exception as e:
+                        logger.debug(f"_save_validator_log_async: docker logs failed for {container_name}: {e}")
                 except Exception:
                     logger.exception(f"Failed to save validator log for node {node.id}")
 
                 # Also periodically fetch the in-container debug logfile so we preserve debug logs
                 debug_file_path = os.path.join(out_dir, f"validator_{node.id}_debug.txt")
                 try:
-                    with open(debug_file_path, "w") as df:
-                        try:
-                            subprocess.run([
+                    try:
+                        _write_snapshot_or_append_error(
+                            debug_file_path,
+                            [
                                 'docker', 'exec', '-i', container_name,
                                 'cat', '/var/log/rippled/debug.log'
-                            ], stdout=df, stderr=df, check=False, text=True)
-                        except Exception as e:
-                            logger.debug(f"_save_validator_log_async: docker exec debug log failed for {container_name}: {e}")
+                            ],
+                        )
+                    except Exception as e:
+                        logger.debug(f"_save_validator_log_async: docker exec debug log failed for {container_name}: {e}")
                 except Exception:
                     logger.exception(f"Failed to save validator debug log for node {node.id}")
 
