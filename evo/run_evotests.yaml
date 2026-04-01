@@ -66,6 +66,10 @@ total_num_tests: 500
 # Population size for genetic algorithm
 population_size: 10
 
+# Parent count (μ) for (μ+λ) selection in DEAP.
+# Note: λ = population_size. If mu > population_size, code will clamp to population_size.
+mu: 10
+
 # Maximum ledger sequence to run
 max_ledger_seq: 15
 

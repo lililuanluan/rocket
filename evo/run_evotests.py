@@ -35,6 +35,13 @@ def validate_config(config: dict):
         if not isinstance(config[key], list):
             raise ValueError(f"Config key '{key}' must be a list")
 
+    for key in ["max_parallel_workers", "individual_timeout_sec", "population_size", "total_num_tests"]:
+        if key in config and (not isinstance(config[key], int) or config[key] <= 0):
+            raise ValueError(f"Config key '{key}' must be a positive integer")
+
+    if "mu" in config and (not isinstance(config["mu"], int) or config["mu"] <= 0):
+        raise ValueError("Config key 'mu' must be a positive integer")
+
 
 def get_parallel_mode(config: dict) -> str:
     """Return 'serial' or 'parallel' from config (default: serial)."""
@@ -64,6 +71,7 @@ def print_config_summary(config: dict, parallel_mode: str):
         f"  Max parallel workers: {config.get('max_parallel_workers', 5)} (per instance)"
     )
     print(f"  Population size:      {config.get('population_size', 10)}")
+    print(f"  Mu (parent count):    {config.get('mu', 4)}")
     print(f"  Total num tests:      {config.get('total_num_tests', 500)}")
     print(f"  Individual timeout:   {config.get('individual_timeout_sec', 180)}s")
     print(
@@ -119,6 +127,12 @@ def main():
     fitnesses = config["fitness_functions"]
     port_start = config.get("port_start", 60000)
     population_size = config.get("population_size", 10)
+    mu = config.get("mu", 4)
+    if mu > population_size:
+        print(
+            f"Warning: mu={mu} > population_size={population_size}; "
+            f"effective mu will be clamped to {population_size} by evotest_parallel.py"
+        )
     max_parallel_workers = config.get("max_parallel_workers", 5)
     total_num_tests = config.get("total_num_tests", 500)
     individual_timeout = config.get("individual_timeout_sec", 180)
@@ -170,6 +184,8 @@ def main():
                     str(total_num_tests),
                     "--population-size",
                     str(population_size),
+                    "--mu",
+                    str(mu),
                     "--individual-timeout-sec",
                     str(individual_timeout),
                 ]
