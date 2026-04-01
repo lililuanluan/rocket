@@ -56,7 +56,8 @@ def run_rocket_and_evaluate(
         cleanup_instance_docker_containers(cluster_id)
 
         tmp_dir.mkdir(parents=True, exist_ok=True)
-        instance_network_yaml = tmp_dir / f"network_{cluster_id}.yaml"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        instance_network_yaml = log_dir / "network_input.yaml"
 
         # 读取network.yaml，重新配置端口号，然后输出到 instance_network_yaml
         with open(network_yaml, "r") as f:
@@ -88,7 +89,7 @@ def run_rocket_and_evaluate(
             yaml.dump(network_config, f)
 
         # 写入strategy.yaml的配置
-        strategy_yaml = tmp_dir / f"{strategy_name}_{cluster_id}.yaml"
+        strategy_yaml = log_dir / "strategy_input.yaml"
         with open(strategy_yaml, "w") as f:
             yaml.dump(
                 {
@@ -184,15 +185,6 @@ def run_rocket_and_evaluate(
                 terminate_process_group(proc_pgid)
         # Cleanup all containers belonging to this cluster only.
         cleanup_instance_docker_containers(cluster_id)
-
-        # 清理临时配置文件
-        for p in (instance_network_yaml, strategy_yaml):
-            if p is None:
-                continue
-            try:
-                p.unlink()
-            except Exception:
-                pass
 
         os.chdir(cur_dir)
 
