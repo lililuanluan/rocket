@@ -63,5 +63,8 @@ docker ps --format '{{.Names}}' | grep -E "^${USER}_.*(validator_[0-9]+|key_gene
 # docker ps --format '{{.Names}}' | grep -E '(^validator_|_validator_|^key_generator$|_key_generator$)' | xargs -r docker rm -f
 
 
+rm -rf /data/workspace/lli21/tmp/
+
+
 # 删掉数据库目录以及临时文件目录：
 # docker run --rm -v /tmp:/host-tmp -v /data/workspace/lli21:/workspace alpine sh -c 'rm -rf /host-tmp/rocket-tmp /workspace/tmp'
