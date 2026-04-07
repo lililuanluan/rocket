@@ -201,13 +201,16 @@ class RandomDelayByzzPartitionStrategy(EvoDelayStrategy):
         return partition
 
     def are_partitioned(self, sender_node_id, receiver_node_id):
+        if self.partition is None:
+            return False
         for parts in self.partition:
             if sender_node_id in parts and receiver_node_id in parts:
                 return False
         return True
 
     def setup(self):
-        pass
+        self.partition_start_time = None
+        self.partition = None
 
     def get_partition_delay(self, cur_time) -> int:
         # do not lock this function!
@@ -243,8 +246,10 @@ class RandomDelayByzzPartitionStrategy(EvoDelayStrategy):
                 ):
                     # 超出持续时间，重置分区状态
                     self.partition_start_time = None
+                    self.partition = None
             elif current_ledger == self.partition_seq:
                 self.partition_start_time = cur_time
+                self.partition = self._gen_partition()
 
         with self.partition_lock:
             if self.partition_start_time is None:
@@ -264,6 +269,10 @@ class RandomByzzStrategy(EvoDelayStrategy):
         **kwargs,
     ):
         super().__init__(**kwargs)
+
+    def setup(self):
+        # RandomByzzStrategy does not use encoded delays.
+        pass
 
     def get_delay(
         self,
@@ -285,6 +294,10 @@ class RandomDelayStrategy(EvoDelayStrategy):
         super().__init__(**kwargs)
         self.delay_max = self.params.get("max_delay_ms", 100)
         self.delay_min = self.params.get("min_delay_ms", 1)
+
+    def setup(self):
+        # RandomDelayStrategy uses random delay bounds, not encoded delays.
+        pass
 
     def get_delay(
         self,
