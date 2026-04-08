@@ -1,27 +1,12 @@
-FROM python:3.12-bookworm
+FROM python:3.12-bookworm AS pythonbase
+FROM docker:cli AS dockercli
+FROM rust:bookworm
 
-ENV DEBIAN_FRONTEND=noninteractive
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
-ENV RUSTUP_HOME=/usr/local/rustup
-ENV CARGO_HOME=/usr/local/cargo
-ENV PATH=/usr/local/cargo/bin:${PATH}
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash \
-    build-essential \
-    ca-certificates \
-    curl \
-    docker.io \
-    git \
-    libssl-dev \
-    openssh-client \
-    pkg-config \
-    protobuf-compiler \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable \
-    && rustc --version \
-    && cargo --version
+COPY --from=pythonbase /usr/local /usr/local
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 
 
 
