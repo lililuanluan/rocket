@@ -8,18 +8,22 @@ repo_root="$(cd -- "${script_dir}/.." && pwd)"
 # 服务器上优先把日志和临时目录放到 workspace；本地则走后面的默认值。
 if [ -d /data/workspace/lli21 ]; then
     ROCKET_LOG_ROOT="/data/workspace/lli21/logs"
-    ROCKET_DEBUG_TMPDIR="/data/workspace/lli21/tmp/rocket-debug"
+    ROCKET_DEBUG_TMPDIR="/data/workspace/lli21/tmp"
 fi
 
-image_name="${ROCKET_DEBUG_IMAGE_NAME:-rocket-evo-debug:latest}"
-dockerfile="${repo_root}/docker/Dockerfile.debug"
-cache_root="${ROCKET_DEBUG_CACHE_ROOT:-${repo_root}/.docker-cache/debug-home}"
-container_home="${ROCKET_DEBUG_CONTAINER_HOME:-/tmp/rocket-debug-home}"
-default_tmp_root="${TMPDIR:-/tmp/rocket-debug-tmp}"
+# debug 默认直接复用主运行镜像，尽量和 docker/run.sh 保持一致。
+image_name="${ROCKET_DEBUG_IMAGE_NAME:-rocket-evo:latest}"
+dockerfile="${ROCKET_DEBUG_DOCKERFILE:-${repo_root}/docker/Dockerfile}"
+cache_root="${ROCKET_DEBUG_CACHE_ROOT:-${repo_root}/.docker-cache/home}"
+container_home="${ROCKET_DEBUG_CONTAINER_HOME:-/tmp/rocket-home}"
+default_tmp_root="${TMPDIR:-/tmp/rocket-tmp}"
 tmp_root="${ROCKET_DEBUG_TMPDIR:-${default_tmp_root}}"
 log_root="${ROCKET_LOG_ROOT:-${repo_root}/logs}"
+volume_root="${ROCKET_DEBUG_VOLUMES_ROOT:-${tmp_root%/}/volumes}"
+network_root="${ROCKET_DEBUG_NETWORK_ROOT:-${tmp_root%/}/network}"
+build_jobs="${ROCKET_BUILD_JOBS:-$(nproc)}"
 
-mkdir -p "${log_root}" "${cache_root}" "${tmp_root}"
+mkdir -p "${log_root}" "${cache_root}" "${tmp_root}" "${volume_root}" "${network_root}"
 
 docker build -f "${dockerfile}" -t "${image_name}" "${repo_root}"
 
@@ -30,23 +34,39 @@ fi
 
 docker_run_args=(
     --rm
-    -it
+    --network host
     --user "$(id -u):$(id -g)"
     --name "rocket-debugger"
     -v "${repo_root}:${repo_root}"
     -v "${log_root}:${log_root}"
     -v "${cache_root}:${container_home}"
     -v "${tmp_root}:${tmp_root}"
+    -v "${volume_root}:${volume_root}"
+    -v "${network_root}:${network_root}"
     -w "${repo_root}"
     -e HOME="${container_home}"
     -e TMPDIR="${tmp_root}"
-    -e PYTHONPATH="${repo_root}"
+    -e PYTHONPATH="${repo_root}:${repo_root}/evo"
     -e ROCKET_WORKSPACE="${repo_root}"
+    -e ROCKET_BUILD_JOBS="${build_jobs}"
     -e ROCKET_LOG_ROOT="${log_root}"
+    -e ROCKET_VOLUMES_ROOT="${volume_root}"
+    -e ROCKET_NETWORK_ROOT="${network_root}"
+    -e ROCKET_HOST_UID="$(id -u)"
+    -e ROCKET_HOST_GID="$(id -g)"
+    -e USER="$(id -un)"
     -e PIP_DISABLE_PIP_VERSION_CHECK=1
     -e MPLCONFIGDIR="${container_home}/.config/matplotlib"
     -e XDG_CONFIG_HOME="${container_home}/.config"
+    -e TERM="${TERM:-xterm-256color}"
+    -e COLORTERM="${COLORTERM:-truecolor}"
+    -e CLICOLOR=1
+    -e FORCE_COLOR=1
 )
+
+if [ -t 0 ] && [ -t 1 ]; then
+    docker_run_args+=(-it)
+fi
 
 if [ -S /var/run/docker.sock ]; then
     docker_run_args+=(
