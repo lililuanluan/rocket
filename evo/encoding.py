@@ -1256,47 +1256,11 @@ class EvoDelayBySeqStrategyEncoding(EvoDelayStrategyEncoding):
         return {"delays": self.encoding}
 
 
-if __name__ == "__main__":
-    for mode in DelayEncoding.delay_modes:
-        delay = DelayEncoding(
-            mode,
-            num_nodes=3,
-            delay_min=10,
-            delay_max=100,
-            byzz_min_seq=5,
-            byzz_max_seq=7,
-        )
-        print(f" --- Mode: {mode} --- ")
-        print(delay.to_yaml())
-
-    for mode in PartitionEncoding.partition_modes:
-        partition = PartitionEncoding(
-            mode,
-            num_nodes=10,
-            partition_seq=5,
-            partition_duration=10,
-        )
-        print(f" --- Mode: {mode} --- ")
-        print(partition.to_yaml())
-
-    for mode in ByzzEncoding.byzz_modes:
-        byzz = ByzzEncoding(
-            mode,
-            num_nodes=3,
-            byzz_nodes=[1],
-            byzz_min_seq=5,
-            byzz_max_seq=7,
-            init_num_rules=5,
-        )
-        print(f" --- Mode: {mode} --- ")
-        print(byzz.to_yaml())
-        
-        
-    # 测试一下composeencoding
-    configs = {
-        "byzz_mode": "sparse_rules",
-        "delay_mode": "sparse_rules",
-        "partition_mode": "bi_part_groups",
+def _demo_configs(delay_mode="sparse_rules", partition_mode="bi_part_groups", byzz_mode="sparse_rules"):
+    return {
+        "byzz_mode": byzz_mode,
+        "delay_mode": delay_mode,
+        "partition_mode": partition_mode,
         "number_of_nodes": 5,
         "min_delay_ms": 10,
         "max_delay_ms": 100,
@@ -1307,8 +1271,33 @@ if __name__ == "__main__":
         "byzz_init_num_rules": 5,
         "delay_init_num_rules": 5,
         "byzz_nodes": [3],
+        "timeout_sec_per_seq": 30,
     }
-    
+
+
+def _build_strategy_input_payload(encoding_dict, configs, seed=42):
+    return {
+        "seed": seed,
+        "encoding": encoding_dict,
+        "byzz_min_seq": configs["byzz_min_seq"],
+        "byzz_max_seq": configs["byzz_max_seq"],
+        "min_delay_ms": configs["min_delay_ms"],
+        "max_delay_ms": configs["max_delay_ms"],
+        "timeout_sec_per_seq": configs["timeout_sec_per_seq"],
+    }
+
+
+def _write_yaml(path: Path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+
+
+if __name__ == "__main__":
+    configs = _demo_configs()
+    output_root = Path(__file__).resolve().parent / "tmp" / "composeencoding_samples"
+    strategy_input_dir = output_root / "strategy_input"
+
     compose = ComposeEncoding.sample(configs)
     print(" --- ComposeEncoding initial --- ")
     print(compose.to_yaml())
@@ -1334,6 +1323,24 @@ if __name__ == "__main__":
     print(" --- ComposeEncoding mate right diff --- ")
     print(mate_right.diff(mate_right_before))
     print(mate_right.to_yaml())
-        
-        
-    # 测试一下mate
+
+    for delay_mode in DelayEncoding.delay_modes:
+        for partition_mode in PartitionEncoding.partition_modes:
+            for byzz_mode in ByzzEncoding.byzz_modes:
+                combo_configs = _demo_configs(
+                    delay_mode=delay_mode,
+                    partition_mode=partition_mode,
+                    byzz_mode=byzz_mode,
+                )
+                compose = ComposeEncoding.sample(combo_configs)
+                payload = _build_strategy_input_payload(
+                    compose.to_dict(), combo_configs
+                )
+                filename = (
+                    f"strategy_input__delay-{delay_mode}"
+                    f"__partition-{partition_mode}"
+                    f"__byzz-{byzz_mode}.yaml"
+                )
+                _write_yaml(strategy_input_dir / filename, payload)
+
+    print(f"Generated encoding sample YAML files under: {output_root}")
