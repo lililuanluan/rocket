@@ -106,6 +106,7 @@ def parse_args() -> argparse.Namespace:
             "message_entropy_integral",
             "message_entropy_average",
             "markov_matrix_non_similarity",
+            "gossip_fiedler",
         ],
         metavar="FITNESS_FUNCTION",
         help="the fitness function to use only for the evolutionary algorithm (default: mean_validation_time)",

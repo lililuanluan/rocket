@@ -16,7 +16,8 @@ titles = {
     "validation_distribution_entropy": "validation distribution entropy",
     "message_entropy_integral": "integral of message entropy over time",
     "markov_matrix_non_similarity": "message markov matrix non similarity",
-    "message_entropy_average": "message entropy per second"
+    "message_entropy_average": "message entropy per second",
+    "gossip_fiedler": "gossip graph fiedler value",
 }
 
 FITNESS_REPORT_NAME = "evolution_report.pdf"

@@ -26,6 +26,17 @@ from rocket_controller.encoder_decoder import (
 # Ripple base58 alphabet (used for node public key encoding)
 RIPPLE_ALPHABET = b"rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz"
 
+# Weights for consensus-relevant message types when building the effective
+# gossip connectivity graph from action logs.
+GOSSIP_MESSAGE_WEIGHTS = {
+    "TMValidation": 1.0,
+    "TMProposeSet": 1.0,
+    "TMStatusChange": 0.5,
+    "TMHaveTransactionSet": 0.3,
+    "TMGetLedger": 0.2,
+    "TMLedgerData": 0.2,
+}
+
 
 def base58_encode_ripple(data: bytes) -> str:
     """Encode data using Ripple's base58 alphabet."""
@@ -261,6 +272,96 @@ def get_validation_distribution_entropy(validation_distribution):
     return np.mean(ent) if ent else None
 
 
+def build_gossip_connectivity_matrix(
+    df_exec: pd.DataFrame,
+    node_info: dict,
+    byzz_nodes: list | None = None,
+    message_weights: dict[str, float] | None = None,
+) -> tuple[np.ndarray, list[int]]:
+    """Build an undirected weighted communication matrix among honest nodes.
+
+    The matrix is derived from action logs, with edge weights reflecting the
+    amount of consensus-relevant traffic observed between node pairs. We keep
+    isolated honest nodes in the matrix so the resulting Fiedler value drops to
+    zero when the effective communication graph becomes disconnected.
+    """
+    byzz_set = {int(node_id) for node_id in (byzz_nodes or [])}
+    weights = message_weights or GOSSIP_MESSAGE_WEIGHTS
+
+    honest_nodes = sorted(
+        int(node_id) for node_id in node_info.keys() if int(node_id) not in byzz_set
+    )
+    node_to_idx = {node_id: idx for idx, node_id in enumerate(honest_nodes)}
+    matrix = np.zeros((len(honest_nodes), len(honest_nodes)), dtype=float)
+
+    if matrix.size == 0:
+        return matrix, honest_nodes
+
+    for _, row in df_exec.iterrows():
+        msg_type = row.get("message_type")
+        msg_weight = weights.get(msg_type, 0.0)
+        if msg_weight <= 0:
+            continue
+
+        from_node = row.get("from_node_id")
+        to_node = row.get("to_node_id")
+        if pd.isna(from_node) or pd.isna(to_node):
+            continue
+
+        try:
+            from_node = int(from_node)
+            to_node = int(to_node)
+        except (TypeError, ValueError):
+            continue
+
+        if from_node == to_node:
+            continue
+        if from_node not in node_to_idx or to_node not in node_to_idx:
+            continue
+
+        send_amount = row.get("send_amount", 1)
+        try:
+            send_amount = float(send_amount)
+        except (TypeError, ValueError):
+            send_amount = 1.0
+
+        if send_amount <= 0:
+            continue
+
+        matrix[node_to_idx[from_node], node_to_idx[to_node]] += (
+            msg_weight * send_amount
+        )
+
+    # Use a symmetric matrix so the Laplacian matches the standard Fiedler
+    # definition for undirected weighted graphs.
+    matrix = (matrix + matrix.T) / 2.0
+    return matrix, honest_nodes
+
+
+def get_gossip_fiedler(
+    df_exec: pd.DataFrame,
+    node_info: dict,
+    byzz_nodes: list | None = None,
+    message_weights: dict[str, float] | None = None,
+) -> float:
+    """Return the Fiedler value of the honest-node gossip connectivity graph."""
+    matrix, honest_nodes = build_gossip_connectivity_matrix(
+        df_exec,
+        node_info=node_info,
+        byzz_nodes=byzz_nodes,
+        message_weights=message_weights,
+    )
+
+    if len(honest_nodes) < 2:
+        return 0.0
+
+    degree = np.sum(matrix, axis=1)
+    laplacian = np.diag(degree) - matrix
+    eigenvalues = np.linalg.eigvalsh(laplacian)
+    eigenvalues = np.clip(eigenvalues, 0.0, None)
+    return float(eigenvalues[1]) if len(eigenvalues) > 1 else 0.0
+
+
 # 对每个时间窗口内发送的消息，根据类型分组，计算信息熵
 def get_message_entropy_integration(df_exec):
     integral = 0
@@ -417,6 +518,7 @@ FITNESS_FUNCTIONS = [
     "message_entropy_integral",
     "message_entropy_average",
     "markov_matrix_non_similarity",
+    "gossip_fiedler",
 ]
 
 
@@ -477,6 +579,14 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
     )
     res["markov_matrix_non_similarity"] = markov_matrix_non_similarity
     print(f"Markov matrix non-similarity: {markov_matrix_non_similarity}")
+
+    gossip_fiedler = get_gossip_fiedler(
+        df_action,
+        node_info=node_info,
+        byzz_nodes=byzz_nodes,
+    )
+    res["gossip_fiedler"] = gossip_fiedler
+    print(f"Gossip Fiedler value: {gossip_fiedler}")
 
     # 读取 aggregated_spec_check_log.json（注意：这是一个对象，不是数组）
     aggregate_spec_check_path = f"{log_dir}/aggregated_spec_check_log.json"

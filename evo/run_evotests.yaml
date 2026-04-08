@@ -9,13 +9,15 @@ parallel_mode: serial  # serial or "parallel"
 # RIPPLE IMAGES
 # ============================================================================
 ripple_images:
-  - xrpllabsofficial/xrpld:2.6.0
+  # - xrpllabsofficial/xrpld:2.6.0
+  - xrpld:2.6.0-bug0-local
 
 # ============================================================================
 # STRATEGY MODE COMBINATIONS
 # ============================================================================
-# List of test strategies to apply. Each combination of image × strategy × fitness
-# will generate separate tests.
+# Each entry describes one ComposedStrategy mode combination.
+# Each image × mode-combo × fitness combination will generate a separate run.
+# Format: [delay_mode, partition_mode, byzz_mode]
 strategies:
   # - [none, none, none]
   - [none, bi_part_groups, sparse_rules]
@@ -28,12 +30,16 @@ strategies:
 # List of fitness metrics to optimize for. Each fitness function will result in
 # separate evolutionary runs.
 fitness_functions:
-  - mean_validation_time
+  # - mean_validation_time
   # - var_validation_time
   # - num_getledger_messages
   # - message_entropy_integral
   # - markov_matrix_non_similarity
-  # - validation_distribution_entropy
+  - gossip_fiedler 
+  - validation_distribution_entropy
+  # - message_entropy_average
+  # - num_propose_set
+  # - num_getledger_hashes
 
 # ============================================================================
 # PORT CONFIGURATION
@@ -55,7 +61,7 @@ port_start: 10000   # must be below the OS ephemeral range (32768-60999 on this 
 #
 # Note: This is independent of parallel_mode. Even in serial mode, each instance
 # will use max_parallel_workers internally.
-max_parallel_workers: 5
+max_parallel_workers: 10
 
 # ============================================================================
 # TEST CONFIGURATION
@@ -68,13 +74,13 @@ population_size: 10
 
 # Parent count (μ) for (μ+λ) selection in DEAP.
 # Note: λ = population_size. If mu > population_size, code will clamp to population_size.
-mu: 10
+mu: 5
 
 # Maximum ledger sequence to run
 max_ledger_seq: 15
 
 # Individual test timeout in seconds
-individual_timeout_sec: 180
+individual_timeout_sec: 500
 
 # ============================================================================
 # BYZANTINE CONFIGURATION
