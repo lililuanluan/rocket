@@ -46,6 +46,7 @@ do not use the EvotestConfig class at all.  """
 
 stop_event = threading.Event()
 _signal_count = 0
+_force_exit_on_second_sigint = False
 
 
 def signal_handler(signum, frame):
@@ -53,9 +54,9 @@ def signal_handler(signum, frame):
     global _signal_count
     _signal_count += 1
     stop_event.set()
-    # if _signal_count >= 2:
-    #     print(f"\nReceived signal {signum} again, forcing immediate exit.")
-    #     raise SystemExit(130)
+    if _force_exit_on_second_sigint and _signal_count >= 2:
+        print(f"\nReceived signal {signum} again, forcing immediate exit.")
+        raise SystemExit(130)
 
 
 def _force_terminate_executor(executor: ProcessPoolExecutor):
@@ -240,15 +241,21 @@ def parallel_evaluate_population(
 
     return results
 
-
-def get_encoding_cls(strategy: str):
+def use_composed_encoding(configs: dict) -> bool:
+    return all(
+        configs.get(k) is not None
+        for k in ["delay_mode", "partition_mode", "byzz_mode"]
+    )
+def get_encoding_cls(configs: dict):
+    if use_composed_encoding(configs):
+        return encoding.ComposeEncoding
+    strategy = configs["strategy"]
     cls_name = f"{strategy}Encoding"
     return getattr(encoding, cls_name)
 
 
 def sample_individual(configs: dict):
-    strategy = configs["strategy"]
-    encoding_cls = get_encoding_cls(strategy)
+    encoding_cls = get_encoding_cls(configs)
     # create a raw encoding instance and then attach the attributes that
     # DEAP expects on an "Individual".  Historically we used a creator
     # subclass of list, but our encodings are now plain classes, so we
@@ -268,7 +275,12 @@ def sample_individual(configs: dict):
 
 
 def main(configs: dict):
+    global _force_exit_on_second_sigint, _signal_count
     stop_event.clear()
+    _signal_count = 0
+    _force_exit_on_second_sigint = configs.get(
+        "force_exit_on_second_sigint", False
+    )
 
     EvoLogger.init_log(configs["test_log_dir"])
 
@@ -290,8 +302,8 @@ def main(configs: dict):
     mu = min(lambda_, configs["mu"])
     max_generation = configs["max_generation"]
 
-    strategy = configs["strategy"]
-    encoding_cls = get_encoding_cls(strategy)
+
+    encoding_cls = get_encoding_cls(configs)
 
     # 设置 DEAP toolbox
     toolbox = base.Toolbox()
@@ -402,7 +414,11 @@ def main(configs: dict):
     print(
         f"  Log directory: {best_ind.log_dir if hasattr(best_ind, 'log_dir') else 'N/A'}"
     )
-    print(f"  Encoding (first 10 genes): {list(best_ind)[:10]}...")
+    if hasattr(best_ind, "to_dict"):
+        print("  Encoding:")
+        print(yaml.safe_dump(best_ind.to_dict(), sort_keys=False).rstrip())
+    else:
+        print(f"  Encoding (first 10 genes): {list(best_ind)[:10]}...")
 
     if hasattr(best_ind, "evaluation_result") and best_ind.evaluation_result:
         result = best_ind.evaluation_result

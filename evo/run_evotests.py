@@ -11,6 +11,39 @@ import signal
 procs = []
 
 
+def normalize_strategy_combo(entry) -> dict:
+    """Normalize a strategy config entry into a composed-mode triple."""
+    if isinstance(entry, dict):
+        delay_mode = entry.get("delay_mode")
+        partition_mode = entry.get("partition_mode")
+        byzz_mode = entry.get("byzz_mode")
+    elif isinstance(entry, (list, tuple)) and len(entry) == 3:
+        delay_mode, partition_mode, byzz_mode = entry
+    else:
+        raise ValueError(
+            "Each strategies entry must be either a dict with "
+            "{delay_mode, partition_mode, byzz_mode} or a 3-item list/tuple."
+        )
+
+    combo = {
+        "delay_mode": delay_mode,
+        "partition_mode": partition_mode,
+        "byzz_mode": byzz_mode,
+    }
+    missing = [k for k, v in combo.items() if not v]
+    if missing:
+        raise ValueError(f"Strategy mode combo is missing values for: {missing}")
+    return combo
+
+
+def format_strategy_combo(combo: dict) -> str:
+    return (
+        f"delay-{combo['delay_mode']}__"
+        f"partition-{combo['partition_mode']}__"
+        f"byzz-{combo['byzz_mode']}"
+    )
+
+
 def load_config(config_file: Path) -> dict:
     """Load and return configuration from a YAML file."""
     if not config_file.exists():
@@ -34,6 +67,8 @@ def validate_config(config: dict):
     for key in ["ripple_images", "strategies", "fitness_functions"]:
         if not isinstance(config[key], list):
             raise ValueError(f"Config key '{key}' must be a list")
+    for entry in config["strategies"]:
+        normalize_strategy_combo(entry)
 
     for key in ["max_parallel_workers", "individual_timeout_sec", "population_size", "total_num_tests"]:
         if key in config and (not isinstance(config[key], int) or config[key] <= 0):
@@ -55,9 +90,10 @@ def get_parallel_mode(config: dict) -> str:
 def print_config_summary(config: dict, parallel_mode: str):
     """Print a human-readable summary of the run configuration."""
     images = config["ripple_images"]
-    strategies = config["strategies"]
+    strategies = [normalize_strategy_combo(entry) for entry in config["strategies"]]
     fitnesses = config["fitness_functions"]
     total = len(images) * len(strategies) * len(fitnesses)
+    strategy_labels = [format_strategy_combo(combo) for combo in strategies]
 
     print("\n" + "=" * 70)
     print("CONFIGURATION SUMMARY")
@@ -65,7 +101,7 @@ def print_config_summary(config: dict, parallel_mode: str):
     print(f"  Config file:          evo/run_evotests.yaml")
     print(f"  Parallel mode:        {parallel_mode.upper()}")
     print(f"  Ripple images ({len(images)}):    {', '.join(images)}")
-    print(f"  Strategies ({len(strategies)}):      {', '.join(strategies)}")
+    print(f"  Mode combos ({len(strategies)}):    {', '.join(strategy_labels)}")
     print(f"  Fitness functions ({len(fitnesses)}): {', '.join(fitnesses)}")
     print(
         f"  Max parallel workers: {config.get('max_parallel_workers', 5)} (per instance)"
@@ -123,7 +159,7 @@ def main():
 
     # ── read all parameters from config ──────────────────────────────────────
     images = config["ripple_images"]
-    strategies = config["strategies"]
+    strategies = [normalize_strategy_combo(entry) for entry in config["strategies"]]
     fitnesses = config["fitness_functions"]
     port_start = config.get("port_start", 60000)
     population_size = config.get("population_size", 10)
@@ -155,12 +191,13 @@ def main():
     population_port_range = (1 + max_num_nodes * 4) * population_size
 
     idx = 0
-    for strategy in strategies:
+    for strategy_combo in strategies:
+        strategy_label = format_strategy_combo(strategy_combo)
         for fitness in fitnesses:
             for img in images:
                 logs_group_dir = (
                     f"{log_dir}/{img.replace(':','_').replace('/','_')}"
-                    f"/{strategy}/{fitness}"
+                    f"/{strategy_label}/{fitness}"
                 )
                 base_port_population = port_start + idx * population_port_range
 
@@ -173,7 +210,13 @@ def main():
                     "--ripple-image",
                     img,
                     "--strategy",
-                    strategy,
+                    "ComposedStrategy",
+                    "--delay-mode",
+                    strategy_combo["delay_mode"],
+                    "--partition-mode",
+                    strategy_combo["partition_mode"],
+                    "--byzz-mode",
+                    strategy_combo["byzz_mode"],
                     "--fitness-function",
                     fitness,
                     "--base-port-population",
@@ -200,7 +243,7 @@ def main():
                 extra = f"{root}:{evo_dir}"
                 env["PYTHONPATH"] = extra + (":" + existing if existing else "")
 
-                print(f"\nStarting [{idx}] {img} / {strategy} / {fitness}")
+                print(f"\nStarting [{idx}] {img} / {strategy_label} / {fitness}")
                 print(
                     "  ports:",
                     base_port_population,

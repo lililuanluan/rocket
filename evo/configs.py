@@ -123,6 +123,7 @@ def parse_args() -> argparse.Namespace:
             "RandomDelayStrategy",
             "EvoDelayBySeqStrategy",
             "RandomDelayByzzPartitionStrategy",
+            "ComposedStrategy",
         ],
         default="EvoDelayStrategy",
         metavar="STRATEGY",
@@ -225,6 +226,33 @@ def parse_args() -> argparse.Namespace:
         help="the duration of the network partition in milliseconds (default: 1000)",
     )
 
+    parser.add_argument(
+        "--delay-mode",
+        type=str,
+        default=None,
+        choices=["none", "random", "dense_rules", "dense_seq_rules", "sparse_rules"],
+    )
+
+    parser.add_argument(
+        "--partition-mode",
+        type=str,
+        default=None,
+        choices=["none", "random_bipart", "bi_part_groups"],
+    )
+
+    parser.add_argument(
+        "--byzz-mode",
+        type=str,
+        default=None,
+        choices=["none", "random", "sparse_rules"],
+    )
+
+    parser.add_argument(
+        "--force-exit-on-second-sigint",
+        action="store_true",
+        help="if set, pressing Ctrl+C twice will force evotest_parallel to exit immediately",
+    )
+
     return parser.parse_args()
 
 
@@ -232,8 +260,6 @@ def extend_configs(args: argparse.Namespace) -> dict:
     configs = vars(args)
     dirs = get_dirs(__file__)
     configs = {**configs, **dirs}
-
-
 
     with open(configs["cur_dir"] / configs["base_network_config_yaml"], "r") as f:
         network_config = yaml.safe_load(f)

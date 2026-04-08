@@ -12,15 +12,15 @@ ripple_images:
   - xrpllabsofficial/xrpld:2.6.0
 
 # ============================================================================
-# STRATEGIES
+# STRATEGY MODE COMBINATIONS
 # ============================================================================
 # List of test strategies to apply. Each combination of image × strategy × fitness
 # will generate separate tests.
 strategies:
-  - EvoDelayByzzPartitionStrategy
-  # - RandomDelayByzzPartitionStrategy
-  # - EvoDelayStrategy
-  # - RandomDelayStrategy
+  # - [none, none, none]
+  - [none, bi_part_groups, sparse_rules]
+  - [dense_seq_rules, bi_part_groups, sparse_rules]
+  - [sparse_rules, bi_part_groups, sparse_rules]
 
 # ============================================================================
 # FITNESS FUNCTIONS
@@ -91,19 +91,19 @@ rust_log_level: info  # or "debug" for more verbose output
 # ============================================================================
 # NOTES
 # ============================================================================
-# 1. Combinations: Each ripple_image × strategy × fitness_function combination
+# 1. Combinations: Each ripple_image × mode-combo × fitness_function combination
 #    will result in a separate evotest_parallel run.
 #    Total runs = len(ripple_images) × len(strategies) × len(fitness_functions)
 #
-#    In this config: 5 images × 1 strategy × 1 fitness = 5 runs
+#    In this config: 1 image × 1 mode-combo × 9 fitnesses = 9 runs
 #
 # 2. Port allocation:
 #    - Each run needs (1 + num_nodes*4) × population_size ports
 #    - With 7 nodes: 29 × 10 = 290 ports per image
-#    - With 5 images: 1450 ports total (60000 - 61449)
+#    - Total port consumption scales with image × mode-combo × fitness combinations
 #
 # 3. Parallel Mode:
-#    - SERIAL (default): Safer, especially on WSL2. Total time = 5 × (single run time)
+#    - SERIAL (default): Safer, especially on WSL2. Total time scales with total runs
 #    - PARALLEL: Faster on servers. Total time ≈ 1 × (single run time)
 #
 # 4. Max Parallel Workers:
