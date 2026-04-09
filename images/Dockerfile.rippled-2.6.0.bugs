@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 
 # docker的multi- stage构建，这一阶段时构建，基于ubuntu，后面就可以从这个阶段拷贝构建产物 COPY --from=builder
 FROM ubuntu:22.04 AS builder
@@ -7,8 +8,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # ARG是Dockerfile中的构建参数，可以在构建镜像时通过--build-arg传入值，这里定义了一个BUG_ID参数，默认值是none，可以在构建时指定为bug1或bug2来注入不同的bug
 ARG BUG_ID=none
-# git 分支
-ARG GIT_REF=buglab 
 
 RUN apt-get update && apt-get install -y \
     git \
@@ -27,38 +26,37 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip3 install conan
 
-WORKDIR /opt
-COPY rippled ./rippled
-WORKDIR /opt/rippled
-
-RUN git checkout ${GIT_REF}
-
-# - 让 Conan 自动探测当前机器的编译环境，生成默认 profile。
-# - 把默认 profile 里的 C++ 标准改成 C++20，也就是：compiler.cppstd=20
-# - 把 GNU C++ 标准库 ABI 设置成：compiler.libcxx=libstdc++11
-RUN conan profile detect \
-    && sed -i 's|^compiler\\.cppstd=.*$|compiler.cppstd=20|' $(conan config home)/profiles/default \
-    && sed -i 's|^compiler\\.libcxx=.*$|compiler.libcxx=libstdc++11|' $(conan config home)/profiles/default
-
-# 添加 XRPL Conan remote（获取 patched recipes）
-RUN conan remote add --index 0 xrplf "https://conan.ripplex.io" || true
-
-
-# 安装依赖等，并配置cmake构建系统
-RUN mkdir -p .build && cd .build \
-    && conan install .. --output-folder . --build missing --settings build_type=Release \
-       -c tools.build:jobs=$(nproc)
-
-# 构建rippled，传入bug flag
-RUN cd .build \
-    && cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=build/generators/conan_toolchain.cmake \
-             -DCMAKE_BUILD_TYPE=Release \
-             -Dxrpld=ON \
-             -Dtests=OFF \
-             -DCMAKE_CXX_FLAGS="-DROCKET_${BUG_ID}" \
-             -G Ninja \
-             .. \
-    && cmake --build . --parallel
+# 使用 BuildKit 将源码目录临时挂载进构建容器，避免每次改代码都让 COPY 层失效。
+# 其中 /root/.conan2 和 /opt/rippled-build 都作为持久 cache mount，这样：
+# 1. Conan 依赖缓存可复用
+# 2. CMake/Ninja 的 build 目录可做增量编译
+# 最终只把编好的 rippled 拷出到镜像层中。
+RUN --mount=type=bind,source=rippled,target=/src/rippled,readonly \
+    --mount=type=cache,id=rippled-conan-cache,target=/root/.conan2,sharing=locked \
+    --mount=type=cache,id=rippled-build-cache,target=/opt/rippled-build,sharing=locked \
+    bash -euxo pipefail -c '\
+        install_deps() { \
+            conan install /src/rippled --output-folder /opt/rippled-build --build missing --settings build_type=Release \
+                -c tools.build:jobs="$(nproc)"; \
+        }; \
+        conan profile detect --force && \
+        sed -i "s|^compiler\\.cppstd=.*$|compiler.cppstd=20|" "$(conan config home)/profiles/default" && \
+        sed -i "s|^compiler\\.libcxx=.*$|compiler.libcxx=libstdc++11|" "$(conan config home)/profiles/default" && \
+        conan remote add --index 0 xrplf "https://conan.ripplex.io" || true && \
+        install_deps || { \
+            echo "conan install failed; clearing cached recipes and retrying once" >&2; \
+            rm -rf /root/.conan2/p /root/.conan2/t /opt/rippled-build/* && \
+            install_deps; \
+        } && \
+        cmake -S /src/rippled -B /opt/rippled-build \
+            -DCMAKE_TOOLCHAIN_FILE:FILEPATH=/opt/rippled-build/build/generators/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -Dxrpld=ON \
+            -Dtests=OFF \
+            -DCMAKE_CXX_FLAGS="-DROCKET_${BUG_ID}" \
+            -G Ninja && \
+        cmake --build /opt/rippled-build --parallel "$(nproc)" && \
+        install -D /opt/rippled-build/rippled /opt/rippled-artifacts/rippled'
 
 
 FROM ubuntu:22.04
@@ -70,7 +68,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 将之前构建好的rippled拷贝过来
-COPY --from=builder /opt/rippled/.build/rippled /usr/local/bin/rippled
+COPY --from=builder /opt/rippled-artifacts/rippled /usr/local/bin/rippled
 
 # 拷贝config文件等，准备运行
 RUN mkdir -p /opt/ripple/etc

@@ -22,12 +22,15 @@ log_root="${ROCKET_LOG_ROOT:-${repo_root}/logs}"
 volume_root="${ROCKET_DEBUG_VOLUMES_ROOT:-${tmp_root%/}/volumes}"
 network_root="${ROCKET_DEBUG_NETWORK_ROOT:-${tmp_root%/}/network}"
 build_jobs="${ROCKET_BUILD_JOBS:-$(nproc)}"
+skip_bootstrap="${ROCKET_SKIP_BOOTSTRAP:-1}"
 
 mkdir -p "${log_root}" "${cache_root}" "${tmp_root}" "${volume_root}" "${network_root}"
 
 docker build -f "${dockerfile}" -t "${image_name}" "${repo_root}"
 
-debug_cmd=(bash)
+# 无参数时进入交互式 shell；有参数时直接在容器里执行该命令。
+# 容器本身带 --rm，所以命令结束或手动 exit 后会自动清理退出。
+debug_cmd=(bash -il)
 if [ "$#" -gt 0 ]; then
     debug_cmd=("$@")
 fi
@@ -49,12 +52,15 @@ docker_run_args=(
     -e PYTHONPATH="${repo_root}:${repo_root}/evo"
     -e ROCKET_WORKSPACE="${repo_root}"
     -e ROCKET_BUILD_JOBS="${build_jobs}"
+    -e ROCKET_SKIP_BOOTSTRAP="${skip_bootstrap}"
     -e ROCKET_LOG_ROOT="${log_root}"
     -e ROCKET_VOLUMES_ROOT="${volume_root}"
     -e ROCKET_NETWORK_ROOT="${network_root}"
     -e ROCKET_HOST_UID="$(id -u)"
     -e ROCKET_HOST_GID="$(id -g)"
     -e USER="$(id -un)"
+    -e DOCKER_BUILDKIT=1
+    -e BUILDKIT_PROGRESS="${BUILDKIT_PROGRESS:-plain}"
     -e PIP_DISABLE_PIP_VERSION_CHECK=1
     -e MPLCONFIGDIR="${container_home}/.config/matplotlib"
     -e XDG_CONFIG_HOME="${container_home}/.config"
