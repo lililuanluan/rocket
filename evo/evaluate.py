@@ -272,6 +272,119 @@ def get_validation_distribution_entropy(validation_distribution):
     return np.mean(ent) if ent else None
 
 
+def get_proposal_distribution(df, node_info, byzz_nodes: list | None = None):
+    """Build receiver-view proposal observations keyed by proposal round.
+
+    We identify the real proposer via ``nodePubKey`` inside ``TMProposeSet``,
+    not via ``from_node_id`` in the CSV row, because proposals can be relayed by
+    gossip and the transport sender may not be the original proposer.
+
+    Returned structure:
+        receiver_id -> previousledger_hex -> propose_seq -> proposer_id -> {
+            "timestamp": int,
+            "current_tx_hash": str,
+        }
+    """
+    distribution = {}
+    byzz_set = {int(node_id) for node_id in (byzz_nodes or [])}
+
+    for _, row in df.iterrows():
+        if row["message_type"] != "TMProposeSet":
+            continue
+
+        packet_hex = row.get("possibly_mutated_packet_data") or row.get("packet_data")
+        if not packet_hex or pd.isna(packet_hex):
+            continue
+
+        try:
+            packet_bytes = bytes.fromhex(packet_hex)
+            packet = ProtoPacket(data=packet_bytes)
+            message, _ = PacketEncoderDecoder.decode_packet(packet)
+        except (ValueError, DecodingNotSupportedError, Exception):
+            continue
+
+        receiver_id = row.get("to_node_id")
+        if pd.isna(receiver_id):
+            continue
+        receiver_id = int(receiver_id)
+        if receiver_id in byzz_set:
+            continue
+
+        proposer_id = pub_key_to_node_id(message.nodePubKey.hex(), node_info)
+        if proposer_id is None:
+            continue
+        if proposer_id == receiver_id:
+            # A node's own proposal can be relayed back to it in gossip, but we
+            # only want peer proposal confusion here.
+            continue
+
+        previous_ledger = bytes(message.previousledger).hex()
+        propose_seq = int(message.proposeSeq)
+        timestamp = int(row.get("timestamp", 0) or 0)
+        current_tx_hash = bytes(message.currentTxHash).hex()
+
+        receiver_entry = distribution.setdefault(receiver_id, {})
+        ledger_entry = receiver_entry.setdefault(previous_ledger, {})
+        seq_entry = ledger_entry.setdefault(propose_seq, {})
+
+        # Keep the latest observation for each proposer at this receiver/round.
+        existing = seq_entry.get(proposer_id)
+        if existing is None or timestamp >= existing["timestamp"]:
+            seq_entry[proposer_id] = {
+                "timestamp": timestamp,
+                "current_tx_hash": current_tx_hash,
+            }
+
+    return distribution
+
+
+def get_proposal_distribution_entropy(proposal_distribution):
+    """Compute a discrete integral of proposal entropy over proposal rounds.
+
+    For each ``receiver × previousledger`` pair we walk proposeSeq in order,
+    maintain the latest proposal seen from each proposer, compute the entropy of
+    the resulting ``currentTxHash`` distribution, and sum that entropy over the
+    discrete proposal rounds. A higher score means disagreement persists longer
+    instead of quickly collapsing toward one proposal.
+    """
+    integrals = []
+
+    for _, ledger_dict in proposal_distribution.items():
+        for _, seq_dict in ledger_dict.items():
+            if not seq_dict:
+                continue
+
+            latest_by_proposer = {}
+            round_integral = 0.0
+            # Iterate only over observed proposal sequence values. Ripple logs
+            # can contain sentinel / wrapped values such as 4294967295; using a
+            # dense numeric range would expand that into billions of empty
+            # iterations and effectively hang evaluation.
+            for seq in sorted(seq_dict.keys()):
+                updates = seq_dict[seq]
+                for proposer_id, proposal in updates.items():
+                    latest_by_proposer[proposer_id] = proposal["current_tx_hash"]
+
+                if not latest_by_proposer:
+                    continue
+
+                hash_counts = {}
+                total = 0
+                for tx_hash in latest_by_proposer.values():
+                    hash_counts[tx_hash] = hash_counts.get(tx_hash, 0) + 1
+                    total += 1
+
+                entropy = 0.0
+                for count in hash_counts.values():
+                    p = count / total
+                    entropy -= p * np.log2(p)
+                round_integral += entropy
+
+            integrals.append(round_integral)
+
+    return np.mean(integrals) if integrals else None
+
+
 def build_gossip_connectivity_matrix(
     df_exec: pd.DataFrame,
     node_info: dict,
@@ -344,7 +457,12 @@ def get_gossip_fiedler(
     byzz_nodes: list | None = None,
     message_weights: dict[str, float] | None = None,
 ) -> float:
-    """Return the Fiedler value of the honest-node gossip connectivity graph."""
+    """Return a maximization-friendly Fiedler score for the honest gossip graph.
+
+    We maximize fitness in DEAP, but a smaller raw Fiedler value means the
+    graph is more fragile / closer to disconnecting. Return the negated value
+    so higher fitness prefers more fragile connectivity.
+    """
     matrix, honest_nodes = build_gossip_connectivity_matrix(
         df_exec,
         node_info=node_info,
@@ -359,7 +477,7 @@ def get_gossip_fiedler(
     laplacian = np.diag(degree) - matrix
     eigenvalues = np.linalg.eigvalsh(laplacian)
     eigenvalues = np.clip(eigenvalues, 0.0, None)
-    return float(eigenvalues[1]) if len(eigenvalues) > 1 else 0.0
+    return -float(eigenvalues[1]) if len(eigenvalues) > 1 else 0.0
 
 
 # 对每个时间窗口内发送的消息，根据类型分组，计算信息熵
@@ -515,6 +633,7 @@ FITNESS_FUNCTIONS = [
     "mean_validation_time",
     "var_validation_time",
     "validation_distribution_entropy",
+    "proposal_distribution_entropy",
     "message_entropy_integral",
     "message_entropy_average",
     "markov_matrix_non_similarity",
@@ -565,6 +684,15 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
     )
     print(f"Validation distribution entropy: {validation_distribution_entropy}")
     res["validation_distribution_entropy"] = validation_distribution_entropy
+
+    proposal_distribution = get_proposal_distribution(
+        df_action, node_info, byzz_nodes
+    )
+    proposal_distribution_entropy = get_proposal_distribution_entropy(
+        proposal_distribution
+    )
+    print(f"Proposal distribution entropy: {proposal_distribution_entropy}")
+    res["proposal_distribution_entropy"] = proposal_distribution_entropy
 
     message_entropy_integral, message_entropy_average = get_message_entropy_integration(
         df_action

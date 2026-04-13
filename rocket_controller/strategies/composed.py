@@ -33,10 +33,10 @@ class ComposedStrategy(EvoDelayStrategy):
         self.delay_rule_table_by_seq: Dict[Tuple[int, int, int, str], int] = {}
         self.byzz_rule_table: Dict[Tuple[int, int, str], str] = {}
 
-        logger.error(
-            f"ComposedStrategy initialized with delay_mode={self.delay_mode}, "
-            f"partition_mode={self.partition_mode}, byzz_mode={self.byzz_mode}"
-        )
+        # logger.error(
+        #     f"ComposedStrategy initialized with delay_mode={self.delay_mode}, "
+        #     f"partition_mode={self.partition_mode}, byzz_mode={self.byzz_mode}"
+        # )
 
     def _sample_partition_shuffle_cut(self, num_nodes: int) -> list[int]:
         nodes = list(range(num_nodes))
@@ -94,12 +94,12 @@ class ComposedStrategy(EvoDelayStrategy):
             )
             self.byzz_rule_table[key] = str(rule["mutation_method"])
 
-        if self.partition_mode == "random_bipart":
-            logger.error(
-                "Partition setup: random_bipart mode, layout will be generated at activation"
-            )
-        if self.partition_mode != "none":
-            logger.error(f"Partition setup: {self.partition}")
+        # if self.partition_mode == "random_bipart":
+        #     logger.error(
+        #         "Partition setup: random_bipart mode, layout will be generated at activation"
+        #     )
+        # if self.partition_mode != "none":
+        #     logger.error(f"Partition setup: {self.partition}")
 
     def _maybe_update_partition_state(self, current_ledger: int, cur_time: float) -> None:
         if self.partition_mode == "none":

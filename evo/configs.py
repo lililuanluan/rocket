@@ -103,6 +103,7 @@ def parse_args() -> argparse.Namespace:
             "mean_validation_time",
             "var_validation_time",
             "validation_distribution_entropy",
+            "proposal_distribution_entropy",
             "message_entropy_integral",
             "message_entropy_average",
             "markov_matrix_non_similarity",

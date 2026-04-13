@@ -14,6 +14,7 @@ titles = {
     "mean_validation_time": "mean validation time",
     "var_validation_time": "variance of validation time",
     "validation_distribution_entropy": "validation distribution entropy",
+    "proposal_distribution_entropy": "proposal distribution entropy",
     "message_entropy_integral": "integral of message entropy over time",
     "markov_matrix_non_similarity": "message markov matrix non similarity",
     "message_entropy_average": "message entropy per second",
