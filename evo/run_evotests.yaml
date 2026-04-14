@@ -79,6 +79,10 @@ mu: 5
 # Maximum ledger sequence to run
 max_ledger_seq: 15
 
+# Delay bounds (milliseconds) passed to evotest_parallel -> ComposedStrategy
+min_delay_ms: 0
+max_delay_ms: 3000
+
 # Individual test timeout in seconds
 individual_timeout_sec: 500
 

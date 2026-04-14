@@ -111,6 +111,9 @@ def print_config_summary(config: dict, parallel_mode: str):
     print(f"  Total num tests:      {config.get('total_num_tests', 500)}")
     print(f"  Individual timeout:   {config.get('individual_timeout_sec', 180)}s")
     print(
+        f"  Delay bounds:         {config.get('min_delay_ms', 0)}-{config.get('max_delay_ms', 100)} ms"
+    )
+    print(
         f"  Total runs:           {len(images)} × {len(strategies)} × {len(fitnesses)} = {total}"
     )
     print("=" * 70 + "\n")
@@ -172,6 +175,8 @@ def main():
     max_parallel_workers = config.get("max_parallel_workers", 5)
     total_num_tests = config.get("total_num_tests", 500)
     individual_timeout = config.get("individual_timeout_sec", 180)
+    min_delay_ms = config.get("min_delay_ms")
+    max_delay_ms = config.get("max_delay_ms")
 
     log_dir = Path(dirs["logs_dir"]) / get_date_time_strf()
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -232,6 +237,10 @@ def main():
                     "--individual-timeout-sec",
                     str(individual_timeout),
                 ]
+                if min_delay_ms is not None:
+                    cmd.extend(["--min-delay-ms", str(min_delay_ms)])
+                if max_delay_ms is not None:
+                    cmd.extend(["--max-delay-ms", str(max_delay_ms)])
 
                 # ensure both the repo root AND the evo/ dir are on PYTHONPATH.
                 # evo/evotest_parallel.py uses bare imports (e.g. `from evaluate
