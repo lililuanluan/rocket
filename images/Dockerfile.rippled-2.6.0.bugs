@@ -1,30 +1,15 @@
 # syntax=docker/dockerfile:1.7
 
-# docker的multi- stage构建，这一阶段时构建，基于ubuntu，后面就可以从这个阶段拷贝构建产物 COPY --from=builder
-FROM ubuntu:22.04 AS builder
-
-# 让apt在安装软件时不弹交互界面，自动用默认选项继续执行
-ENV DEBIAN_FRONTEND=noninteractive 
+# 参考 docker/ 下的镜像，尽量直接使用带工具链的 bookworm 基础镜像，
+# 避免在构建阶段依赖不稳定的 Ubuntu apt 源。
+FROM python:3.12-bookworm AS builder
 
 # ARG是Dockerfile中的构建参数，可以在构建镜像时通过--build-arg传入值，这里定义了一个BUG_ID参数，默认值是none，可以在构建时指定为bug1或bug2来注入不同的bug
 ARG BUG_ID=none
 
-RUN apt-get update && apt-get install -y \
-    git \
-    cmake \
-    ninja-build \
-    pkg-config \
-    python3 \
-    python3-pip \
-    gcc-12 \
-    g++-12 \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 \
-    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
-
-
-RUN pip3 install conan
+RUN python -m pip install -U pip \
+    && python -m pip install conan cmake ninja \
+    && ln -sf /usr/local/bin/ninja /usr/bin/ninja
 
 # 使用 BuildKit 将源码目录临时挂载进构建容器，避免每次改代码都让 COPY 层失效。
 # 其中 /root/.conan2 和 /opt/rippled-build 都作为持久 cache mount，这样：
@@ -42,12 +27,14 @@ RUN --mount=type=bind,source=rippled,target=/src/rippled,readonly \
         conan profile detect --force && \
         sed -i "s|^compiler\\.cppstd=.*$|compiler.cppstd=20|" "$(conan config home)/profiles/default" && \
         sed -i "s|^compiler\\.libcxx=.*$|compiler.libcxx=libstdc++11|" "$(conan config home)/profiles/default" && \
-        conan remote add --index 0 xrplf "https://conan.ripplex.io" || true && \
+        conan remote add --index 0 xrplf "https://conan.ripplex.io" --force || true && \
         install_deps || { \
             echo "conan install failed; clearing cached recipes and retrying once" >&2; \
             rm -rf /root/.conan2/p /root/.conan2/t /opt/rippled-build/* && \
             install_deps; \
         } && \
+        rm -f /opt/rippled-build/CMakeCache.txt && \
+        rm -rf /opt/rippled-build/CMakeFiles && \
         cmake -S /src/rippled -B /opt/rippled-build \
             -DCMAKE_TOOLCHAIN_FILE:FILEPATH=/opt/rippled-build/build/generators/conan_toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Release \
@@ -59,13 +46,7 @@ RUN --mount=type=bind,source=rippled,target=/src/rippled,readonly \
         install -D /opt/rippled-build/rippled /opt/rippled-artifacts/rippled'
 
 
-FROM ubuntu:22.04
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y \
-    curl \
-    libstdc++6 \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.12-bookworm
 
 # 将之前构建好的rippled拷贝过来
 COPY --from=builder /opt/rippled-artifacts/rippled /usr/local/bin/rippled
@@ -88,4 +69,4 @@ CMD []
 
 # docker自定义健康检查，每30秒检查一次，超时时间10秒，启动后60秒才开始检查，检查命令是curl访问本地5005端口，如果失败就返回1，成功返回0
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
-  CMD curl -f http://localhost:5005 || exit 1
+  CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:5005', timeout=10)" || exit 1
