@@ -4,15 +4,22 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/.." && pwd)"
-plot_home_root="${ROCKET_PLOT_HOME_ROOT:-/data/workspace/lli21/tmp/rocket-plot-home}"
-plot_tmp_root="${ROCKET_PLOT_TMP_ROOT:-/data/workspace/lli21/tmp/rocket-plot-tmp}"
+workspace_root="/data/workspace/lli21"
+workspace_cache_root="${workspace_root}/docker_cache"
+plot_home_root="${ROCKET_PLOT_HOME_ROOT:-${workspace_cache_root}/plot-home}"
+plot_tmp_root="${ROCKET_PLOT_TMP_ROOT:-${workspace_cache_root}/plot-tmp}"
 container_home="${ROCKET_PLOT_CONTAINER_HOME:-/tmp/rocket-plot-home}"
 container_tmp="${ROCKET_PLOT_CONTAINER_TMP:-/tmp/rocket-plot-tmp}"
-log_root="${ROCKET_LOG_ROOT:-/data/workspace/lli21/logs}"
+log_root="${ROCKET_LOG_ROOT:-${workspace_root}/logs}"
 
 mkdir -p "${plot_home_root}" "${plot_tmp_root}"
 
-docker build -f "${script_dir}/Dockerfile.plot" -t rocket-plot:latest "${repo_root}"
+force_build="${ROCKET_PLOT_FORCE_BUILD:-0}"
+if [ "${force_build}" = "1" ] || ! docker image inspect rocket-plot:latest >/dev/null 2>&1; then
+  docker build -f "${script_dir}/Dockerfile.plot" -t rocket-plot:latest "${repo_root}"
+else
+  echo "Using existing image rocket-plot:latest; skipping docker build (set ROCKET_PLOT_FORCE_BUILD=1 to rebuild)."
+fi
 
 
 
@@ -29,4 +36,4 @@ exec docker run --rm -it \
   -e XDG_CONFIG_HOME="${container_home}/.config" \
   -e ROCKET_LOG_ROOT="${log_root}" \
   rocket-plot:latest \
-  python evo/plot_fitness_trend.py
+  python evo/plot_fitness_trend.py "$@"

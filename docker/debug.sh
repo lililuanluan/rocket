@@ -4,11 +4,14 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/.." && pwd)"
+workspace_root="/data/workspace/lli21"
+workspace_cache_root="${workspace_root}/docker_cache"
 
 # 服务器上优先把日志和临时目录放到 workspace；本地则走后面的默认值。
-if [ -d /data/workspace/lli21 ]; then
-    ROCKET_LOG_ROOT="/data/workspace/lli21/logs"
-    ROCKET_DEBUG_TMPDIR="/data/workspace/lli21/tmp"
+if [ -d "${workspace_root}" ]; then
+    ROCKET_LOG_ROOT="${ROCKET_LOG_ROOT:-${workspace_root}/logs}"
+    ROCKET_DEBUG_TMPDIR="${ROCKET_DEBUG_TMPDIR:-${workspace_cache_root}/debug-tmp}"
+    ROCKET_DEBUG_CACHE_ROOT="${ROCKET_DEBUG_CACHE_ROOT:-${workspace_cache_root}/debug-home}"
 fi
 
 # debug 默认直接复用主运行镜像，尽量和 docker/run.sh 保持一致。
@@ -26,7 +29,12 @@ skip_bootstrap="${ROCKET_SKIP_BOOTSTRAP:-1}"
 
 mkdir -p "${log_root}" "${cache_root}" "${tmp_root}" "${volume_root}" "${network_root}"
 
-docker build -f "${dockerfile}" -t "${image_name}" "${repo_root}"
+force_build="${ROCKET_DEBUG_FORCE_BUILD:-0}"
+if [ "${force_build}" = "1" ] || ! docker image inspect "${image_name}" >/dev/null 2>&1; then
+    docker build -f "${dockerfile}" -t "${image_name}" "${repo_root}"
+else
+    echo "Using existing image ${image_name}; skipping docker build (set ROCKET_DEBUG_FORCE_BUILD=1 to rebuild)."
+fi
 
 # 无参数时进入交互式 shell；有参数时直接在容器里执行该命令。
 # 容器本身带 --rm，所以命令结束或手动 exit 后会自动清理退出。

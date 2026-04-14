@@ -5,11 +5,14 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/.." && pwd)"
+workspace_root="/data/workspace/lli21"
+workspace_cache_root="${workspace_root}/docker_cache"
 
 # 服务器上优先把日志和临时目录放到 workspace；本地则走后面的默认值。
-if [ -d /data/workspace/lli21 ]; then
-    ROCKET_LOG_ROOT="/data/workspace/lli21/logs"
-    ROCKET_TMPDIR="/data/workspace/lli21/tmp"
+if [ -d "${workspace_root}" ]; then
+    ROCKET_LOG_ROOT="${ROCKET_LOG_ROOT:-${workspace_root}/logs}"
+    ROCKET_TMPDIR="${ROCKET_TMPDIR:-${workspace_cache_root}/tmp}"
+    ROCKET_CACHE_ROOT="${ROCKET_CACHE_ROOT:-${workspace_cache_root}/home}"
 fi
 
 # 默认使用环境变量 ROCKET_IMAGE_NAME 指定的镜像名称，如果没有设置则使用 rocket-evo:latest
@@ -28,7 +31,12 @@ build_jobs="${ROCKET_BUILD_JOBS:-$(nproc)}"
 
 mkdir -p "${log_root}" "${cache_root}" "${tmp_root}" "${volume_root}" "${network_root}"
 
-docker build -f "${dockerfile}" -t "${image_name}" "${repo_root}"
+force_build="${ROCKET_FORCE_BUILD:-0}"
+if [ "${force_build}" = "1" ] || ! docker image inspect "${image_name}" >/dev/null 2>&1; then
+    docker build -f "${dockerfile}" -t "${image_name}" "${repo_root}"
+else
+    echo "Using existing image ${image_name}; skipping docker build (set ROCKET_FORCE_BUILD=1 to rebuild)."
+fi
 
 
 exec docker run --rm \
@@ -63,7 +71,7 @@ docker ps --format '{{.Names}}' | grep -E "^${USER}_.*(validator_[0-9]+|key_gene
 # docker ps --format '{{.Names}}' | grep -E '(^validator_|_validator_|^key_generator$|_key_generator$)' | xargs -r docker rm -f
 
 
-rm -rf /data/workspace/lli21/tmp/
+rm -rf "${workspace_cache_root}/tmp"
 
 
 # 删掉数据库目录以及临时文件目录：
