@@ -1,7 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
+import os
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from matplotlib.ticker import MaxNLocator
 from pathlib import Path
 from utils import get_logs_root
@@ -23,11 +25,55 @@ titles = {
 
 FITNESS_REPORT_NAME = "evolution_report.pdf"
 STRATEGY_REPORT_NAME = "fitness_trend_report.pdf"
+def emit(message: str, messages: list[str] | None = None) -> None:
+    """Print immediately or append to a message buffer."""
+    if messages is None:
+        print(message)
+    else:
+        messages.append(message)
 
 
 def get_metric_title(metric_name: str) -> str:
     """Return the display title for a metric/fitness name."""
     return titles.get(metric_name, metric_name)
+
+
+def format_gt_label(generation: float | int, individual_id) -> str:
+    """Format one row as G*T* for console reporting."""
+    generation_label = str(int(generation)) if pd.notna(generation) else "?"
+    individual_numeric = pd.to_numeric(pd.Series([individual_id]), errors="coerce").iloc[0]
+    if pd.notna(individual_numeric):
+        individual_label = str(int(individual_numeric))
+    else:
+        individual_label = str(individual_id)
+    return f"G{generation_label}T{individual_label}"
+
+
+def report_violation_cases(
+    df: pd.DataFrame,
+    csv_path: Path,
+    messages: list[str] | None = None,
+) -> None:
+    """Print all G*T* rows whose total_failures is non-zero."""
+    required_cols = {"generation", "individual_id", "total_failures"}
+    if not required_cols.issubset(df.columns):
+        return
+
+    failure_counts = pd.to_numeric(df["total_failures"], errors="coerce").fillna(0)
+    violating_rows = df.loc[failure_counts != 0, ["generation", "individual_id", "total_failures"]]
+    if violating_rows.empty:
+        return
+
+    labels = [
+        format_gt_label(row.generation, row.individual_id)
+        for row in violating_rows.itertuples(index=False)
+    ]
+    unique_labels = list(dict.fromkeys(labels))
+    emit(
+        f"🎉🎉🎉 {csv_path} 中存在 violation(total_failures != 0): {', '.join(unique_labels)}",
+        messages,
+    )
+
 
 def find_latest_log_dir() -> Path | None:
     """Locate the newest child directory under ../logs relative to this file."""
@@ -53,16 +99,19 @@ def get_csv_files() -> list[Path]:
     return sorted(latest_dir.rglob("evo_result.csv"))
 
 
-def load_plot_data(csv_path: Path) -> tuple[pd.DataFrame, list[str], str | None] | None:
+def load_plot_data(
+    csv_path: Path,
+    messages: list[str] | None = None,
+) -> tuple[pd.DataFrame, list[str], str | None] | None:
     """Load, clean and describe a CSV for plotting."""
     if not csv_path.exists():
-        print(f"❌ 错误: 找不到文件 '{csv_path}'，请检查路径是否正确。")
+        emit(f"❌ 错误: 找不到文件 '{csv_path}'，请检查路径是否正确。", messages)
         return None
 
     try:
         df = pd.read_csv(csv_path)
     except Exception as exc:  # 捕获任何读取错误
-        print(f"❌ 读取 '{csv_path}' 失败: {exc}")
+        emit(f"❌ 读取 '{csv_path}' 失败: {exc}", messages)
         return None
 
     # 尝试将 generation 列转换为数值，若失败则丢弃该行
@@ -70,7 +119,7 @@ def load_plot_data(csv_path: Path) -> tuple[pd.DataFrame, list[str], str | None]
     df = df.dropna(subset=['generation'])
 
     if df.empty:
-        print(f"⚠️  跳过空数据文件: {csv_path}")
+        emit(f"⚠️  跳过空数据文件: {csv_path}", messages)
         return None
 
     # 3. 提取指标列
@@ -78,7 +127,7 @@ def load_plot_data(csv_path: Path) -> tuple[pd.DataFrame, list[str], str | None]
     metrics = [col for col in df.columns if col not in exclude_cols]
 
     if not metrics:
-        print(f"⚠️  未发现可绘制的指标列，跳过: {csv_path}")
+        emit(f"⚠️  未发现可绘制的指标列，跳过: {csv_path}", messages)
         return None
 
     # 尝试从 CSV 中读取 fitness_type（如果存在）用于图表标题
@@ -97,11 +146,11 @@ def load_plot_data(csv_path: Path) -> tuple[pd.DataFrame, list[str], str | None]
     )
     skipped_rows = int(invalid_metric_rows.sum())
     if skipped_rows:
-        print(f"⚠️  跳过 {skipped_rows} 行未成功运行的测试记录: {csv_path}")
+        emit(f"⚠️  跳过 {skipped_rows} 行未成功运行的测试记录: {csv_path}", messages)
         df = df.loc[~invalid_metric_rows].copy()
 
     if df.empty:
-        print(f"⚠️  跳过没有有效指标数据的文件: {csv_path}")
+        emit(f"⚠️  跳过没有有效指标数据的文件: {csv_path}", messages)
         return None
 
     # 将所有指标列转换为数值，以便在出现其他非数字字段时不报错
@@ -112,8 +161,10 @@ def load_plot_data(csv_path: Path) -> tuple[pd.DataFrame, list[str], str | None]
     df = df.dropna(subset=metrics, how='all')
 
     if df.empty:
-        print(f"⚠️  跳过没有可绘制数值数据的文件: {csv_path}")
+        emit(f"⚠️  跳过没有可绘制数值数据的文件: {csv_path}", messages)
         return None
+
+    report_violation_cases(df, csv_path, messages)
 
     if not fitness_label:
         fitness_label = csv_path.parent.name
@@ -139,14 +190,13 @@ def build_subplot_grid(num_metrics: int):
     return fig, axes
 
 
-def generate_report(csv_path: Path, output_path: Path) -> None:
-    """Load a CSV and write a PDF report next to it."""
-    plot_data = load_plot_data(csv_path)
-    if plot_data is None:
-        return
-
-    df, metrics, fitness_label = plot_data
-
+def write_metric_report(
+    df: pd.DataFrame,
+    metrics: list[str],
+    fitness_label: str | None,
+    output_path: Path,
+) -> None:
+    """Write one per-fitness PDF report from already loaded data."""
     # 按代数分组计算均值和标准差
     stats = build_metric_stats(df, metrics)
 
@@ -186,7 +236,6 @@ def generate_report(csv_path: Path, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, format='pdf', bbox_inches='tight')
     plt.close(fig)
-    print(f"✅ 成功！报告已保存至: {output_path}")
 
 
 def find_strategy_dir(csv_path: Path) -> Path | None:
@@ -236,27 +285,13 @@ def resolve_strategy_metric(metrics: list[str], fitness_label: str | None) -> st
     return None
 
 
-def generate_strategy_report(strategy_dir: Path, csv_files: list[Path], output_path: Path) -> None:
+def write_strategy_report(
+    strategy_dir: Path,
+    plot_entries: list[tuple[str, str, pd.DataFrame]],
+    output_path: Path,
+) -> None:
     """Generate one report under a strategy directory with all fitness trends."""
-    plot_entries: list[tuple[str, str, pd.DataFrame]] = []
-
-    for csv_path in csv_files:
-        plot_data = load_plot_data(csv_path)
-        if plot_data is None:
-            continue
-
-        df, metrics, fitness_label = plot_data
-        metric_name = resolve_strategy_metric(metrics, fitness_label)
-        if metric_name is None:
-            print(f"⚠️  未找到可用于 strategy 聚合的 fitness 列，跳过: {csv_path}")
-            continue
-
-        label = fitness_label or csv_path.parent.name
-        stats = build_metric_stats(df, [metric_name])
-        plot_entries.append((label, metric_name, stats))
-
     if not plot_entries:
-        print(f"⚠️  strategy 目录下没有可绘制的 fitness 趋势: {strategy_dir}")
         return
 
     fig, axes = build_subplot_grid(len(plot_entries))
@@ -282,7 +317,108 @@ def generate_strategy_report(strategy_dir: Path, csv_files: list[Path], output_p
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, format='pdf', bbox_inches='tight')
     plt.close(fig)
-    print(f"✅ 成功！strategy 级 fitness 报告已保存至: {output_path}")
+
+
+def build_strategy_entry(
+    csv_path: Path,
+    df: pd.DataFrame,
+    metrics: list[str],
+    fitness_label: str | None,
+    messages: list[str] | None = None,
+):
+    """Build one strategy-level aggregation entry from a CSV's loaded data."""
+    strategy_dir = find_strategy_dir(csv_path)
+    if strategy_dir is None:
+        return None
+
+    metric_name = resolve_strategy_metric(metrics, fitness_label)
+    if metric_name is None:
+        emit(f"⚠️  未找到可用于 strategy 聚合的 fitness 列，跳过: {csv_path}", messages)
+        return None
+
+    label = fitness_label or csv_path.parent.name
+    stats = build_metric_stats(df, [metric_name])
+    return {
+        "strategy_dir": strategy_dir,
+        "csv_path": csv_path,
+        "label": label,
+        "metric_name": metric_name,
+        "stats": stats,
+    }
+
+
+def generate_single_csv_report(task: tuple[Path, Path, bool]) -> dict:
+    """Load one CSV, generate its PDF, and return reusable strategy data."""
+    csv_path, output_path, write_output = task
+    messages: list[str] = []
+    emit(f"👉 处理 {csv_path} -> {output_path}", messages)
+
+    plot_data = load_plot_data(csv_path, messages)
+    if plot_data is None:
+        return {"messages": messages, "strategy_entry": None}
+
+    df, metrics, fitness_label = plot_data
+    if write_output:
+        write_metric_report(df, metrics, fitness_label, output_path)
+        emit(f"✅ 成功！报告已保存至: {output_path}", messages)
+
+    strategy_entry = build_strategy_entry(
+        csv_path,
+        df,
+        metrics,
+        fitness_label,
+        messages,
+    )
+    return {
+        "messages": messages,
+        "strategy_entry": strategy_entry,
+    }
+
+
+def resolve_jobs(requested_jobs: int | None, num_tasks: int) -> int:
+    """Resolve the effective worker count for report generation."""
+    if num_tasks <= 1:
+        return 1
+    if requested_jobs is not None:
+        return max(1, min(requested_jobs, num_tasks))
+
+    cpu_count = os.cpu_count() or 1
+    return max(1, min(num_tasks, cpu_count))
+
+
+def run_report_tasks_parallel(
+    tasks: list[tuple[Path, Path, bool]],
+    worker_count: int,
+) -> list[dict]:
+    """Run report generation in parallel while preserving input order."""
+    with ProcessPoolExecutor(max_workers=worker_count) as executor:
+        return list(executor.map(generate_single_csv_report, tasks))
+
+
+def collect_strategy_entries(
+    report_results: list[dict],
+    root_dir: Path | None = None,
+) -> dict[Path, list[tuple[str, str, pd.DataFrame]]]:
+    """Group reusable strategy entries by their strategy directory."""
+    groups: dict[Path, list[dict]] = {}
+    for result in report_results:
+        entry = result.get("strategy_entry")
+        if entry is None:
+            continue
+
+        strategy_dir = entry["strategy_dir"]
+        if root_dir is not None and not is_same_or_child(strategy_dir, root_dir):
+            continue
+        groups.setdefault(strategy_dir, []).append(entry)
+
+    grouped_entries: dict[Path, list[tuple[str, str, pd.DataFrame]]] = {}
+    for strategy_dir, entries in groups.items():
+        entries.sort(key=lambda item: item["csv_path"].parent.name)
+        grouped_entries[strategy_dir] = [
+            (item["label"], item["metric_name"], item["stats"])
+            for item in entries
+        ]
+    return grouped_entries
 
 
 def collect_csvs_from_input(input_path: Path) -> list[Path]:
@@ -297,23 +433,36 @@ def generate_reports_for_csvs(
     csv_files: list[Path],
     custom_output: Path | None = None,
     strategy_root_dir: Path | None = None,
+    jobs: int | None = None,
 ) -> None:
     """Generate per-fitness reports and optional per-strategy aggregate reports."""
     use_custom_output = custom_output is not None and len(csv_files) == 1
+    tasks = [
+        (
+            csv_path,
+            custom_output if use_custom_output else csv_path.with_name(FITNESS_REPORT_NAME),
+            True,
+        )
+        for csv_path in csv_files
+    ]
 
-    for csv_path in csv_files:
-        output_path = custom_output if use_custom_output else csv_path.with_name(FITNESS_REPORT_NAME)
-        print(f"👉 处理 {csv_path} -> {output_path}")
-        generate_report(csv_path, output_path)
+    worker_count = resolve_jobs(jobs, len(tasks))
+    print(f"🚀 并行生成报告，worker 数: {worker_count}")
+    report_results = run_report_tasks_parallel(tasks, worker_count)
+
+    for result in report_results:
+        for message in result["messages"]:
+            print(message)
 
     if strategy_root_dir is None:
         return
 
-    strategy_groups = collect_strategy_csv_groups(csv_files, root_dir=strategy_root_dir)
-    for strategy_dir, strategy_csvs in strategy_groups.items():
+    strategy_groups = collect_strategy_entries(report_results, root_dir=strategy_root_dir)
+    for strategy_dir, plot_entries in strategy_groups.items():
         output_path = strategy_dir / STRATEGY_REPORT_NAME
         print(f"👉 汇总 strategy 目录 {strategy_dir} -> {output_path}")
-        generate_strategy_report(strategy_dir, strategy_csvs, output_path)
+        write_strategy_report(strategy_dir, plot_entries, output_path)
+        print(f"✅ 成功！strategy 级 fitness 报告已保存至: {output_path}")
 
 
 def main():
@@ -321,6 +470,13 @@ def main():
     parser = argparse.ArgumentParser(description='绘制演化算法指标趋势图')
     parser.add_argument('input', nargs='?', default=None, help='可以是 evo_result.csv 文件路径，或 logs 下的目录路径；若不提供则自动搜索最新日志目录')
     parser.add_argument('-o', '--output', default='out/evolution_report.pdf', help='输出的 PDF 文件名（仅当 input 指定为单个 CSV 文件时生效；若 input 为目录则忽略）')
+    parser.add_argument(
+        '-j',
+        '--jobs',
+        type=int,
+        default=None,
+        help='并行 worker 数；默认自动选择，传 1 可禁用并行',
+    )
 
     args = parser.parse_args()
 
@@ -336,7 +492,11 @@ def main():
             print("❌ 未找到最新日志目录或其中的 evo_result.csv。")
             sys.exit(1)
 
-        generate_reports_for_csvs(csv_files, strategy_root_dir=latest_dir)
+        generate_reports_for_csvs(
+            csv_files,
+            strategy_root_dir=latest_dir,
+            jobs=args.jobs,
+        )
     else:
         input_path = Path(args.input).expanduser().resolve()
         csv_files = collect_csvs_from_input(input_path)
@@ -351,6 +511,7 @@ def main():
             csv_files,
             custom_output=custom_output,
             strategy_root_dir=strategy_root_dir,
+            jobs=args.jobs,
         )
 
 
