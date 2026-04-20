@@ -70,12 +70,22 @@ def validate_config(config: dict):
     for entry in config["strategies"]:
         normalize_strategy_combo(entry)
 
-    for key in ["max_parallel_workers", "individual_timeout_sec", "population_size", "total_num_tests"]:
+    for key in [
+        "max_parallel_workers",
+        "individual_timeout_sec",
+        "population_size",
+        "total_num_tests",
+    ]:
         if key in config and (not isinstance(config[key], int) or config[key] <= 0):
             raise ValueError(f"Config key '{key}' must be a positive integer")
 
     if "mu" in config and (not isinstance(config["mu"], int) or config["mu"] <= 0):
         raise ValueError("Config key 'mu' must be a positive integer")
+
+    if "runtime_retries" in config and (
+        not isinstance(config["runtime_retries"], int) or config["runtime_retries"] < 0
+    ):
+        raise ValueError("Config key 'runtime_retries' must be a non-negative integer")
 
 
 def get_parallel_mode(config: dict) -> str:
@@ -110,6 +120,7 @@ def print_config_summary(config: dict, parallel_mode: str):
     print(f"  Mu (parent count):    {config.get('mu', 4)}")
     print(f"  Total num tests:      {config.get('total_num_tests', 500)}")
     print(f"  Individual timeout:   {config.get('individual_timeout_sec', 180)}s")
+    print(f"  Runtime retries:     {config.get('runtime_retries', 1)}")
     print(
         f"  Delay bounds:         {config.get('min_delay_ms', 0)}-{config.get('max_delay_ms', 100)} ms"
     )
@@ -164,7 +175,6 @@ def main():
     images = config["ripple_images"]
     strategies = [normalize_strategy_combo(entry) for entry in config["strategies"]]
     fitnesses = config["fitness_functions"]
-    port_start = config.get("port_start", 60000)
     population_size = config.get("population_size", 10)
     mu = config.get("mu", 4)
     if mu > population_size:
@@ -175,25 +185,12 @@ def main():
     max_parallel_workers = config.get("max_parallel_workers", 5)
     total_num_tests = config.get("total_num_tests", 500)
     individual_timeout = config.get("individual_timeout_sec", 180)
+    runtime_retries = config.get("runtime_retries", 1)
     min_delay_ms = config.get("min_delay_ms")
     max_delay_ms = config.get("max_delay_ms")
 
     log_dir = Path(dirs["logs_dir"]) / get_date_time_strf()
     log_dir.mkdir(parents=True, exist_ok=True)
-
-    # read number_of_nodes from network.yaml to compute per-population port range
-    network_yaml = Path(dirs["cur_dir"]) / "network.yaml"
-    max_num_nodes = 10
-    try:
-        with open(network_yaml, "r") as f:
-            max_num_nodes = int(yaml.safe_load(f).get("number_of_nodes", max_num_nodes))
-    except Exception:
-        print(
-            f"Warning: could not read {network_yaml}, using max_num_nodes={max_num_nodes}"
-        )
-
-    # each test occupies (1 + num_nodes*4) ports; a whole population needs that × population_size
-    population_port_range = (1 + max_num_nodes * 4) * population_size
 
     idx = 0
     for strategy_combo in strategies:
@@ -204,7 +201,6 @@ def main():
                     f"{log_dir}/{img.replace(':','_').replace('/','_')}"
                     f"/{strategy_label}/{fitness}"
                 )
-                base_port_population = port_start + idx * population_port_range
 
                 cmd = [
                     sys.executable,
@@ -224,8 +220,6 @@ def main():
                     strategy_combo["byzz_mode"],
                     "--fitness-function",
                     fitness,
-                    "--base-port-population",
-                    str(base_port_population),
                     "--max-parallel-workers",
                     str(max_parallel_workers),
                     "--total-num-tests",
@@ -236,6 +230,8 @@ def main():
                     str(mu),
                     "--individual-timeout-sec",
                     str(individual_timeout),
+                    "--runtime-retries",
+                    str(runtime_retries),
                 ]
                 if min_delay_ms is not None:
                     cmd.extend(["--min-delay-ms", str(min_delay_ms)])
@@ -253,12 +249,7 @@ def main():
                 env["PYTHONPATH"] = extra + (":" + existing if existing else "")
 
                 print(f"\nStarting [{idx}] {img} / {strategy_label} / {fitness}")
-                print(
-                    "  ports:",
-                    base_port_population,
-                    "–",
-                    base_port_population + population_port_range - 1,
-                )
+                print("  ports: controller + docker host ports are auto-assigned")
 
                 t0 = time.time()
                 proc = subprocess.Popen(cmd, env=env, start_new_session=True)

@@ -16,7 +16,12 @@ from loguru import logger
 class InterceptorManager:
     """Class for interacting with the network packet interceptor subprocess."""
 
-    def __init__(self, grpc_port: int = 50051, cluster_id: str = "", rippled_img: str | None = None):
+    def __init__(
+        self,
+        grpc_port: int | None = None,
+        cluster_id: str = "",
+        rippled_img: str | None = None,
+    ):
         """Initialize the InterceptorManager, with None for the process variable."""
         self.process: Popen | None = None
         self.grpc_port = grpc_port
@@ -118,6 +123,10 @@ class InterceptorManager:
 
     def start_new(self):
         """Starts the rocket-interceptor subprocess, and spawns a thread checking for output."""
+        if self.grpc_port is None:
+            raise RuntimeError(
+                "InterceptorManager.grpc_port was not set before start_new()."
+            )
         file = (
             "rocket-interceptor"
             if platform != "win32"

@@ -16,7 +16,7 @@ def main(args: argparse.Namespace) -> None:
     """
     params_dict = process_args(args)
 
-    grpc_port = params_dict.get("grpc_port", 50051)
+    grpc_port = params_dict.get("grpc_port")
 
     strategy: Strategy = str_to_strategy(args.strategy)(**params_dict)
     server = serve(strategy, grpc_port=grpc_port)

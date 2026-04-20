@@ -11,6 +11,7 @@ This module supports running multiple test instances in parallel, each with:
 import yaml
 import os
 import sys
+import re
 from pathlib import Path
 from evaluate import evaluate_log
 import subprocess
@@ -70,6 +71,24 @@ def _force_terminate_executor(executor: ProcessPoolExecutor):
             pass
 
 
+def _archive_retry_log_dir(log_dir: Path, attempt_idx: int, reason: str | None):
+    if not log_dir.exists():
+        return None
+
+    safe_reason = re.sub(r"[^A-Za-z0-9_.-]+", "_", reason or "runtime_invalid").strip("_")
+    safe_reason = safe_reason[:80] or "runtime_invalid"
+    archived_dir = log_dir.parent / f"{log_dir.name}__attempt{attempt_idx}_{safe_reason}"
+    suffix = 1
+    while archived_dir.exists():
+        archived_dir = (
+            log_dir.parent / f"{log_dir.name}__attempt{attempt_idx}_{safe_reason}_{suffix}"
+        )
+        suffix += 1
+
+    log_dir.rename(archived_dir)
+    return archived_dir
+
+
 def setup_deap_types():
     """设置 DEAP 的类型系统"""
     if not hasattr(creator, "FitnessMax"):
@@ -95,11 +114,11 @@ def evaluate_individual_worker(args):
         fitness_function,
         logs_dir,
         output_screen,
-        base_port_number,
     ) = args
 
     # choose a fresh seed per evaluation, ignore whatever was in config
     seed = random.randrange(2**31)
+    runtime_retries = max(0, int(config.get("runtime_retries", 1) or 0))
 
     # build cluster/log identifiers exactly as before
     ind_id = f"G{generation}T{individual_id}"
@@ -109,29 +128,45 @@ def evaluate_individual_worker(args):
 
     # call shared helper; it will take care of container cleanup, network
     # config file generation, and evaluation of the log.
-    result = run_rocket_and_evaluate(
-        log_dir=full_log_dir,
-        cluster_id=cluster_id,
-        max_ledger_seq=max_ledger_seq,
-        seed=seed,
-        encoding=individual_genes,
-        rocket_dir=get_dirs(__file__)["rocket_dir"],
-        tmp_dir=get_dirs(__file__)["tmp_dir"],
-        byzz_min_seq=config.get("byzz_min_seq", 5),
-        byzz_max_seq=config.get("byzz_max_seq", 10),
-        output_screen=output_screen,
-        timeout_sec_per_seq=config.get("timeout_per_seq", 30),
-        network_yaml=get_dirs(__file__)["cur_dir"]
-        / config.get("base_network_config_yaml", "network.yaml"),
-        base_port_number=base_port_number,
-        strategy_name=get_strategy_name(config.get("strategy", "")),
-        min_delay_ms=config.get("min_delay_ms"),
-        max_delay_ms=config.get("max_delay_ms"),
-        ripple_image=config.get("ripple_image", ""),
-        rust_log_level=config.get("rust_log_level", "info"),
-        fitness_function=fitness_function,
-        individual_timeout_sec=config.get("individual_timeout_sec", 300),
-    )
+    result = None
+    attempts_used = 0
+    for attempts_used in range(1, runtime_retries + 2):
+        result = run_rocket_and_evaluate(
+            log_dir=full_log_dir,
+            cluster_id=cluster_id,
+            max_ledger_seq=max_ledger_seq,
+            seed=seed,
+            encoding=individual_genes,
+            rocket_dir=get_dirs(__file__)["rocket_dir"],
+            tmp_dir=get_dirs(__file__)["tmp_dir"],
+            byzz_min_seq=config.get("byzz_min_seq", 5),
+            byzz_max_seq=config.get("byzz_max_seq", 10),
+            output_screen=output_screen,
+            timeout_sec_per_seq=config.get("timeout_per_seq", 65),
+            network_yaml=get_dirs(__file__)["cur_dir"]
+            / config.get("base_network_config_yaml", "network.yaml"),
+            base_port_number=None,
+            strategy_name=get_strategy_name(config.get("strategy", "")),
+            min_delay_ms=config.get("min_delay_ms"),
+            max_delay_ms=config.get("max_delay_ms"),
+            ripple_image=config.get("ripple_image", ""),
+            rust_log_level=config.get("rust_log_level", "info"),
+            fitness_function=fitness_function,
+            individual_timeout_sec=config.get("individual_timeout_sec", 300),
+        )
+        if not result.get("runtime_invalid", False):
+            break
+
+        reason = result.get("runtime_invalid_reason", "unknown")
+        print(
+            f"[{cluster_id}] Runtime-invalid attempt {attempts_used}/{runtime_retries + 1}: {reason}"
+        )
+        if attempts_used <= runtime_retries:
+            archived_dir = _archive_retry_log_dir(full_log_dir, attempts_used, reason)
+            if archived_dir is not None:
+                print(f"[{cluster_id}] Archived failed attempt logs to {archived_dir}")
+
+    assert result is not None
 
     fitness = result.get("fitness", 0.0)
     eval_result = result.get("eval_result", {})
@@ -144,6 +179,11 @@ def evaluate_individual_worker(args):
         "eval_result": eval_result,
         "log_dir": str(full_log_dir),
         "genes": individual_genes,
+        "run_status": result.get("run_status", "ok"),
+        "runtime_invalid": result.get("runtime_invalid", False),
+        "runtime_invalid_reason": result.get("runtime_invalid_reason"),
+        "attempts_used": attempts_used,
+        "retcode": result.get("retcode"),
     }
 
 
@@ -153,7 +193,6 @@ def parallel_evaluate_population(
     config,
 ):
     # extract parameters from config dictionary (seed ignored)
-    base_network_config = config.get("base_network_config", {})
     test_log_dir = Path(config.get("test_log_dir", ""))
     max_ledger_seq = config.get("max_ledger_seq")
     fitness_function = config.get("fitness_function")
@@ -165,18 +204,11 @@ def parallel_evaluate_population(
     print(f"using test_log_dir: {test_log_dir_str}")
 
     # prepare task parameters
-    num_nodes = base_network_config.get("number_of_nodes", 0) or 1
-    ports_per_test = 1 + num_nodes * 4
-    base_pop = config.get("base_port_population", 60000)
     population_size = config.get("population_size", len(population))
 
     tasks = []
     output_screen_flag = config["output_screen"]
     for idx, ind in enumerate(population):
-        # ensure that each evaluation gets its own slice of the port space.
-        offset_index = generation * population_size + idx
-        base_port_number = base_pop + offset_index * ports_per_test
-        # seed value passed but ignored by worker
         tasks.append(
             (
                 ind.to_dict(),
@@ -188,7 +220,6 @@ def parallel_evaluate_population(
                 fitness_function,
                 str(logs_dir),
                 output_screen_flag,
-                base_port_number,
             )
         )
 
@@ -222,9 +253,18 @@ def parallel_evaluate_population(
                     try:
                         result = future.result()
                         results.append(result)
-                        EvoLogger.write_result_to_csv(
-                            result, fitness_function, Path(test_log_dir) / "evo_result.csv"
-                        )
+                        if result.get("run_status") == "ok":
+                            EvoLogger.write_result_to_csv(
+                                result,
+                                fitness_function,
+                                Path(test_log_dir) / "evo_result.csv",
+                            )
+                        else:
+                            EvoLogger.write_excluded_run_to_csv(
+                                result,
+                                fitness_function,
+                                Path(test_log_dir) / "evo_excluded_runs.csv",
+                            )
                     except Exception as e:
                         print(f"Error processing evaluation result: {e}")
                         import traceback

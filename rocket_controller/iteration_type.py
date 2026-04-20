@@ -40,7 +40,7 @@ class TimeBasedIteration:
         ledger_timeout: bool = False,
         max_ledger_seq: int = -1,
         strategy_stopper = None, # func in strategy to stop ws subscriber or other things
-        grpc_port : int = 50051,
+        grpc_port: int | None = None,
         cluster_id: str = "",
         rippled_img: str | None = None,
     ):
@@ -345,6 +345,11 @@ class TimeBasedIteration:
         self._timer = None
         self.ledger_validation_map = {}
 
+    def set_grpc_port(self, grpc_port: int):
+        """Update the controller gRPC port before starting the interceptor."""
+        self.grpc_port = grpc_port
+        self._interceptor_manager.grpc_port = grpc_port
+
     def request_all_validated_ledgers(self):
         logger.info("Requesting all validated ledgers from validator nodes...")
         # enumerate over validator nodes safely
@@ -582,7 +587,7 @@ class LedgerBasedIteration(TimeBasedIteration):
         max_ledger_seq: int = 10,
         ledger_timeout_seconds: int = 60,
         strategy_stopper = None, # func in strategy to stop ws subscriber or other things
-        grpc_port : int = 50051,
+        grpc_port: int | None = None,
         cluster_id: str = "",
         rippled_img: str | None = None,
     ):

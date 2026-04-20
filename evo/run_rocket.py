@@ -1,10 +1,12 @@
-from pathlib import Path
 import os
-import sys
-from cleanup import cleanup_instance_docker_containers
-import yaml
-import subprocess
 import signal
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import yaml
+from cleanup import cleanup_instance_docker_containers
 
 from utils import build_interceptor, get_dirs, terminate_process_group
 from datetime import datetime
@@ -15,7 +17,47 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 from rocket_controller.helper import format_datetime
-from evo.evaluate import evaluate_log
+from evo.evaluate import FITNESS_FUNCTIONS, evaluate_log
+
+
+INVALID_RUNTIME_FITNESS = -1e12
+RUNTIME_INVALID_LOG_MARKERS = (
+    "thread 'tokio-runtime-worker' panicked",
+    "panicked at ",
+    "called `Result::unwrap()` on an `Err` value",
+    "Broken pipe",
+    "RecvError",
+    "SslStream from peer",
+    "Traceback (most recent call last):",
+    "address already in use",
+    "failed to bind host port",
+    "Could not bind controller gRPC",
+)
+
+
+def _read_log_text(log_path: Path) -> str:
+    if not log_path.exists():
+        return ""
+    return log_path.read_text(encoding="utf-8", errors="ignore")
+
+
+def _detect_runtime_invalid_reason(log_dir: Path, retcode: int) -> str | None:
+    if retcode not in (0, 124):
+        return f"controller_exit_code_{retcode}"
+
+    for log_name in ("rocket_stderr.log", "rocket_stdout.log"):
+        content = _read_log_text(log_dir / log_name)
+        for marker in RUNTIME_INVALID_LOG_MARKERS:
+            if marker in content:
+                return marker
+
+    return None
+
+
+def _has_complete_metrics(eval_result: dict | None) -> bool:
+    if not eval_result:
+        return False
+    return all(eval_result.get(metric) is not None for metric in FITNESS_FUNCTIONS)
 
 
 # 一个独立的函数，运行一个rocket实例
@@ -32,7 +74,7 @@ def run_rocket_and_evaluate(
     output_screen: bool,  # 是否打印到屏幕输出
     timeout_sec_per_seq: int,
     network_yaml: Path,  # 例如，network.yaml，绝对路径
-    base_port_number: int, # 每个cluster实例占用5个端口
+    base_port_number: int | None,  # deprecated: kept for call-site compatibility
     strategy_name: str,  # 策略类名称，例如 "RandomDelayByzzPartitionStrategy"
     min_delay_ms: int,
     max_delay_ms: int,
@@ -55,35 +97,17 @@ def run_rocket_and_evaluate(
         # 清理旧容器，避免上次中断留下的同名资源冲突
         cleanup_instance_docker_containers(cluster_id)
 
+        if log_dir.exists():
+            shutil.rmtree(log_dir)
         tmp_dir.mkdir(parents=True, exist_ok=True)
         log_dir.mkdir(parents=True, exist_ok=True)
         instance_network_yaml = log_dir / "network_input.yaml"
 
-        # 读取network.yaml，重新配置端口号，然后输出到 instance_network_yaml
+        # 读取 network.yaml，并为这次运行复制一份实例级配置。
+        # validator host 端口现在由 Docker 动态分配，controller gRPC 端口也
+        # 交给 controller 自己自动选择，因此这里不再重写任何端口号。
         with open(network_yaml, "r") as f:
             network_config = yaml.safe_load(f)
-
-        # 一次运行需要占用 1+num_nodes*4 个端口，如果7个节点，则有29个端口占用
-        num_nodes = network_config.get("number_of_nodes", 0) or 1
-
-        # NOTE: Do NOT use ports_free() / socket-bind probing here.
-        # Docker-mapped ports are NOT visible to host-level socket bind checks,
-        # so the probe always returns True even while a container is actively
-        # using those ports.  Worse, multiple parallel workers racing through
-        # the same probe loop will all land on the same "free" port block and
-        # collide inside Docker.
-        #
-        # Port allocation is handled statically by evotest_parallel.py:
-        #   base_port = base_pop + (generation * pop_size + idx) * ports_per_test
-        # That formula guarantees each individual gets a unique, non-overlapping
-        # block, so we just trust the value passed in here.
-
-        network_config["base_port_peer"] = base_port_number
-        network_config["base_port_ws"] = base_port_number + num_nodes
-        network_config["base_port_ws_admin"] = base_port_number + 2 * num_nodes
-        network_config["base_port_rpc"] = base_port_number + 3 * num_nodes
-        # grpc port sits after all categories
-        grpc_port = base_port_number + 4 * num_nodes
 
         with open(instance_network_yaml, "w") as f:
             yaml.dump(network_config, f)
@@ -119,8 +143,6 @@ def run_rocket_and_evaluate(
             str(1),
             "--max-ledger-seq",
             str(max_ledger_seq),
-            "--grpc-port",
-            str(grpc_port),
             "--cluster-id",
             str(cluster_id),
             "--rippled-img",
@@ -195,20 +217,42 @@ def run_rocket_and_evaluate(
         return {
             "eval_result": {"timed_out": True},
             "fitness": 0.0,
+            "run_status": "timed_out",
+            "runtime_invalid": False,
+            "runtime_invalid_reason": None,
+            "retcode": retcode,
         }
 
     with open(network_yaml, "r") as f:
         network_config = yaml.safe_load(f)
         byzz_nodes = network_config["byzz_nodes"]
 
-    eval_result = evaluate_log(log_dir, byzz_nodes=byzz_nodes) or {}
-    fitness = 0.0
-    if fitness_function in eval_result:
-        fitness = eval_result[fitness_function] if eval_result[fitness_function] else 0.0
+    raw_eval_result = evaluate_log(log_dir, byzz_nodes=byzz_nodes)
+    runtime_invalid_reason = _detect_runtime_invalid_reason(log_dir, retcode)
+    if runtime_invalid_reason is None and not _has_complete_metrics(raw_eval_result):
+        runtime_invalid_reason = "incomplete_evaluation_artifacts"
+
+    runtime_invalid = runtime_invalid_reason is not None
+    eval_result = raw_eval_result or {}
+
+    if runtime_invalid:
+        eval_result["runtime_invalid"] = True
+        eval_result["runtime_invalid_reason"] = runtime_invalid_reason
+        fitness = INVALID_RUNTIME_FITNESS
+        run_status = "runtime_invalid"
+    else:
+        fitness = 0.0
+        if fitness_function in eval_result:
+            fitness = eval_result[fitness_function] if eval_result[fitness_function] else 0.0
+        run_status = "ok"
 
     return {
         "eval_result": eval_result,
         "fitness": fitness,
+        "run_status": run_status,
+        "runtime_invalid": runtime_invalid,
+        "runtime_invalid_reason": runtime_invalid_reason,
+        "retcode": retcode,
     }
 
 
@@ -238,9 +282,9 @@ if __name__ == "__main__":
         byzz_min_seq=0,
         byzz_max_seq=10,
         output_screen=True,
-        timeout_sec_per_seq=30,
+        timeout_sec_per_seq=65,
         network_yaml=dirs["cur_dir"] / "network.yaml",
-        base_port_number=60000,
+        base_port_number=None,
         strategy_name="RandomDelayByzzPartitionStrategy",
         min_delay_ms=0,
         max_delay_ms=100,

@@ -170,10 +170,6 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
 
         config_values_types = {
             "network_partition": List[List[int]],
-            "base_port_peer": int,
-            "base_port_ws": int,
-            "base_port_ws_admin": int,
-            "base_port_rpc": int,
             "number_of_nodes": int,
         }
 
@@ -201,21 +197,30 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
         )
 
         return packet_pb2.Config(
-            base_port_peer=config.get("base_port_peer"),
-            base_port_ws=config.get("base_port_ws"),
-            base_port_ws_admin=config.get("base_port_ws_admin"),
-            base_port_rpc=config.get("base_port_rpc"),
+            # These legacy fields are still carried over the proto for
+            # compatibility, but the interceptor now asks Docker to assign
+            # host ports dynamically and does not depend on them.
+            base_port_peer=int(config.get("base_port_peer", 0) or 0),
+            base_port_ws=int(config.get("base_port_ws", 0) or 0),
+            base_port_ws_admin=int(config.get("base_port_ws_admin", 0) or 0),
+            base_port_rpc=int(config.get("base_port_rpc", 0) or 0),
             number_of_nodes=config.get("number_of_nodes"),
             net_partitions=net_partitions,
             unl_partitions=unl_partitions,
         )
 
 
-def serve(strategy: Strategy, grpc_port: int = 50051):
+def serve(strategy: Strategy, grpc_port: int | None = None):
     """This function starts the server and listens for incoming packets."""
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1000))
     packet_pb2_grpc.add_PacketServiceServicer_to_server(PacketService(strategy), server)
-    server.add_insecure_port(f"[::]:{grpc_port}")
+    requested_port = 0 if grpc_port in (None, 0) else grpc_port
+    bound_port = server.add_insecure_port(f"[::]:{requested_port}")
+    if bound_port == 0:
+        raise RuntimeError(
+            f"Could not bind controller gRPC server on port {requested_port}"
+        )
+    strategy.iteration_type.set_grpc_port(bound_port)
     server.start()
     strategy.iteration_type.set_server(server)
     strategy.iteration_type.add_iteration()

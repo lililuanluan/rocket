@@ -102,8 +102,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--grpc-port",
         type=int,
-        default=50051,
-        help="The gRPC port for the controller to listen on. Default is 50051.",
+        default=None,
+        help=(
+            "The gRPC port for the controller to listen on. "
+            "If omitted, the OS will assign a free port automatically."
+        ),
         metavar="PORT",
     )
     parser.add_argument(
@@ -218,7 +221,7 @@ def process_args(args: argparse.Namespace) -> Dict[str, Any]:
         params_dict["max_iteration"] = args.max_iteration
     if args.max_ledger_seq:
         params_dict["max_ledger_seq"] = args.max_ledger_seq
-    if args.grpc_port:
+    if args.grpc_port is not None:
         params_dict["grpc_port"] = args.grpc_port
     if getattr(args, "cluster_id", None):
         params_dict["cluster_id"] = args.cluster_id

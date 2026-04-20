@@ -175,6 +175,18 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument(
+        "--runtime-retries",
+        type=int,
+        default=1,
+        metavar="RUNTIME_RETRIES",
+        help=(
+            "how many times to retry an evaluation when it hits a runtime "
+            "anomaly such as interceptor panic or incomplete logs "
+            "(default: 1)"
+        ),
+    )
+
     # logging options
     parser.add_argument(
         "--logs-group-dir",
@@ -193,8 +205,8 @@ def parse_args() -> argparse.Namespace:
         default=60000,
         metavar="BASE_PORT_POPULATION",
         help=(
-            "starting port number that will be handed to the first individual; "
-            "subsequent individuals will be assigned higher ports to avoid collisions"
+            "deprecated and ignored; validator host ports are now assigned by "
+            "Docker dynamically"
         ),
     )
 
@@ -209,7 +221,10 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=50051,
         metavar="GRPC_BASE_PORT",
-        help="the starting gRPC port; each instance will add its own offset",
+        help=(
+            "deprecated and ignored; controller gRPC ports are now assigned "
+            "automatically unless --grpc-port is passed to rocket_controller"
+        ),
     )
 
     parser.add_argument(
