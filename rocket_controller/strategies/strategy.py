@@ -104,7 +104,7 @@ class Strategy(ABC):
         self.log_dir = log_dir if log_dir is not None else Path(format_datetime(self.strategy.start_datetime))
         logger.info(f"Strategy set log dir to {self.log_dir}")
         self.max_ledger_seq = max_ledger_seq if max_ledger_seq is not None else 10
-        timeout_sec_per_seq = self.params.get("timeout_sec_per_seq", 30)
+        timeout_sec_per_seq = self.params.get("timeout_sec_per_seq", 65)
         self.cluster_id = cluster_id if cluster_id is not None else ""
         self.rippled_img = rippled_img
         self.iteration_type = (

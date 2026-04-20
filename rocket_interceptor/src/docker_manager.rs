@@ -31,6 +31,62 @@ struct ValidationKeyCreateResponse {
     result: ValidatorKeyData,
 }
 
+fn try_parse_json_value(text: &str) -> Option<Value> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        return Some(value);
+    }
+
+    for line in trimmed.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(value) = serde_json::from_str::<Value>(line) {
+            return Some(value);
+        }
+    }
+
+    let start = trimmed.find('{')?;
+    let end = trimmed.rfind('}')?;
+    if start >= end {
+        return None;
+    }
+    serde_json::from_str::<Value>(&trimmed[start..=end]).ok()
+}
+
+fn try_parse_validation_key_response(text: &str) -> Option<ValidationKeyCreateResponse> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(value) = serde_json::from_str::<ValidationKeyCreateResponse>(trimmed) {
+        return Some(value);
+    }
+
+    for line in trimmed.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(value) = serde_json::from_str::<ValidationKeyCreateResponse>(line) {
+            return Some(value);
+        }
+    }
+
+    let start = trimmed.find('{')?;
+    let end = trimmed.rfind('}')?;
+    if start >= end {
+        return None;
+    }
+    serde_json::from_str::<ValidationKeyCreateResponse>(&trimmed[start..=end]).ok()
+}
+
 /// Struct that represents all the data used for validation by nodes.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ValidatorKeyData {
@@ -96,7 +152,14 @@ async fn check_validator_available(container: DockerContainer, docker: Docker) -
     {
         while let Some(Ok(msg)) = output.next().await {
             let json_str = String::from_utf8(msg.as_ref().to_vec()).unwrap();
-            let server_info_data: Value = serde_json::from_str(json_str.as_str()).unwrap();
+            let Some(server_info_data) = try_parse_json_value(json_str.as_str()) else {
+                debug!(
+                    "{} availability probe returned non-JSON output: {:?}",
+                    container.name,
+                    json_str.trim()
+                );
+                continue;
+            };
             if server_info_data["result"]["status"] == "success" {
                 debug!("{} Available!", container.name.clone());
                 return true;
@@ -242,21 +305,16 @@ impl DockerNetwork {
         let validator_keys = self.generate_keys(self.config.number_of_nodes as u16).await;
         let names_with_keys = self.generate_validator_configs(&validator_keys);
 
-        let base_port_peer = self.config.base_port_peer;
-        let base_port_ws = self.config.base_port_ws;
-        let base_port_ws_admin = self.config.base_port_ws_admin;
-        let base_port_rpc = self.config.base_port_rpc;
-
         let mut validator_node_info_list = vec![];
 
-        for (i, (name, keys)) in names_with_keys.iter().enumerate() {
+        for (name, keys) in names_with_keys.iter() {
             let mut validator_container = DockerContainer {
                 id: None,
                 name: name.clone(),
-                port_peer: base_port_peer + i as u32,
-                port_ws: base_port_ws + i as u32,
-                port_ws_admin: base_port_ws_admin + i as u32,
-                port_rpc: base_port_rpc + i as u32,
+                port_peer: 0,
+                port_ws: 0,
+                port_ws_admin: 0,
+                port_rpc: 0,
                 key_data: keys.clone(),
             };
             self.start_validator(&mut validator_container).await;
@@ -391,7 +449,7 @@ impl DockerNetwork {
     }
 
     /// Starts a validator node.
-    /// It binds specific ports of the container to be able to communicate with the nodes.
+    /// It publishes the validator service ports and lets Docker assign free host ports.
     /// Besides, it starts the validator node with a specified ledger to have all amendments already included.
     ///
     /// # Parameters
@@ -409,21 +467,24 @@ impl DockerNetwork {
         port_map.insert(
             String::from("51235/tcp"),
             Some(vec![PortBinding {
-                host_port: Some(container.port_peer.to_string()),
+                ..Default::default()
+            }]),
+        );
+        port_map.insert(
+            String::from("6005/tcp"),
+            Some(vec![PortBinding {
                 ..Default::default()
             }]),
         );
         port_map.insert(
             String::from("6006/tcp"),
             Some(vec![PortBinding {
-                host_port: Some(container.port_ws_admin.to_string()),
                 ..Default::default()
             }]),
         );
         port_map.insert(
             String::from("5005/tcp"),
             Some(vec![PortBinding {
-                host_port: Some(container.port_rpc.to_string()),
                 ..Default::default()
             }]),
         );
@@ -475,9 +536,10 @@ impl DockerNetwork {
                 match self.docker.start_container::<String>(&id, None).await {
                     Ok(_) => {
                         container.id = Some(id.clone());
+                        self.populate_published_ports(container).await;
                     }
                     Err(e) => {
-                        panic!("Failed to start the xrpld container, try checking your base port configuration values to make sure they are not bound by another process: {}", e);
+                        panic!("Failed to start the xrpld container: {}", e);
                     }
                 }
             }
@@ -485,6 +547,54 @@ impl DockerNetwork {
                 panic!("Failed to create container: {}", e);
             }
         }
+    }
+
+    async fn populate_published_ports(&self, container: &mut DockerContainer) {
+        let container_id = container
+            .id
+            .clone()
+            .expect("Container id should be set before reading published ports");
+        let inspect = self
+            .docker
+            .inspect_container(&container_id, None)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to inspect container {}: {}", container.name, e));
+
+        let ports = inspect
+            .network_settings
+            .and_then(|settings| settings.ports)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Docker did not report published ports for container {}",
+                    container.name
+                )
+            });
+
+        container.port_peer = Self::published_host_port(&ports, "51235/tcp", &container.name);
+        container.port_ws = Self::published_host_port(&ports, "6005/tcp", &container.name);
+        container.port_ws_admin = Self::published_host_port(&ports, "6006/tcp", &container.name);
+        container.port_rpc = Self::published_host_port(&ports, "5005/tcp", &container.name);
+    }
+
+    fn published_host_port(ports: &PortMap, container_port: &str, container_name: &str) -> u32 {
+        let binding = ports
+            .get(container_port)
+            .and_then(|bindings| bindings.as_ref())
+            .and_then(|bindings| bindings.first())
+            .and_then(|binding| binding.host_port.as_ref())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Container {} missing published host port for {}",
+                    container_name, container_port
+                )
+            });
+
+        binding.parse::<u32>().unwrap_or_else(|e| {
+            panic!(
+                "Container {} reported invalid host port {} for {}: {}",
+                container_name, binding, container_port, e
+            )
+        })
     }
 
     /// Generates `n` validator keys using a `rippled` instance.
@@ -603,8 +713,15 @@ impl DockerNetwork {
             {
                 while let Some(Ok(msg)) = output.next().await {
                     let json_str = String::from_utf8(msg.as_ref().to_vec()).unwrap();
-                    let validator_key_data: ValidationKeyCreateResponse =
-                        serde_json::from_str(json_str.as_str()).unwrap();
+                    let Some(validator_key_data) =
+                        try_parse_validation_key_response(json_str.as_str())
+                    else {
+                        debug!(
+                            "validation_create returned non-JSON output: {:?}",
+                            json_str.trim()
+                        );
+                        continue;
+                    };
 
                     key_vec.push(validator_key_data.result);
                 }
@@ -860,6 +977,12 @@ mod integration_tests_docker {
             3,
             "Not all containers were started"
         );
+        for container in &docker_network.containers {
+            assert!(container.port_peer > 0, "peer port was not populated");
+            assert!(container.port_ws > 0, "public ws port was not populated");
+            assert!(container.port_ws_admin > 0, "admin ws port was not populated");
+            assert!(container.port_rpc > 0, "rpc port was not populated");
+        }
 
         let running_containers = docker_network
             .docker
