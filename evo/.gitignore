@@ -6,3 +6,4 @@ protos/
 RandomByzzStrategy*.yaml
 network_*.yaml
 tmp/
+run_cache/

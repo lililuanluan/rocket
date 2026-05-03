@@ -9,6 +9,13 @@ COPY --from=pythonbase /usr/local /usr/local
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        latexmk \
+        texlive-latex-extra \
+        texlive-pictures \
+        texlive-fonts-recommended \
+    && rm -rf /var/lib/apt/lists/*
 
 
 # 将requirements.txt复制到一个单独的目录然后安装依赖避免在镜像构建阶段就假设真实 repo 路径

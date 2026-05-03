@@ -6,6 +6,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/.." && pwd)"
 workspace_root="/data/workspace/lli21"
 workspace_cache_root="${workspace_root}/docker_cache"
+workspace_data_root="${ROCKET_DEBUG_DATA_ROOT:-${workspace_root}/data}"
 
 # 服务器上优先把日志和临时目录放到 workspace；本地则走后面的默认值。
 if [ -d "${workspace_root}" ]; then
@@ -77,6 +78,13 @@ docker_run_args=(
     -e CLICOLOR=1
     -e FORCE_COLOR=1
 )
+
+if [ -d "${workspace_data_root}" ]; then
+    docker_run_args+=(
+        -v "${workspace_data_root}:${workspace_data_root}"
+        -e ROCKET_DATA_ROOT="${workspace_data_root}"
+    )
+fi
 
 if [ -t 0 ] && [ -t 1 ]; then
     docker_run_args+=(-it)
