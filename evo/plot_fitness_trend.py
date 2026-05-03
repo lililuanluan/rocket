@@ -15,7 +15,11 @@ titles = {
     "num_getledger_messages": "number of getledger messages",
     "mean_validation_time": "mean validation time",
     "var_validation_time": "variance of validation time",
+    "diff_validation_time_max": "max validation time range",
     "validation_distribution_entropy": "validation distribution entropy",
+    "validation_distribution_entropy_max": "max validation distribution entropy",
+    "validation_distribution_entropy_unl": "validation distribution entropy (UNL)",
+    "validation_distribution_entropy_max_unl": "max validation distribution entropy (UNL)",
     "proposal_distribution_entropy": "proposal distribution entropy",
     "message_entropy_integral": "integral of message entropy over time",
     "markov_matrix_non_similarity": "message markov matrix non similarity",
@@ -23,8 +27,8 @@ titles = {
     "gossip_fiedler": "gossip graph fiedler value",
 }
 
-FITNESS_REPORT_NAME = "evolution_report.pdf"
-STRATEGY_REPORT_NAME = "fitness_trend_report.pdf"
+FITNESS_REPORT_NAME = "_evolution_report.pdf"
+STRATEGY_REPORT_NAME = "_fitness_trend_report.pdf"
 def emit(message: str, messages: list[str] | None = None) -> None:
     """Print immediately or append to a message buffer."""
     if messages is None:
@@ -95,8 +99,26 @@ def get_csv_files() -> list[Path]:
     if latest_dir is None:
         return []
 
-    # 递归搜索最新日志目录下的所有 evo_result.csv
-    return sorted(latest_dir.rglob("evo_result.csv"))
+    return collect_csvs_from_logs_dir(latest_dir)
+
+
+def collect_csvs_from_logs_dir(root_dir: Path) -> list[Path]:
+    """Find evo_result.csv in the expected logs layout without scanning G*T* subtrees."""
+    direct_csv = root_dir / "evo_result.csv"
+    if direct_csv.is_file():
+        return [direct_csv]
+
+    csv_files: set[Path] = set()
+    for pattern in ("*/evo_result.csv", "*/*/evo_result.csv", "*/*/*/evo_result.csv"):
+        for csv_path in root_dir.glob(pattern):
+            if csv_path.is_file():
+                csv_files.add(csv_path)
+
+    if csv_files:
+        return sorted(csv_files)
+
+    # Fallback for unexpected layouts.
+    return sorted(root_dir.rglob("evo_result.csv"))
 
 
 def load_plot_data(
@@ -140,10 +162,7 @@ def load_plot_data(
 
     # 如果某个测试的任一指标列出现 '-'，说明该测试实际没有跑起来；
     # 这种行虽然 fitness 可能被置为 0，但不应纳入趋势统计。
-    invalid_metric_rows = df[metrics].apply(
-        lambda row: any(isinstance(value, str) and value.strip() == '-' for value in row),
-        axis=1,
-    )
+    invalid_metric_rows = df[metrics].eq('-').any(axis=1)
     skipped_rows = int(invalid_metric_rows.sum())
     if skipped_rows:
         emit(f"⚠️  跳过 {skipped_rows} 行未成功运行的测试记录: {csv_path}", messages)
@@ -319,6 +338,18 @@ def write_strategy_report(
     plt.close(fig)
 
 
+def generate_single_strategy_report(
+    task: tuple[Path, list[tuple[str, str, pd.DataFrame]], Path],
+) -> list[str]:
+    """Generate one strategy-level PDF report."""
+    strategy_dir, plot_entries, output_path = task
+    messages: list[str] = []
+    emit(f"👉 汇总 strategy 目录 {strategy_dir} -> {output_path}", messages)
+    write_strategy_report(strategy_dir, plot_entries, output_path)
+    emit(f"✅ 成功！strategy 级 fitness 报告已保存至: {output_path}", messages)
+    return messages
+
+
 def build_strategy_entry(
     csv_path: Path,
     df: pd.DataFrame,
@@ -395,6 +426,15 @@ def run_report_tasks_parallel(
         return list(executor.map(generate_single_csv_report, tasks))
 
 
+def run_strategy_tasks_parallel(
+    tasks: list[tuple[Path, list[tuple[str, str, pd.DataFrame]], Path]],
+    worker_count: int,
+) -> list[list[str]]:
+    """Run strategy report generation in parallel while preserving input order."""
+    with ProcessPoolExecutor(max_workers=worker_count) as executor:
+        return list(executor.map(generate_single_strategy_report, tasks))
+
+
 def collect_strategy_entries(
     report_results: list[dict],
     root_dir: Path | None = None,
@@ -424,8 +464,7 @@ def collect_strategy_entries(
 def collect_csvs_from_input(input_path: Path) -> list[Path]:
     """Accept either a CSV file path or a directory under logs and return csv list."""
     if input_path.is_dir():
-        csvs = sorted(input_path.rglob("evo_result.csv"))
-        return csvs
+        return collect_csvs_from_logs_dir(input_path)
     return [input_path]
 
 
@@ -458,11 +497,18 @@ def generate_reports_for_csvs(
         return
 
     strategy_groups = collect_strategy_entries(report_results, root_dir=strategy_root_dir)
-    for strategy_dir, plot_entries in strategy_groups.items():
-        output_path = strategy_dir / STRATEGY_REPORT_NAME
-        print(f"👉 汇总 strategy 目录 {strategy_dir} -> {output_path}")
-        write_strategy_report(strategy_dir, plot_entries, output_path)
-        print(f"✅ 成功！strategy 级 fitness 报告已保存至: {output_path}")
+    strategy_tasks = [
+        (strategy_dir, plot_entries, strategy_dir / STRATEGY_REPORT_NAME)
+        for strategy_dir, plot_entries in strategy_groups.items()
+    ]
+    if not strategy_tasks:
+        return
+
+    strategy_worker_count = resolve_jobs(jobs, len(strategy_tasks))
+    strategy_results = run_strategy_tasks_parallel(strategy_tasks, strategy_worker_count)
+    for messages in strategy_results:
+        for message in messages:
+            print(message)
 
 
 def main():
@@ -487,7 +533,7 @@ def main():
             print("❌ 未找到最新日志目录或其中的 evo_result.csv。")
             sys.exit(1)
 
-        csv_files = sorted(latest_dir.rglob("evo_result.csv"))
+        csv_files = collect_csvs_from_logs_dir(latest_dir)
         if not csv_files:
             print("❌ 未找到最新日志目录或其中的 evo_result.csv。")
             sys.exit(1)

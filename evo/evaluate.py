@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 import pandas as pd
 import numpy as np
 
@@ -7,8 +8,14 @@ import numpy as np
 import json
 import re
 import codecs
+from contextlib import redirect_stdout
+from concurrent.futures import ProcessPoolExecutor
+from collections import Counter
+from io import StringIO
+from pathlib import Path
 from typing import Tuple, Set
 from itertools import combinations
+import yaml
 from utils import *
 
 # Ensure project root is on sys.path so local packages like 'protos' can be imported
@@ -95,6 +102,52 @@ def pub_key_to_node_id(pubkey_bytes: str, node_info: dict) -> int:
     return None
 
 
+def get_trusted_nodes_from_config(network_config: dict) -> dict[int, set[int]]:
+    """Parse receiver-specific trusted validator sets from network config.
+
+    ``unl_partition`` is stored in YAML as directional rows of the form
+    ``[receiver_id, trusted_1, trusted_2, ...]``. For evaluation we treat the
+    logical trusted set as including the receiver itself, matching the older
+    offline analysis helpers and XRPL's effective-UNL mental model.
+    """
+    num_nodes = int(network_config.get("number_of_nodes", 0) or 0)
+    unl_partitions = network_config.get("unl_partition") or []
+
+    if unl_partitions:
+        trusted_nodes = {}
+        for partition in unl_partitions:
+            if not partition:
+                continue
+            receiver_id = int(partition[0])
+            trusted_nodes[receiver_id] = {
+                receiver_id,
+                *(int(node_id) for node_id in partition[1:]),
+            }
+
+        if num_nodes > 0:
+            for node_id in range(num_nodes):
+                trusted_nodes.setdefault(node_id, {node_id})
+        return trusted_nodes
+
+    if num_nodes <= 0:
+        return {}
+
+    # Empty unl_partition means fully connected trust.
+    return {node_id: set(range(num_nodes)) for node_id in range(num_nodes)}
+
+
+def get_trusted_nodes(log_dir: Path) -> dict[int, set[int]] | None:
+    network_config_path = log_dir / "network_input.yaml"
+    if not network_config_path.exists():
+        print(f"Network config file {network_config_path} does not exist.")
+        return None
+
+    with open(network_config_path, "r") as f:
+        network_config = yaml.safe_load(f) or {}
+
+    return get_trusted_nodes_from_config(network_config)
+
+
 def get_prop_set_count(df: pd.DataFrame) -> int:
     return df[df["message_type"] == "TMProposeSet"].shape[0]
 
@@ -108,7 +161,7 @@ def get_getledger_stats(df_exec) -> Tuple[Set[str], int]:
         total_requests += 1
         # Prefer using the raw packet bytes logged in the 'packet_data' column
         packet_hex = row.get("packet_data")
-        if not packet_hex or pd.isna(packet_hex):
+        if pd.isna(packet_hex) or not packet_hex:
             # If packet_data is missing, skip this row (avoid string parsing)
             continue
 
@@ -185,8 +238,29 @@ def get_validation_time_var(vt: dict) -> float:
     return np.mean(vars) if vars else None
 
 
-def get_validation_distribution(df, node_info, byzz_nodes: list = None):
+def get_diff_validation_time_max(vt: dict) -> float:
+    diffs = []
+    seq = set()
+    for r in vt.values():
+        seq.update(r.keys())
+    for s in seq:
+        times = []
+        for _, r in vt.items():
+            if s in r:
+                times.append(r[s])
+        if len(times) > 1:
+            diffs.append(max(times) - min(times))
+
+    return max(diffs) if diffs else None
+
+
+def get_validation_distribution(
+    df,
+    node_info,
+    byzz_nodes: list = None,
+):
     distribution = {}  # node_id -> {ledger_index -> {node_id: hash}}
+    byzz_set = {int(node_id) for node_id in (byzz_nodes or [])}
 
     # 读取每一行，如果是TM Validation，则反序列化为packet data，然后用serialize库解析validation消息
 
@@ -196,7 +270,7 @@ def get_validation_distribution(df, node_info, byzz_nodes: list = None):
 
         # Prefer using the raw packet bytes logged in the 'packet_data' column
         packet_hex = row.get("packet_data")
-        if not packet_hex or pd.isna(packet_hex):
+        if pd.isna(packet_hex) or not packet_hex:
             # If packet_data is missing, skip this row (avoid string parsing)
             print("No packet_data found for TMValidation message; skipping.")
             continue
@@ -210,14 +284,84 @@ def get_validation_distribution(df, node_info, byzz_nodes: list = None):
         pubkey = parsed.get("SigningPubKey")
         sender_id = pub_key_to_node_id(pubkey, node_info)
         receiver_id = row["to_node_id"]
-        if receiver_id in byzz_nodes:
+        if receiver_id in byzz_set:
             # 跳过拜占庭节点
             continue
         ledger_index = parsed.get("LedgerSequence")
-        hash = parsed.get("LedgerHash")
+        ledger_hash = parsed.get("LedgerHash")
         distribution.setdefault(receiver_id, {}).setdefault(ledger_index, {})[
             sender_id
-        ] = hash
+        ] = ledger_hash
+
+    return distribution
+
+
+def get_validation_distribution_unl(
+    df,
+    node_info,
+    byzz_nodes: list | None = None,
+    trusted_nodes: dict[int, set[int]] | None = None,
+):
+    distribution = {}  # node_id -> {ledger_index -> {node_id: hash}}
+    byzz_set = {int(node_id) for node_id in (byzz_nodes or [])}
+
+    # 读取每一行，如果是TM Validation，则反序列化为packet data，然后用serialize库解析validation消息
+
+    for _, row in df.iterrows():
+        if row["message_type"] != "TMValidation":
+            continue
+
+        # Evaluate what the receiver actually saw after mutation, if available.
+        packet_hex = row.get("possibly_mutated_packet_data")
+        if pd.isna(packet_hex) or not packet_hex:
+            packet_hex = row.get("packet_data")
+        if pd.isna(packet_hex) or not packet_hex:
+            print("No packet_data found for TMValidation message; skipping.")
+            continue
+
+        try:
+            packet_bytes = bytes.fromhex(packet_hex)
+            packet = ProtoPacket(data=packet_bytes)
+            message, _ = PacketEncoderDecoder.decode_packet(packet)
+            parsed = PacketEncoderDecoder.decode_validation(message)
+        except (ValueError, DecodingNotSupportedError, Exception):
+            continue
+
+        pubkey = parsed.get("SigningPubKey")
+        if not pubkey:
+            continue
+
+        sender_id = pub_key_to_node_id(pubkey, node_info)
+        if sender_id is None:
+            continue
+
+        ledger_index = parsed.get("LedgerSequence")
+        ledger_hash = parsed.get("LedgerHash")
+
+        # A node implicitly trusts itself, so include its own signed validation
+        # in its local view exactly once.
+        if sender_id not in byzz_set and (
+            trusted_nodes is None or sender_id in trusted_nodes.get(sender_id, set())
+        ):
+            distribution.setdefault(sender_id, {}).setdefault(ledger_index, {})[
+                sender_id
+            ] = ledger_hash
+
+        receiver_id = row.get("to_node_id")
+        if pd.isna(receiver_id):
+            continue
+        receiver_id = int(receiver_id)
+        if receiver_id in byzz_set:
+            continue
+
+        if trusted_nodes is not None and sender_id not in trusted_nodes.get(
+            receiver_id, set()
+        ):
+            continue
+
+        distribution.setdefault(receiver_id, {}).setdefault(ledger_index, {})[
+            sender_id
+        ] = ledger_hash
 
     # for _, row in df.iterrows():
     #     if row["validation_parsed"] is None:
@@ -248,28 +392,38 @@ def get_validation_distribution(df, node_info, byzz_nodes: list = None):
     return distribution
 
 
-def get_validation_distribution_entropy(validation_distribution):
+def get_validation_distribution_entropies(validation_distribution):
     # input(f"validation_distribution: {validation_distribution}")
-    ent = []
-    # 对每个节点的每个ledger index的validation分布进行评估，计算信息熵，然后求平均值
+    entropies = []
+    # 对每个节点的每个ledger index的validation分布进行评估，计算信息熵
     # 注意 validation_distribution 的结构是 node -> ledger_index -> {node_id: hash}
-    for node, ledger_dict in validation_distribution.items():
-        for ledger_index, validations in ledger_dict.items():
-            # 计算这个 validations 的信息熵
+    for _, ledger_dict in validation_distribution.items():
+        for _, validations in ledger_dict.items():
             hash_counts = {}
             total = 0
-            for node_id, hash in validations.items():
-                if hash not in hash_counts:
-                    hash_counts[hash] = 0
-                hash_counts[hash] += 1
+            for _, ledger_hash in validations.items():
+                if ledger_hash not in hash_counts:
+                    hash_counts[ledger_hash] = 0
+                hash_counts[ledger_hash] += 1
                 total += 1
-            # 计算信息熵
-            entropy = 0
+
+            entropy = 0.0
             for count in hash_counts.values():
                 p = count / total
                 entropy -= p * np.log2(p)
-            ent.append(entropy)
-    return np.mean(ent) if ent else None
+            entropies.append(entropy)
+
+    return entropies
+
+
+def get_validation_distribution_entropy(validation_distribution):
+    entropies = get_validation_distribution_entropies(validation_distribution)
+    return np.mean(entropies) if entropies else None
+
+
+def get_validation_distribution_entropy_max(validation_distribution):
+    entropies = get_validation_distribution_entropies(validation_distribution)
+    return np.max(entropies) if entropies else None
 
 
 def get_proposal_distribution(df, node_info, byzz_nodes: list | None = None):
@@ -292,8 +446,10 @@ def get_proposal_distribution(df, node_info, byzz_nodes: list | None = None):
         if row["message_type"] != "TMProposeSet":
             continue
 
-        packet_hex = row.get("possibly_mutated_packet_data") or row.get("packet_data")
-        if not packet_hex or pd.isna(packet_hex):
+        packet_hex = row.get("possibly_mutated_packet_data")
+        if pd.isna(packet_hex) or not packet_hex:
+            packet_hex = row.get("packet_data")
+        if pd.isna(packet_hex) or not packet_hex:
             continue
 
         try:
@@ -604,7 +760,16 @@ def get_test_total_time(f):
     if isinstance(f, pd.DataFrame):
         df = f
     else:
-        df = pd.read_csv(f)
+        df = pd.read_csv(
+            f,
+            dtype={
+                "message_type": "string",
+                "packet_data": "string",
+                "possibly_mutated_packet_data": "string",
+                "original_data": "string",
+                "possibly_mutated_data": "string",
+            },
+        )
 
     df = df["timestamp"]
     if df.empty:
@@ -632,7 +797,11 @@ FITNESS_FUNCTIONS = [
     "num_getledger_messages",
     "mean_validation_time",
     "var_validation_time",
+    "diff_validation_time_max",
     "validation_distribution_entropy",
+    "validation_distribution_entropy_max",
+    "validation_distribution_entropy_unl",
+    "validation_distribution_entropy_max_unl",
     "proposal_distribution_entropy",
     "message_entropy_integral",
     "message_entropy_average",
@@ -647,13 +816,23 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
 
     node_info = get_node_info(log_dir)
     print(f"Node info: {node_info}")
+    trusted_nodes = get_trusted_nodes(log_dir)
 
     # 如果存在 log_dir/iteration-1/action-1.csv，则进行评估
     action_log_path = log_dir / "iteration-1" / "action-1.csv"
     if not action_log_path.exists():
         print(f"Action log file {action_log_path} does not exist.")
         return None
-    df_action = pd.read_csv(action_log_path)
+    df_action = pd.read_csv(
+        action_log_path,
+        dtype={
+            "message_type": "string",
+            "packet_data": "string",
+            "possibly_mutated_packet_data": "string",
+            "original_data": "string",
+            "possibly_mutated_data": "string",
+        },
+    )
     # 计算 "message_type"为"TMProposeSet" 的行数
     num_propose_set = get_prop_set_count(df_action)
     res["num_propose_set"] = num_propose_set
@@ -662,7 +841,12 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
     if not result_log_path.exists():
         print(f"Result log file {result_log_path} does not exist.")
         return None
-    df_result = pd.read_csv(result_log_path)
+    df_result = pd.read_csv(
+        result_log_path,
+        dtype={
+            "ledger_hash": "string",
+        },
+    )
     validation_times = get_validation_times(df_result, node_info)
     # print(f"Validation times: {validation_times}")
     mean_validation_time = get_avg_validation_time(validation_times)
@@ -671,19 +855,60 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
     var_validation_time = get_validation_time_var(validation_times)
     res["var_validation_time"] = var_validation_time
 
+    diff_validation_time_max = get_diff_validation_time_max(validation_times)
+    res["diff_validation_time_max"] = diff_validation_time_max
+    print(f"Diff validation time max: {diff_validation_time_max}")
+
     requested_ledger_hashes, num_getledger_messages = get_getledger_stats(df_action)
     num_getledger_hashes = len(requested_ledger_hashes)
     res["num_getledger_hashes"] = num_getledger_hashes
     res["num_getledger_messages"] = num_getledger_messages
 
-    validation_distribution = get_validation_distribution(
-        df_action, node_info, byzz_nodes
-    )
+    validation_distribution = get_validation_distribution(df_action, node_info, byzz_nodes)
     validation_distribution_entropy = get_validation_distribution_entropy(
         validation_distribution
     )
     print(f"Validation distribution entropy: {validation_distribution_entropy}")
     res["validation_distribution_entropy"] = validation_distribution_entropy
+
+    validation_distribution_entropy_max = get_validation_distribution_entropy_max(
+        validation_distribution
+    )
+    print(
+        "Validation distribution entropy max: "
+        f"{validation_distribution_entropy_max}"
+    )
+    res["validation_distribution_entropy_max"] = (
+        validation_distribution_entropy_max
+    )
+
+    validation_distribution_unl = get_validation_distribution_unl(
+        df_action,
+        node_info,
+        byzz_nodes,
+        trusted_nodes=trusted_nodes,
+    )
+    validation_distribution_entropy_unl = get_validation_distribution_entropy(
+        validation_distribution_unl
+    )
+    print(
+        "Validation distribution entropy UNL: "
+        f"{validation_distribution_entropy_unl}"
+    )
+    res["validation_distribution_entropy_unl"] = (
+        validation_distribution_entropy_unl
+    )
+
+    validation_distribution_entropy_max_unl = (
+        get_validation_distribution_entropy_max(validation_distribution_unl)
+    )
+    print(
+        "Validation distribution entropy max UNL: "
+        f"{validation_distribution_entropy_max_unl}"
+    )
+    res["validation_distribution_entropy_max_unl"] = (
+        validation_distribution_entropy_max_unl
+    )
 
     proposal_distribution = get_proposal_distribution(
         df_action, node_info, byzz_nodes
@@ -751,10 +976,265 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
     return res
 
 
-if __name__ == "__main__":
-    res = evaluate_log(
-        Path("/home/luanli/rocket/logs/2026_02_26_14h56m/WhateverStrategy/GxTx"),
-        byzz_nodes=[3],
+def _looks_like_gxtx_log_dir(path: Path) -> bool:
+    """Return whether ``path`` looks like one saved GxTx run directory."""
+    if not path.is_dir():
+        return False
+    if re.fullmatch(r"G\d+T\d+", path.name) is None:
+        return False
+
+    return any(
+        marker.exists()
+        for marker in (
+            path / "network_input.yaml",
+            path / "aggregated_spec_check_log.json",
+            path / "iteration-1",
+        )
     )
-    for k, v in res.items():
-        print(f"{k}: {v}")
+
+
+def collect_gxtx_dirs_from_logs_dir(root_dir: Path) -> list[Path]:
+    """Find GxTx run directories under a logs root using the expected layout."""
+    candidates: set[Path] = set()
+    if _looks_like_gxtx_log_dir(root_dir):
+        candidates.add(root_dir.resolve())
+
+    for pattern in (
+        "G*T*",
+        "*/G*T*",
+        "*/*/G*T*",
+        "*/*/*/G*T*",
+        "*/*/*/*/G*T*",
+    ):
+        for candidate in root_dir.glob(pattern):
+            if _looks_like_gxtx_log_dir(candidate):
+                candidates.add(candidate.resolve())
+
+    if candidates:
+        return sorted(candidates)
+
+    return sorted(
+        path.resolve()
+        for path in root_dir.rglob("*")
+        if _looks_like_gxtx_log_dir(path)
+    )
+
+
+def resolve_jobs(requested_jobs: int | None, num_tasks: int) -> int:
+    """Resolve the effective worker count for batch evaluation."""
+    if num_tasks <= 1:
+        return 1
+    if requested_jobs is not None:
+        return max(1, min(requested_jobs, num_tasks))
+
+    cpu_count = os.cpu_count() or 1
+    return max(1, min(num_tasks, cpu_count))
+
+
+def find_latest_log_dir() -> Path | None:
+    """Locate the newest child directory under the configured logs root."""
+    logs_root = get_logs_root(Path(repo_root))
+    if not logs_root.exists():
+        return None
+
+    subdirs = [path for path in logs_root.iterdir() if path.is_dir()]
+    if not subdirs:
+        return None
+
+    return max(subdirs, key=lambda path: path.stat().st_mtime)
+
+
+def _get_run_metadata(root_dir: Path, log_dir: Path) -> dict[str, str]:
+    """Infer image / encoding / fitness labels relative to the chosen root."""
+    try:
+        relative_parts = log_dir.resolve().relative_to(root_dir.resolve()).parts
+    except ValueError:
+        relative_parts = log_dir.parts
+
+    image = ""
+    encoding = ""
+    fitness = ""
+
+    if len(relative_parts) >= 4:
+        image = relative_parts[-4]
+        encoding = relative_parts[-3]
+        fitness = relative_parts[-2]
+    elif len(relative_parts) == 3:
+        image = root_dir.name
+        encoding = relative_parts[0]
+        fitness = relative_parts[1]
+    elif len(relative_parts) == 2:
+        image = root_dir.parent.name if len(root_dir.parents) >= 1 else ""
+        encoding = root_dir.name
+        fitness = relative_parts[0]
+    elif len(relative_parts) == 1 and not _looks_like_gxtx_log_dir(root_dir):
+        image = root_dir.parents[1].name if len(root_dir.parents) >= 2 else ""
+        encoding = root_dir.parent.name if len(root_dir.parents) >= 1 else ""
+        fitness = root_dir.name
+
+    return {
+        "image": image,
+        "encoding": encoding,
+        "fitness": fitness,
+        "test_case": log_dir.name,
+    }
+
+
+def _get_byzz_nodes_for_log_dir(log_dir: Path) -> list[int]:
+    """Read byzantine node ids from one saved run directory when available."""
+    network_config_path = log_dir / "network_input.yaml"
+    if not network_config_path.exists():
+        return []
+
+    with open(network_config_path, "r") as f:
+        network_config = yaml.safe_load(f) or {}
+
+    return [int(node_id) for node_id in (network_config.get("byzz_nodes") or [])]
+
+
+def _evaluate_single_log_dir(task: tuple[Path, Path]) -> dict:
+    """Evaluate one saved run while keeping worker stdout out of the main log."""
+    root_dir, log_dir = task
+    row = {
+        **_get_run_metadata(root_dir, log_dir),
+        **{fitness_name: None for fitness_name in FITNESS_FUNCTIONS},
+    }
+    captured_stdout = StringIO()
+
+    try:
+        byzz_nodes = _get_byzz_nodes_for_log_dir(log_dir)
+        with redirect_stdout(captured_stdout):
+            result = evaluate_log(log_dir, byzz_nodes=byzz_nodes)
+        if result is None:
+            return {
+                "row": row,
+                "log_dir": str(log_dir),
+                "error": "evaluate_log returned None",
+                "stdout": captured_stdout.getvalue(),
+            }
+
+        for fitness_name in FITNESS_FUNCTIONS:
+            row[fitness_name] = result.get(fitness_name)
+        return {
+            "row": row,
+            "log_dir": str(log_dir),
+            "error": None,
+            "stdout": "",
+        }
+    except Exception as exc:
+        return {
+            "row": row,
+            "log_dir": str(log_dir),
+            "error": f"{type(exc).__name__}: {exc}",
+            "stdout": captured_stdout.getvalue(),
+        }
+
+
+def _sanitize_output_stem(name: str) -> str:
+    """Return a filesystem-friendly stem for the batch CSV filename."""
+    sanitized = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("._")
+    return sanitized or "logs"
+
+
+def _default_batch_output_path(root_dir: Path) -> Path:
+    """Build the default batch-evaluation CSV path under evo/tmp."""
+    tmp_dir = Path(__file__).resolve().parent / "tmp"
+    return tmp_dir / f"evaluate_{_sanitize_output_stem(root_dir.name)}_{get_date_time_strf()}.csv"
+
+
+def run_batch_evaluation(
+    root_dir: Path,
+    output_path: Path,
+    jobs: int | None = None,
+) -> int:
+    """Evaluate all discovered GxTx runs under ``root_dir`` and write one CSV."""
+    gxtx_dirs = collect_gxtx_dirs_from_logs_dir(root_dir)
+    if not gxtx_dirs:
+        print(f"❌ 在 {root_dir} 下没有找到 GxTx 日志目录。")
+        return 1
+
+    worker_count = resolve_jobs(jobs, len(gxtx_dirs))
+    print(f"📂 搜索根目录: {root_dir}")
+    print(f"🧪 发现 {len(gxtx_dirs)} 个 GxTx 日志目录")
+    print(f"🚀 并行 worker 数: {worker_count}")
+    tasks = [(root_dir, log_dir) for log_dir in gxtx_dirs]
+
+    if worker_count == 1:
+        results = [_evaluate_single_log_dir(task) for task in tasks]
+    else:
+        with ProcessPoolExecutor(max_workers=worker_count) as executor:
+            results = list(executor.map(_evaluate_single_log_dir, tasks))
+
+    rows = [result["row"] for result in results]
+    failures = [result for result in results if result["error"]]
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_columns = ["image", "encoding", "fitness", "test_case", *FITNESS_FUNCTIONS]
+    pd.DataFrame(rows, columns=output_columns).to_csv(output_path, index=False)
+
+    print(f"📝 已写出 {len(rows)} 行到 {output_path}")
+    if failures:
+        print(f"⚠️  {len(failures)} 个日志目录评估失败，已保留空指标行：")
+        error_counts = Counter(result["error"] for result in failures)
+        for error, count in error_counts.most_common():
+            print(f"  - {count} × {error}")
+
+        preview_count = min(10, len(failures))
+        print(f"🔎 失败样本预览（前 {preview_count} 个）:")
+        for result in failures[:preview_count]:
+            print(f"  - {result['log_dir']}: {result['error']}")
+        if len(failures) > preview_count:
+            print(f"  - ... 其余 {len(failures) - preview_count} 个失败样本已省略")
+    else:
+        print("✅ 所有日志目录评估完成。")
+
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="从日志根目录批量搜索 GxTx 并调用 evaluate_log，输出调试 CSV。"
+    )
+    parser.add_argument(
+        "input",
+        nargs="?",
+        default=None,
+        help="日志顶层目录；若不提供则自动搜索最新日志目录。",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="输出 CSV 路径；默认写到 evo/tmp/evaluate_<root>_<timestamp>.csv",
+    )
+    parser.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=None,
+        help="并行 worker 数；默认自动选择，传 1 可禁用并行。",
+    )
+    args = parser.parse_args()
+
+    if args.input is None:
+        root_dir = find_latest_log_dir()
+        if root_dir is None:
+            print("❌ 未找到最新日志目录。")
+            return 1
+    else:
+        root_dir = Path(args.input).expanduser().resolve()
+        if not root_dir.exists():
+            print(f"❌ 输入路径不存在: {root_dir}")
+            return 1
+
+    output_path = (
+        args.output.expanduser().resolve()
+        if args.output is not None
+        else _default_batch_output_path(root_dir)
+    )
+    return run_batch_evaluation(root_dir, output_path, jobs=args.jobs)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
