@@ -59,6 +59,7 @@ class EvoDelayStrategy(Strategy):
         self.dummy_transaction = self.dummy_hash
         
         self.old_proposals = {-1: set([self.dummy_proposal,])} # seq -> set of proposals
+        self.old_proposal_close_times = {-1: set()} # seq -> set of proposal close times
         self.old_validation_hashes = {-1: set([self.dummy_validation,])} # seq -> set of validations
         self.old_transactions = []
         
@@ -94,6 +95,9 @@ class EvoDelayStrategy(Strategy):
             if prop_seq not in self.old_proposals:
                 self.old_proposals[prop_seq] = set()
             self.old_proposals[prop_seq].add(message.currentTxHash)
+            if prop_seq not in self.old_proposal_close_times:
+                self.old_proposal_close_times[prop_seq] = set()
+            self.old_proposal_close_times[prop_seq].add(int(message.closeTime))
         elif isinstance(message, ripple_pb2.TMValidation):
             parsed = PacketEncoderDecoder.decode_validation(message)
             if "error" in parsed:

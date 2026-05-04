@@ -11,6 +11,10 @@ from protos.ripple_pb2 import TMProposeSet
 from rocket_controller.encoder_decoder import PacketEncoderDecoder
 from rocket_controller.strategies import Strategy
 from rocket_controller.strategies.mutation_example import MutationExample
+from rocket_controller.strategies.utils import (
+    replace_close_time_with_old_propose,
+    shift_proposal_close_time_bucket,
+)
 
 
 def test_mutation_propose():
@@ -190,3 +194,50 @@ def test_mutation_propose_correct_signature_change():
     assert mutated_message.nodePubKey == message.nodePubKey
     assert mutated_message.signature != message.signature
     assert mutated_message.previousledger == message.previousledger
+
+
+def test_shift_proposal_close_time_bucket():
+    message = ripple_pb2.TMProposeSet(closeTime=100, proposeSeq=2)
+
+    increased = shift_proposal_close_time_bucket(message, 10)
+    decreased = shift_proposal_close_time_bucket(message, -150)
+
+    assert increased.closeTime == 110
+    assert decreased.closeTime == 0
+    assert message.closeTime == 100
+
+
+def test_replace_close_time_with_old_propose_prefers_previous_seq():
+    message = ripple_pb2.TMProposeSet(closeTime=100, proposeSeq=3)
+    old_close_times = {
+        2: {95},
+        3: {101},
+    }
+
+    mutated = replace_close_time_with_old_propose(message, old_close_times)
+
+    assert mutated.closeTime == 95
+    assert message.closeTime == 100
+
+
+def test_replace_close_time_with_old_propose_falls_back_to_same_seq():
+    message = ripple_pb2.TMProposeSet(closeTime=100, proposeSeq=3)
+    old_close_times = {
+        3: {100, 101},
+    }
+
+    mutated = replace_close_time_with_old_propose(message, old_close_times)
+
+    assert mutated.closeTime == 101
+
+
+def test_replace_close_time_with_old_propose_keeps_current_when_no_candidate():
+    message = ripple_pb2.TMProposeSet(closeTime=100, proposeSeq=3)
+    old_close_times = {
+        2: {100},
+        3: {100},
+    }
+
+    mutated = replace_close_time_with_old_propose(message, old_close_times)
+
+    assert mutated.closeTime == 100

@@ -53,6 +53,9 @@ BYZZ_MUTATE_METHODS = {
     ripple_pb2.TMProposeSet: [
         "do_nothing",
         "replace_tx_hash",
+        "increment_close_time_bucket",
+        "decrement_close_time_bucket",
+        "replace_close_time_with_old",
         # TODO: replace prev ledger hash
         "increment_propose_seq",
         # "repeat_5",
@@ -160,6 +163,25 @@ class ByzzMutator:
                     msg_copy,
                     self.strategy.old_proposals,
                     self.strategy.dummy_proposal,
+                )
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
+        elif method == "increment_close_time_bucket":
+            self.debug("Mutate TMProposeSet: increment_close_time_bucket")
+            new_msg = shift_proposal_close_time_bucket(msg_copy, 10)
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
+        elif method == "decrement_close_time_bucket":
+            self.debug("Mutate TMProposeSet: decrement_close_time_bucket")
+            new_msg = shift_proposal_close_time_bucket(msg_copy, -10)
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
+        elif method == "replace_close_time_with_old":
+            self.debug("Mutate TMProposeSet: replace_close_time_with_old")
+            with self.lock:
+                new_msg = replace_close_time_with_old_propose(
+                    msg_copy,
+                    self.strategy.old_proposal_close_times,
                 )
             signed_message = sign_message(new_msg)
             return signed_message, None, None
@@ -389,6 +411,20 @@ def increment_propose_seq(message: ripple_pb2.TMProposeSet):
     return m
 
 
+def shift_proposal_close_time_bucket(
+    message: ripple_pb2.TMProposeSet, delta_seconds: int
+) -> ripple_pb2.TMProposeSet:
+    """Shift a proposal close time by one or more consensus buckets.
+
+    We mutate by bucket-sized deltas instead of single-second nudges because
+    bucket changes are more likely to influence close-time voting.
+    """
+    m = copy.deepcopy(message)
+    shifted = int(m.closeTime) + int(delta_seconds)
+    m.closeTime = max(0, shifted)
+    return m
+
+
 def _is_all_zero_hash(val) -> bool:
     """Return True if `val` represents an all-zero 32-byte hash.
 
@@ -454,4 +490,35 @@ def replace_txs_with_old_propose(
             m.currentTxHash = random.choice(candidate_hashes)
         else:
             m.currentTxHash = dummy_proposal
+    return m
+
+
+def replace_close_time_with_old_propose(
+    message: ripple_pb2.TMProposeSet,
+    old_close_times: dict[int, set[int]],
+) -> ripple_pb2.TMProposeSet:
+    """Reuse an earlier proposal close time from the same consensus round.
+
+    Preference order:
+    1. Previous proposal sequence in the round (`proposeSeq - 1`)
+    2. Same proposal sequence observed from other peers
+    If neither yields a different close time, keep the current one.
+    """
+    m = copy.deepcopy(message)
+    current_close_time = int(m.closeTime)
+
+    candidate_close_times = [
+        ct
+        for ct in old_close_times.get(m.proposeSeq - 1, set())
+        if int(ct) != current_close_time
+    ]
+    if not candidate_close_times:
+        candidate_close_times = [
+            ct
+            for ct in old_close_times.get(m.proposeSeq, set())
+            if int(ct) != current_close_time
+        ]
+
+    if candidate_close_times:
+        m.closeTime = int(random.choice(candidate_close_times))
     return m
