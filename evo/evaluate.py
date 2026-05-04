@@ -24,6 +24,7 @@ repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 # Retry import; if it still fails, let the exception propagate so the caller can see the underlying issue
+from evo.preferred import get_max_tip_distance, get_sum_tip_distance
 from protos.packet_pb2 import Packet as ProtoPacket
 from rocket_controller.encoder_decoder import (
     PacketEncoderDecoder,
@@ -807,6 +808,8 @@ FITNESS_FUNCTIONS = [
     "message_entropy_average",
     "markov_matrix_non_similarity",
     "gossip_fiedler",
+    "max_tip_distance",
+    "sum_tip_distance",
 ]
 
 
@@ -940,6 +943,14 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
     )
     res["gossip_fiedler"] = gossip_fiedler
     print(f"Gossip Fiedler value: {gossip_fiedler}")
+
+    max_tip_distance = get_max_tip_distance(log_dir)
+    res["max_tip_distance"] = max_tip_distance
+    print(f"Max tip distance: {max_tip_distance}")
+
+    sum_tip_distance = get_sum_tip_distance(log_dir)
+    res["sum_tip_distance"] = sum_tip_distance
+    print(f"Sum tip distance: {sum_tip_distance}")
 
     # 读取 aggregated_spec_check_log.json（注意：这是一个对象，不是数组）
     aggregate_spec_check_path = f"{log_dir}/aggregated_spec_check_log.json"
