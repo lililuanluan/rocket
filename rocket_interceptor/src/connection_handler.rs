@@ -140,6 +140,8 @@ impl Node {
         peer_to_port: u16,
         message_queue_sender: mpsc::Sender<Message>,
     ) {
+        let use_stream_reassembly = Self::use_stream_reassembly();
+        let mut pending = BytesMut::with_capacity(SIZE_64KB);
         loop {
             let mut buffer = BytesMut::with_capacity(SIZE_64KB);
             buffer.resize(SIZE_64KB, 0);
@@ -150,7 +152,6 @@ impl Node {
 
             let read_moment = Instant::now();
 
-            buffer.resize(size_read, 0);
             if size_read == 0 {
                 panic!(
                     "SslStream from peer {} to peer {} has been closed.",
@@ -158,14 +159,31 @@ impl Node {
                 );
             }
 
-            tokio::spawn(Self::handle_message_and_action(
-                buffer,
-                client.clone(),
-                peer_from_port,
-                peer_to_port,
-                message_queue_sender.clone(),
-                read_moment,
-            ));
+            buffer.resize(size_read, 0);
+
+            if use_stream_reassembly {
+                pending.extend_from_slice(&buffer);
+
+                while let Some(message) = Self::try_extract_message(&mut pending) {
+                    tokio::spawn(Self::handle_message_and_action(
+                        message,
+                        client.clone(),
+                        peer_from_port,
+                        peer_to_port,
+                        message_queue_sender.clone(),
+                        read_moment,
+                    ));
+                }
+            } else {
+                tokio::spawn(Self::handle_message_and_action(
+                    buffer,
+                    client.clone(),
+                    peer_from_port,
+                    peer_to_port,
+                    message_queue_sender.clone(),
+                    read_moment,
+                ));
+            }
         }
     }
 
@@ -234,6 +252,18 @@ impl Node {
     /// * If the payload size could not be parsed.
     /// * If the payload size is bigger than the buffer's size, meaning it only read a part of the message.
     fn check_message(buffered_message: BytesMut) -> Vec<u8> {
+        Self::validate_message_header(&buffered_message);
+        let payload_size = Self::payload_size(&buffered_message);
+
+        if buffered_message.len() < 6 + payload_size {
+            error!("Message did not fit in the buffer.");
+        }
+
+        // return the full message
+        buffered_message[0..(6 + payload_size)].to_vec()
+    }
+
+    fn validate_message_header(buffered_message: &[u8]) {
         // Check if the most significant bit turned on, indicating a compressed message
         if (buffered_message[0] & 0b1000_0000) != 0 {
             panic!(
@@ -249,15 +279,36 @@ impl Node {
                 buffered_message[0]
             );
         }
+    }
 
-        let payload_size = u32::from_be_bytes(buffered_message[0..4].try_into().unwrap()) as usize;
+    fn payload_size(buffered_message: &[u8]) -> usize {
+        u32::from_be_bytes(buffered_message[0..4].try_into().unwrap()) as usize
+    }
 
-        if buffered_message.len() < 6 + payload_size {
-            error!("Message did not fit in the buffer.");
+    fn image_uses_stream_reassembly(image: &str) -> bool {
+        let tag = image.rsplit(':').next().unwrap_or(image);
+        tag.starts_with("3.")
+    }
+
+    fn use_stream_reassembly() -> bool {
+        std::env::var("RIPPLE_IMAGE")
+            .map(|image| Self::image_uses_stream_reassembly(&image))
+            .unwrap_or(false)
+    }
+
+    fn try_extract_message(buffer: &mut BytesMut) -> Option<BytesMut> {
+        if buffer.len() < 4 {
+            return None;
         }
 
-        // return the full message
-        buffered_message[0..(6 + payload_size)].to_vec()
+        Self::validate_message_header(buffer);
+        let message_len = 6 + Self::payload_size(buffer);
+
+        if buffer.len() < message_len {
+            return None;
+        }
+
+        Some(buffer.split_to(message_len))
     }
 
     /// This method polls a queue with messages.
@@ -394,5 +445,59 @@ mod unit_tests {
         let message = Node::check_message(buffer);
 
         assert_eq!(message.len(), payload_size + 6)
+    }
+
+    #[test]
+    fn pass_extract_message_across_multiple_reads() {
+        let payload_size: usize = 19_920;
+        let mut full_message = BytesMut::with_capacity(payload_size + 6);
+        full_message.extend_from_slice(&create_header(0b0000_0000, payload_size));
+        full_message.extend_from_slice(&create_dummy_payload(payload_size));
+        full_message.resize(6 + payload_size, 0);
+
+        let split_at = 16_384;
+        let mut pending = BytesMut::with_capacity(full_message.len());
+        pending.extend_from_slice(&full_message[..split_at]);
+        assert!(Node::try_extract_message(&mut pending).is_none());
+
+        pending.extend_from_slice(&full_message[split_at..]);
+        let message = Node::try_extract_message(&mut pending).unwrap();
+
+        assert_eq!(message.len(), payload_size + 6);
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn pass_extract_multiple_messages_from_single_read() {
+        let payload_size_1: usize = 123;
+        let payload_size_2: usize = 456;
+
+        let mut message_1 = BytesMut::with_capacity(payload_size_1 + 6);
+        message_1.extend_from_slice(&create_header(0b0000_0000, payload_size_1));
+        message_1.extend_from_slice(&create_dummy_payload(payload_size_1));
+        message_1.resize(6 + payload_size_1, 0);
+
+        let mut message_2 = BytesMut::with_capacity(payload_size_2 + 6);
+        message_2.extend_from_slice(&create_header(0b0000_0000, payload_size_2));
+        message_2.extend_from_slice(&create_dummy_payload(payload_size_2));
+        message_2.resize(6 + payload_size_2, 0);
+
+        let mut pending = BytesMut::with_capacity(message_1.len() + message_2.len());
+        pending.extend_from_slice(&message_1);
+        pending.extend_from_slice(&message_2);
+
+        let message_1 = Node::try_extract_message(&mut pending).unwrap();
+        let message_2 = Node::try_extract_message(&mut pending).unwrap();
+
+        assert_eq!(message_1.len(), payload_size_1 + 6);
+        assert_eq!(message_2.len(), payload_size_2 + 6);
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn pass_image_uses_stream_reassembly_version_gate() {
+        assert!(Node::image_uses_stream_reassembly("xrpllabsofficial/xrpld:3.1.0"));
+        assert!(!Node::image_uses_stream_reassembly("xrpllabsofficial/xrpld:2.6.0"));
+        assert!(!Node::image_uses_stream_reassembly("xrpld:2.6.0-bug0-local"));
     }
 }

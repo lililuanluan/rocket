@@ -1,0 +1,80 @@
+# rippled 3.1.0 from local source tree, built into a local image
+# Uses our own entrypoint so validator configs keep working under host uid/gid.
+
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    ninja-build \
+    pkg-config \
+    python3 \
+    python3-pip \
+    gcc-12 \
+    g++-12 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+
+RUN pip3 install conan
+
+WORKDIR /opt
+
+# Use a clean upstream 3.1.0 checkout in the builder so the image build does
+# not depend on the local worktree state or on shipping a large .git dir in the
+# Docker build context.
+RUN git clone --branch 3.1.0 --depth 1 https://github.com/XRPLF/rippled.git ./rippled
+
+WORKDIR /opt/rippled
+
+RUN conan profile detect \
+    && sed -i 's|^compiler\\.cppstd=.*$|compiler.cppstd=20|' $(conan config home)/profiles/default \
+    && sed -i 's|^compiler\\.libcxx=.*$|compiler.libcxx=libstdc++11|' $(conan config home)/profiles/default
+
+RUN conan remote add --index 0 xrplf "https://conan.ripplex.io" || true
+
+RUN mkdir -p .build && cd .build \
+    && conan install .. --output-folder . --build missing --settings build_type=Release \
+       -c tools.build:jobs=$(nproc)
+
+RUN cd .build \
+    && cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=build/generators/conan_toolchain.cmake \
+             -DCMAKE_BUILD_TYPE=Release \
+             -Dxrpld=ON \
+             -Dtests=OFF \
+             -G Ninja \
+             .. \
+    && cmake --build . --parallel
+
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/rippled/.build/rippled /usr/local/bin/rippled
+
+# These defaults are only a fallback for keygen / empty-config startup.
+COPY rippled_default_2.6.0.cfg /opt/ripple/etc/rippled.cfg
+COPY validators_default_2.6.0.txt /opt/ripple/etc/validators.txt
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /usr/local/bin/rippled /entrypoint.sh
+
+RUN mkdir -p /config/db /var/lib/rippled/db /var/log/rippled
+
+WORKDIR /config
+
+VOLUME ["/config/db", "/var/lib/rippled/db", "/var/log/rippled"]
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD []
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+  CMD curl -f http://localhost:5005 || exit 1 || true

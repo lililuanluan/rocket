@@ -196,6 +196,7 @@ def main():
     img_dockerfiles["xrpld:1.4.0-local"] = "Dockerfile.rippled-1.4.0"
     img_dockerfiles["xrpld:1.7.2-local"] = "Dockerfile.rippled-1.7.2"
     img_dockerfiles["xrpld:2.6.0-local"] = "Dockerfile.rippled-2.6.0"
+    img_dockerfiles["xrpld:3.1.0-local"] = "Dockerfile.rippled-3.1.0"
 
     selected = []
     if args.build is not None:
