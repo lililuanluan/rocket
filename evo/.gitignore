@@ -7,3 +7,4 @@ RandomByzzStrategy*.yaml
 network_*.yaml
 tmp/
 run_cache/
+analysis_bak

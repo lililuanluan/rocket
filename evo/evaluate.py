@@ -438,6 +438,7 @@ def get_proposal_distribution(df, node_info, byzz_nodes: list | None = None):
         receiver_id -> previousledger_hex -> propose_seq -> proposer_id -> {
             "timestamp": int,
             "current_tx_hash": str,
+            "close_time": int,
         }
     """
     distribution = {}
@@ -479,6 +480,7 @@ def get_proposal_distribution(df, node_info, byzz_nodes: list | None = None):
         propose_seq = int(message.proposeSeq)
         timestamp = int(row.get("timestamp", 0) or 0)
         current_tx_hash = bytes(message.currentTxHash).hex()
+        close_time = int(message.closeTime)
 
         receiver_entry = distribution.setdefault(receiver_id, {})
         ledger_entry = receiver_entry.setdefault(previous_ledger, {})
@@ -490,9 +492,27 @@ def get_proposal_distribution(df, node_info, byzz_nodes: list | None = None):
             seq_entry[proposer_id] = {
                 "timestamp": timestamp,
                 "current_tx_hash": current_tx_hash,
+                "close_time": close_time,
             }
 
     return distribution
+
+
+def _shannon_entropy(values):
+    counts = {}
+    total = 0
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+        total += 1
+
+    if total == 0:
+        return 0.0
+
+    entropy = 0.0
+    for count in counts.values():
+        p = count / total
+        entropy -= p * np.log2(p)
+    return entropy
 
 
 def get_proposal_distribution_entropy(proposal_distribution):
@@ -525,21 +545,89 @@ def get_proposal_distribution_entropy(proposal_distribution):
                 if not latest_by_proposer:
                     continue
 
-                hash_counts = {}
-                total = 0
-                for tx_hash in latest_by_proposer.values():
-                    hash_counts[tx_hash] = hash_counts.get(tx_hash, 0) + 1
-                    total += 1
-
-                entropy = 0.0
-                for count in hash_counts.values():
-                    p = count / total
-                    entropy -= p * np.log2(p)
+                entropy = _shannon_entropy(latest_by_proposer.values())
                 round_integral += entropy
 
             integrals.append(round_integral)
 
     return np.mean(integrals) if integrals else None
+
+
+def get_proposal_position_entropy_stats(proposal_distribution):
+    """Compute proposal split metrics that include both tx set and close time.
+
+    The older ``proposal_distribution_entropy`` only observes ``currentTxHash``.
+    That misses close-time-only splits and underweights cases where the tx-set
+    disagreement is small but the full proposal position is still divergent.
+
+    Returned values:
+        proposal_position_entropy:
+            Mean discrete integral of entropy over proposal rounds.
+        proposal_position_entropy_max:
+            Maximum per-round entropy over any receiver/previous-ledger view.
+        proposal_late_position_entropy_max:
+            Maximum per-round entropy weighted toward later proposal rounds.
+        proposal_close_time_entropy_max:
+            Maximum close-time-only entropy over any proposal round.
+    """
+    integrals = []
+    max_position_entropy = 0.0
+    max_late_position_entropy = 0.0
+    max_close_time_entropy = 0.0
+
+    for _, ledger_dict in proposal_distribution.items():
+        for _, seq_dict in ledger_dict.items():
+            if not seq_dict:
+                continue
+
+            latest_by_proposer = {}
+            round_integral = 0.0
+            sorted_seqs = sorted(seq_dict.keys())
+            denominator = max(1, len(sorted_seqs) - 1)
+
+            for idx, seq in enumerate(sorted_seqs):
+                updates = seq_dict[seq]
+                for proposer_id, proposal in updates.items():
+                    latest_by_proposer[proposer_id] = proposal
+
+                if not latest_by_proposer:
+                    continue
+
+                positions = [
+                    (proposal["current_tx_hash"], proposal.get("close_time"))
+                    for proposal in latest_by_proposer.values()
+                ]
+                close_times = [
+                    proposal.get("close_time")
+                    for proposal in latest_by_proposer.values()
+                ]
+
+                position_entropy = _shannon_entropy(positions)
+                close_time_entropy = _shannon_entropy(close_times)
+                round_integral += position_entropy
+                max_position_entropy = max(max_position_entropy, position_entropy)
+                max_close_time_entropy = max(max_close_time_entropy, close_time_entropy)
+
+                # Later disagreement is more dangerous because it is closer to
+                # accept/expire. Use observed proposal-round order instead of a
+                # dense numeric range because some logs contain sentinel values.
+                late_weight = 1.0 + (idx / denominator)
+                max_late_position_entropy = max(
+                    max_late_position_entropy,
+                    position_entropy * late_weight,
+                )
+
+            integrals.append(round_integral)
+
+    if not integrals:
+        return None, None, None, None
+
+    return (
+        np.mean(integrals),
+        max_position_entropy,
+        max_late_position_entropy,
+        max_close_time_entropy,
+    )
 
 
 def build_gossip_connectivity_matrix(
@@ -804,6 +892,10 @@ FITNESS_FUNCTIONS = [
     "validation_distribution_entropy_unl",
     "validation_distribution_entropy_max_unl",
     "proposal_distribution_entropy",
+    "proposal_position_entropy",
+    "proposal_position_entropy_max",
+    "proposal_late_position_entropy_max",
+    "proposal_close_time_entropy_max",
     "message_entropy_integral",
     "message_entropy_average",
     "markov_matrix_non_similarity",
@@ -921,6 +1013,24 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
     )
     print(f"Proposal distribution entropy: {proposal_distribution_entropy}")
     res["proposal_distribution_entropy"] = proposal_distribution_entropy
+
+    (
+        proposal_position_entropy,
+        proposal_position_entropy_max,
+        proposal_late_position_entropy_max,
+        proposal_close_time_entropy_max,
+    ) = get_proposal_position_entropy_stats(proposal_distribution)
+    print(f"Proposal position entropy: {proposal_position_entropy}")
+    print(f"Proposal position entropy max: {proposal_position_entropy_max}")
+    print(
+        "Proposal late position entropy max: "
+        f"{proposal_late_position_entropy_max}"
+    )
+    print(f"Proposal close time entropy max: {proposal_close_time_entropy_max}")
+    res["proposal_position_entropy"] = proposal_position_entropy
+    res["proposal_position_entropy_max"] = proposal_position_entropy_max
+    res["proposal_late_position_entropy_max"] = proposal_late_position_entropy_max
+    res["proposal_close_time_entropy_max"] = proposal_close_time_entropy_max
 
     message_entropy_integral, message_entropy_average = get_message_entropy_integration(
         df_action
