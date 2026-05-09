@@ -11,6 +11,7 @@ plot_tmp_root="${ROCKET_PLOT_TMP_ROOT:-${workspace_cache_root}/plot-tmp}"
 container_home="${ROCKET_PLOT_CONTAINER_HOME:-/tmp/rocket-plot-home}"
 container_tmp="${ROCKET_PLOT_CONTAINER_TMP:-/tmp/rocket-plot-tmp}"
 log_root="${ROCKET_LOG_ROOT:-${workspace_root}/logs}"
+data_root="${workspace_root}/data"
 
 mkdir -p "${plot_home_root}" "${plot_tmp_root}"
 
@@ -21,12 +22,11 @@ else
   echo "Using existing image rocket-plot:latest; skipping docker build (set ROCKET_PLOT_FORCE_BUILD=1 to rebuild)."
 fi
 
-
-
 exec docker run --rm -it \
   --user "$(id -u):$(id -g)" \
   -v "${repo_root}:${repo_root}" \
   -v "${log_root}:${log_root}" \
+  -v "${data_root}:${data_root}" \
   -v "${plot_home_root}:${container_home}" \
   -v "${plot_tmp_root}:${container_tmp}" \
   -w "${repo_root}" \
@@ -36,4 +36,4 @@ exec docker run --rm -it \
   -e XDG_CONFIG_HOME="${container_home}/.config" \
   -e ROCKET_LOG_ROOT="${log_root}" \
   rocket-plot:latest \
-  python evo/plot_fitness_trend.py "$@"
+  python -m evo.analysis.cli "$@"
