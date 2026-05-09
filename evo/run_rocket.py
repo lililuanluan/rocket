@@ -3,6 +3,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
 import yaml
@@ -58,6 +59,24 @@ def _has_complete_metrics(eval_result: dict | None) -> bool:
     if not eval_result:
         return False
     return all(eval_result.get(metric) is not None for metric in FITNESS_FUNCTIONS)
+
+
+def _runtime_invalid_result(
+    reason: str,
+    retcode: int,
+    eval_result: dict | None = None,
+) -> dict:
+    result = eval_result or {}
+    result["runtime_invalid"] = True
+    result["runtime_invalid_reason"] = reason
+    return {
+        "eval_result": result,
+        "fitness": INVALID_RUNTIME_FITNESS,
+        "run_status": "runtime_invalid",
+        "runtime_invalid": True,
+        "runtime_invalid_reason": reason,
+        "retcode": retcode,
+    }
 
 
 # 一个独立的函数，运行一个rocket实例
@@ -213,7 +232,14 @@ def run_rocket_and_evaluate(
     # Only evaluate when run was not interrupted.
     if retcode in (130, -signal.SIGINT, -signal.SIGTERM):
         raise KeyboardInterrupt()
+
+    # Detect controller/interceptor/runtime panics before evaluating artifacts.
+    # Some panics leave partial logs that make evaluate_log raise before retry
+    # can see runtime_invalid=True.
+    runtime_invalid_reason = _detect_runtime_invalid_reason(log_dir, retcode)
     if timed_out:
+        if runtime_invalid_reason is not None:
+            return _runtime_invalid_result(runtime_invalid_reason, retcode)
         return {
             "eval_result": {"timed_out": True},
             "fitness": 0.0,
@@ -227,8 +253,18 @@ def run_rocket_and_evaluate(
         network_config = yaml.safe_load(f)
         byzz_nodes = network_config["byzz_nodes"]
 
-    raw_eval_result = evaluate_log(log_dir, byzz_nodes=byzz_nodes)
-    runtime_invalid_reason = _detect_runtime_invalid_reason(log_dir, retcode)
+    raw_eval_result = None
+    try:
+        raw_eval_result = evaluate_log(log_dir, byzz_nodes=byzz_nodes)
+    except Exception as exc:
+        traceback_path = log_dir / "evaluation_error.log"
+        traceback_path.write_text(
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            encoding="utf-8",
+        )
+        if runtime_invalid_reason is None:
+            runtime_invalid_reason = f"evaluate_log_exception:{type(exc).__name__}"
+
     if runtime_invalid_reason is None and not _has_complete_metrics(raw_eval_result):
         runtime_invalid_reason = "incomplete_evaluation_artifacts"
 
