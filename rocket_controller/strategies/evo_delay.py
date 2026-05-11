@@ -233,17 +233,21 @@ class EvoDelayStrategy(Strategy):
                 data=encoded, from_port=packet.from_port, to_port=packet.to_port
             )
             return new_packet.data, mutated_delay, mutated_repeat
+
+
         if (
             self.byzz_min_seq
             <= current_ledger
             <= self.byzz_max_seq
         ):
             if isinstance(message, ripple_pb2.TMProposeSet):
-                # identify original sender
+                if sender_node_id not in (self.byzz_nodes or []):
+                    return packet.data, configed_delay, 1
+
+                # Only byzz senders may mutate proposals signed by the byzz coalition.
                 _pub_key = message.nodePubKey.hex()
-                if not self.byzz_mutator.is_sent_from_byzz_node(_pub_key):
-                    # only mutate if sender is byzz node
-                    # logger.debug(f"[ProposeSet] Non-byzz node {original_sender}, returning with delay {configed_delay}ms")
+                original_sender = pubkey_to_node_id(self, _pub_key)
+                if original_sender not in (self.byzz_nodes or []):
                     return packet.data, configed_delay, 1
 
                 # logger.debug(
@@ -256,13 +260,16 @@ class EvoDelayStrategy(Strategy):
                 return handle_mutated_message(signed_message, delay, repeat)
 
             elif isinstance(message, ripple_pb2.TMValidation): # TODO: 让parsed返回结果也继承自Message，统一接口
+                if sender_node_id not in (self.byzz_nodes or []):
+                    return packet.data, configed_delay, 1
+
                 # logger.debug("Processing TMValidation for possible mutation")
                 parsed = PacketEncoderDecoder.decode_validation(message)
 
                 # logger.debug(f"Parsed validation content: {parsed}")
                 _pub_key = parsed.get("SigningPubKey", "")
-                if not self.byzz_mutator.is_sent_from_byzz_node(_pub_key):
-                    # only mutate if sender is byzz node
+                original_sender = pubkey_to_node_id(self, _pub_key)
+                if original_sender not in (self.byzz_nodes or []):
                     return packet.data, configed_delay, 1
                 # logger.debug(
                 #     f"Mutating validation from non-byzz node {original_sender}, sender_node_id={sender_node_id}"
@@ -272,16 +279,22 @@ class EvoDelayStrategy(Strategy):
                 signed_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(signed_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMHaveTransactionSet):
+                if sender_node_id not in (self.byzz_nodes or []):
+                    return packet.data, configed_delay, 1
                 method = self.get_mutation_method(message, packet, current_ledger)
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
 
                 # print(f"chosen mutation method: {method}")
                 return handle_mutated_message(mutated_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMTransaction):
+                if sender_node_id not in (self.byzz_nodes or []):
+                    return packet.data, configed_delay, 1
                 method = self.get_mutation_method(message, packet, current_ledger)
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(mutated_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMGetLedger):
+                if sender_node_id not in (self.byzz_nodes or []):
+                    return packet.data, configed_delay, 1
                 method = self.get_mutation_method(message, packet, current_ledger)
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 
