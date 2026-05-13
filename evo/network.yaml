@@ -70,6 +70,14 @@ transactions:
       amount: 100001000000
       sender_account: None
       destination_account: "Account3"
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account4"
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account5"
 
   # Regular transactions are performed a set amount of time after the network has started.
   regular:
@@ -85,21 +93,52 @@ transactions:
     #   destination_account: "Account2" # Account alias to send the transaction to.
     #   time: 2 # Seconds after which the transaction is performed.
     #   in_seq: [5]
-    - peer_id: 1  # The node to submit the transaction to
-      amount: 81000000000 # Amount in XRP drops, minimum is 1.000.000.000.
-      sender_account: "Account1" # Account alias to send the transaction from.
-      destination_account: "Account3" # Account alias to send the transaction to.
-      time: 2 # Seconds after which the transaction is performed.
-      in_seq: [5]
-    - peer_id: 5
-      amount: 82000000000
+    # Spread transfers across multiple consensus rounds to emulate periodic bursts.
+    - peer_id: 1
+      amount: 12000000000
       sender_account: "Account1"
+      destination_account: "Account2"
+      time: 1
+      in_seq: [6, 8, 10, 12]
+    - peer_id: 5
+      amount: 9000000000
+      sender_account: "Account2"
       destination_account: "Account3"
       time: 2
-      in_seq: [5]
-    # - peer_id: 6
-    #   amount: 83000000000
-    #   sender_account: "Account1"
-    #   destination_account: "Account2"
-    #   time: 2
-    #   in_seq: [5]
+      in_seq: [6, 7, 9, 11]
+    - peer_id: 0
+      amount: 7000000000
+      sender_account: "Account3"
+      destination_account: "Account1"
+      time: 1
+      in_seq: [7, 10, 12]
+    - peer_id: 4
+      amount: 5000000000
+      sender_account: "Account4"
+      destination_account: "Account5"
+      time: 2
+      in_seq: [6, 9, 12]
+    - peer_id: 2
+      amount: 8000000000
+      sender_account: "Account5"
+      destination_account: "Account4"
+      time: 3
+      in_seq: [7, 8, 10]
+    - peer_id: 6
+      amount: 11000000000
+      sender_account: "Account1"
+      destination_account: "Account4"
+      time: 2
+      in_seq: [7, 11]
+    - peer_id: 1
+      amount: 6000000000
+      sender_account: "Account2"
+      destination_account: "Account5"
+      time: 1
+      in_seq: [8, 12]
+    - peer_id: 5
+      amount: 10000000000
+      sender_account: "Account4"
+      destination_account: "Account3"
+      time: 2
+      in_seq: [10, 12]
