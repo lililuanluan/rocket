@@ -70,7 +70,9 @@ DEFAULT_EVOTEST_CONFIG: dict[str, Any] = {
     "logs_group_dir": None,
     "output_screen": False,
     "partition_seq": 5,
-    "partition_duration": 1000,
+    "partition_duration": None,
+    "max_partition_duration": 1000,
+    "start_partition": "open",
     "delay_mode": None,
     "partition_mode": None,
     "byzz_mode": None,
@@ -194,6 +196,9 @@ def validate_config(config: dict[str, Any]):
         "population_size",
         "total_num_tests",
         "mu",
+        "partition_seq",
+        "partition_duration",
+        "max_partition_duration",
     ]
     for key in positive_int_keys:
         if key in config and config[key] is not None:
@@ -203,6 +208,9 @@ def validate_config(config: dict[str, Any]):
     if "runtime_retries" in config and config["runtime_retries"] is not None:
         if not isinstance(config["runtime_retries"], int) or config["runtime_retries"] < 0:
             raise ValueError("Config key 'runtime_retries' must be a non-negative integer")
+
+    if config.get("start_partition") not in (None, "open", "establish"):
+        raise ValueError("Config key 'start_partition' must be one of: open, establish")
 
 
 def get_parallel_mode(config: dict[str, Any]) -> str:
@@ -256,6 +264,15 @@ def extend_run_config(
     config["base_network_config"] = network_config
     config["number_of_nodes"] = network_config.get("number_of_nodes")
     config["byzz_nodes"] = network_config.get("byzz_nodes")
+    if config.get("max_partition_duration") is None:
+        config["max_partition_duration"] = int(config.get("partition_duration") or 1000)
+    else:
+        config["max_partition_duration"] = int(config["max_partition_duration"])
+    config["partition_seq"] = int(config.get("partition_seq") or 5)
+    config["partition_duration"] = int(
+        config.get("partition_duration") or config["max_partition_duration"]
+    )
+    config["start_partition"] = config.get("start_partition") or "open"
 
     population_size = int(config.get("population_size", 10))
     total_num_tests = int(config.get("total_num_tests", 500))
@@ -338,6 +355,8 @@ def print_config_summary(
     print(f"  Population size:          {config.get('population_size', 10)}")
     print(f"  Mu:                       {config.get('mu', 4)}")
     print(f"  Total num tests:          {config.get('total_num_tests', 500)}")
+    print(f"  Start partition:          {config.get('start_partition', 'open')}")
+    print(f"  Max partition duration:   {config.get('max_partition_duration', 'default')}ms")
     print(f"  Individual timeout:       {config.get('individual_timeout_sec')}s")
     print(f"  Runtime retries:          {config.get('runtime_retries', 1)}")
     print("=" * 70)

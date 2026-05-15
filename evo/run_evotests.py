@@ -75,8 +75,13 @@ def validate_config(config: dict):
         "individual_timeout_sec",
         "population_size",
         "total_num_tests",
+        "partition_seq",
+        "partition_duration",
+        "max_partition_duration",
     ]:
-        if key in config and (not isinstance(config[key], int) or config[key] <= 0):
+        if key in config and config[key] is not None and (
+            not isinstance(config[key], int) or config[key] <= 0
+        ):
             raise ValueError(f"Config key '{key}' must be a positive integer")
 
     if "mu" in config and (not isinstance(config["mu"], int) or config["mu"] <= 0):
@@ -86,6 +91,9 @@ def validate_config(config: dict):
         not isinstance(config["runtime_retries"], int) or config["runtime_retries"] < 0
     ):
         raise ValueError("Config key 'runtime_retries' must be a non-negative integer")
+
+    if config.get("start_partition") not in (None, "open", "establish"):
+        raise ValueError("Config key 'start_partition' must be one of: open, establish")
 
 
 def get_parallel_mode(config: dict) -> str:
@@ -188,6 +196,10 @@ def main():
     runtime_retries = config.get("runtime_retries", 1)
     min_delay_ms = config.get("min_delay_ms")
     max_delay_ms = config.get("max_delay_ms")
+    partition_seq = config.get("partition_seq")
+    partition_duration = config.get("partition_duration")
+    max_partition_duration = config.get("max_partition_duration")
+    start_partition = config.get("start_partition")
 
     log_dir = Path(dirs["logs_dir"]) / get_date_time_strf()
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -237,6 +249,14 @@ def main():
                     cmd.extend(["--min-delay-ms", str(min_delay_ms)])
                 if max_delay_ms is not None:
                     cmd.extend(["--max-delay-ms", str(max_delay_ms)])
+                if partition_seq is not None:
+                    cmd.extend(["--partition-seq", str(partition_seq)])
+                if partition_duration is not None:
+                    cmd.extend(["--partition-duration", str(partition_duration)])
+                if max_partition_duration is not None:
+                    cmd.extend(["--max-partition-duration", str(max_partition_duration)])
+                if start_partition is not None:
+                    cmd.extend(["--start-partition", str(start_partition)])
 
                 # ensure both the repo root AND the evo/ dir are on PYTHONPATH.
                 # evo/evotest_parallel.py uses bare imports (e.g. `from evaluate

@@ -191,48 +191,159 @@ class PartitionEncoding:
         "none",  # no partition
         "random_bipart",  # randomly partition into two groups
         "bi_part_groups",  # partition into two groups
-        # TODO: 目前是把partition的seq和duration固定，作为初始化参数，后续也可以作为encoding一部分
+        "flex_bi_part_groups",  # two groups with evolvable seq and duration
     ]
 
-    def __init__(self, mode, num_nodes, partition_seq, partition_duration):
+    def __init__(
+        self,
+        mode,
+        num_nodes,
+        partition_seq=5,
+        partition_duration=None,
+        byzz_min_seq=None,
+        byzz_max_seq=None,
+        max_partition_duration=1000,
+        start_partition="open",
+    ):
         if mode not in self.partition_modes:
             raise ValueError(f"Invalid partition mode: {mode}")
+        if start_partition not in ["open", "establish"]:
+            raise ValueError(f"Invalid start_partition: {start_partition}")
+        if max_partition_duration is None:
+            max_partition_duration = (
+                partition_duration if partition_duration is not None else 1000
+            )
+        if partition_duration is None:
+            partition_duration = max_partition_duration
         self.mode = mode
-        self.partition_seq = partition_seq
-        self.partition_duration = partition_duration
-        self.num_nodes = num_nodes
+        self.start_partition = start_partition
+        self.partition_seq = int(partition_seq)
+        self.partition_duration = int(partition_duration)
+        self.num_nodes = int(num_nodes)
+        self.byzz_min_seq = int(
+            byzz_min_seq if byzz_min_seq is not None else partition_seq
+        )
+        self.byzz_max_seq = int(
+            byzz_max_seq if byzz_max_seq is not None else partition_seq
+        )
+        self.max_partition_duration = int(
+            max_partition_duration
+            if max_partition_duration is not None
+            else partition_duration
+        )
+        if self.byzz_min_seq > self.byzz_max_seq:
+            raise ValueError(
+                f"Invalid partition seq range: {self.byzz_min_seq} > {self.byzz_max_seq}"
+            )
+        if self.max_partition_duration <= 0:
+            raise ValueError("max_partition_duration must be positive")
         self.partition = None  # list of 0/1, length = number_of_nodes
         self._sample_partition()
+
+    def _sample_partition_groups(self):
+        if self.num_nodes < 2:
+            raise ValueError("partition modes require at least two nodes")
+
+        nodes = list(range(self.num_nodes))
+        random.shuffle(nodes)
+        cut = random.randint(1, self.num_nodes - 1)
+        partition = [0] * self.num_nodes
+        for i, idx in enumerate(nodes):
+            if i < cut:
+                partition[idx] = 0
+            else:
+                partition[idx] = 1
+        return partition
+
+    @staticmethod
+    def _random_int_excluding(low, high, current):
+        if low >= high:
+            return low
+
+        value = random.randint(low, high)
+        while value == current:
+            value = random.randint(low, high)
+        return value
+
+    def _repair_flex_partition_groups(self):
+        if self.partition is None or self.mode != "flex_bi_part_groups":
+            return
+        if len(set(self.partition)) > 1:
+            return
+        if len(self.partition) < 2:
+            raise ValueError("flex_bi_part_groups requires at least two nodes")
+
+        flip_idx = random.randint(0, len(self.partition) - 1)
+        self.partition[flip_idx] = 1 - self.partition[flip_idx]
+
+    def _repair_flex_bounds(self):
+        if self.mode != "flex_bi_part_groups":
+            return
+        self.partition_seq = int(
+            max(self.byzz_min_seq, min(self.byzz_max_seq, self.partition_seq))
+        )
+        self.partition_duration = int(
+            max(1, min(self.max_partition_duration, self.partition_duration))
+        )
 
     def _sample_partition(self):
         if self.mode in ["none", "random_bipart"]:
             return
         elif self.mode == "bi_part_groups":
-            # 随机shuffle，然后随机cut
-            nodes = list(range(self.num_nodes))
-            random.shuffle(nodes)
-            cut = random.randint(1, self.num_nodes - 1)
-            self.partition = [0] * self.num_nodes
-            for i, idx in enumerate(nodes):
-                if i < cut:
-                    self.partition[idx] = 0
-                else:
-                    self.partition[idx] = 1
+            self.partition = self._sample_partition_groups()
+        elif self.mode == "flex_bi_part_groups":
+            self.partition = self._sample_partition_groups()
+            self.partition_seq = random.randint(self.byzz_min_seq, self.byzz_max_seq)
+            self.partition_duration = random.randint(1, self.max_partition_duration)
         else:
             raise ValueError(f"Invalid partition mode: {self.mode}")
 
-    def mutate_self(self, force=False):
-        if self.mode != "bi_part_groups" or self.partition is None:
+    def _mutate_partition_assignment(self):
+        if self.partition is None:
             return
         flip_idx = random.randint(0, len(self.partition) - 1)
         self.partition[flip_idx] = 1 - self.partition[flip_idx]
+
+    def mutate_self(self, force=False):
+        if self.mode not in ["bi_part_groups", "flex_bi_part_groups"]:
+            return
+        if self.partition is None:
+            return
+
+        if self.mode == "bi_part_groups":
+            self._mutate_partition_assignment()
+            return
+
+        ops = ["partition"]
+        if self.byzz_min_seq < self.byzz_max_seq:
+            ops.append("seq")
+        if self.max_partition_duration > 1:
+            ops.append("duration")
+
+        op = random.choice(ops)
+        if op == "partition":
+            self._mutate_partition_assignment()
+            self._repair_flex_partition_groups()
+        elif op == "seq":
+            self.partition_seq = self._random_int_excluding(
+                self.byzz_min_seq,
+                self.byzz_max_seq,
+                self.partition_seq,
+            )
+        elif op == "duration":
+            self.partition_duration = self._random_int_excluding(
+                1,
+                self.max_partition_duration,
+                self.partition_duration,
+            )
+        self._repair_flex_bounds()
 
     def mate_with(self, other: "PartitionEncoding"):
         if self.mode != other.mode:
             raise ValueError(
                 f"PartitionEncoding mode mismatch: self={self.mode}, other={other.mode}"
             )
-        if self.mode != "bi_part_groups":
+        if self.mode not in ["bi_part_groups", "flex_bi_part_groups"]:
             return
         if self.partition is None or other.partition is None:
             return
@@ -252,13 +363,31 @@ class PartitionEncoding:
 
         self.partition = new_partition_1
         other.partition = new_partition_2
+        if self.mode == "flex_bi_part_groups":
+            if random.random() < 0.5:
+                self.partition_seq, other.partition_seq = (
+                    other.partition_seq,
+                    self.partition_seq,
+                )
+            if random.random() < 0.5:
+                self.partition_duration, other.partition_duration = (
+                    other.partition_duration,
+                    self.partition_duration,
+                )
+            self._repair_flex_partition_groups()
+            other._repair_flex_partition_groups()
+            self._repair_flex_bounds()
+            other._repair_flex_bounds()
 
     def to_dict(self):
         res = {
             "mode": self.mode,
+            "start_partition": self.start_partition,
             "partition_seq": self.partition_seq,
             "partition_duration": self.partition_duration,
         }
+        if self.mode == "flex_bi_part_groups":
+            res["max_partition_duration"] = self.max_partition_duration
         if self.partition is not None:
             res["partition"] = self.partition
         return res
@@ -619,6 +748,32 @@ class ComposeEncoding(BaseEncoding):
         if self.partition_mode in ["none", "random_bipart"]:
             return []
 
+        lines = []
+        if (
+            self.partition_encoding.start_partition
+            != other.partition_encoding.start_partition
+        ):
+            lines.append(
+                "PartitionEncoding: "
+                f"start_partition {other.partition_encoding.start_partition} -> "
+                f"{self.partition_encoding.start_partition}"
+            )
+        if self.partition_encoding.partition_seq != other.partition_encoding.partition_seq:
+            lines.append(
+                "PartitionEncoding: "
+                f"partition_seq {other.partition_encoding.partition_seq} -> "
+                f"{self.partition_encoding.partition_seq}"
+            )
+        if (
+            self.partition_encoding.partition_duration
+            != other.partition_encoding.partition_duration
+        ):
+            lines.append(
+                "PartitionEncoding: "
+                f"partition_duration {other.partition_encoding.partition_duration} -> "
+                f"{self.partition_encoding.partition_duration}"
+            )
+
         current = self.partition_encoding.partition or []
         previous = other.partition_encoding.partition or []
         changed = [
@@ -626,12 +781,10 @@ class ComposeEncoding(BaseEncoding):
             for idx, (old_value, new_value) in enumerate(zip(previous, current))
             if old_value != new_value
         ]
-        if not changed:
-            return []
-
-        lines = [f"PartitionEncoding: {len(changed)} node(s) changed"]
-        for idx, old_value, new_value in changed:
-            lines.append(f"  node {idx}: {old_value} -> {new_value}")
+        if changed:
+            lines.append(f"PartitionEncoding: {len(changed)} node(s) changed")
+            for idx, old_value, new_value in changed:
+                lines.append(f"  node {idx}: {old_value} -> {new_value}")
         return lines
 
     def _diff_delay(self, other):
@@ -748,8 +901,6 @@ class ComposeEncoding(BaseEncoding):
             "max_delay_ms",
             "byzz_min_seq",
             "byzz_max_seq",
-            "partition_seq",
-            "partition_duration",
             "byzz_nodes",
         ]
         for key in required_keys:
@@ -780,8 +931,15 @@ class ComposeEncoding(BaseEncoding):
         partition_encoding = PartitionEncoding(
             mode=configs["partition_mode"],
             num_nodes=configs["number_of_nodes"],
-            partition_seq=configs["partition_seq"],
-            partition_duration=configs["partition_duration"],
+            partition_seq=configs.get("partition_seq", 5),
+            partition_duration=configs.get(
+                "partition_duration",
+                configs.get("max_partition_duration", 1000),
+            ),
+            byzz_min_seq=configs["byzz_min_seq"],
+            byzz_max_seq=configs["byzz_max_seq"],
+            max_partition_duration=configs.get("max_partition_duration", 1000),
+            start_partition=configs.get("start_partition", "open"),
         )
 
         return ComposeEncoding(

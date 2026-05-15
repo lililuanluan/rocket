@@ -4,7 +4,8 @@ import time
 from typing import Dict, Tuple
 
 from loguru import logger
-from protos import packet_pb2
+from google.protobuf.message import Message
+from protos import packet_pb2, ripple_pb2
 
 from rocket_controller.strategies.evo_delay import EvoDelayStrategy
 
@@ -25,9 +26,14 @@ class ComposedStrategy(EvoDelayStrategy):
 
         self.partition_seq = self.partition_cfg.get("partition_seq")
         self.partition_duration = self.partition_cfg.get("partition_duration", 0)
+        self.start_partition = self.partition_cfg.get("start_partition", "open")
+        if self.start_partition not in ["open", "establish"]:
+            raise ValueError(f"Unsupported start_partition: {self.start_partition}")
         self.partition_lock = threading.Lock()
         self.partition_start_time = None
+        self.partition_started_once = False
         self.partition = None
+        self.partition_node_states: Dict[int, Tuple[int, int]] = {}
 
         self.delay_rule_table: Dict[Tuple[int, int, str], int] = {}
         self.delay_rule_table_by_seq: Dict[Tuple[int, int, int, str], int] = {}
@@ -56,10 +62,12 @@ class ComposedStrategy(EvoDelayStrategy):
         self.delay_rule_table_by_seq.clear()
         self.byzz_rule_table.clear()
         self.partition_start_time = None
+        self.partition_started_once = False
+        self.partition_node_states.clear()
 
         if self.partition_mode == "random_bipart":
             self.partition = None
-        elif self.partition_mode == "bi_part_groups":
+        elif self.partition_mode in ["bi_part_groups", "flex_bi_part_groups"]:
             self.partition = self.partition_cfg["partition"]
             if len(self.partition) != self.network.node_amount:
                 raise ValueError(
@@ -101,6 +109,38 @@ class ComposedStrategy(EvoDelayStrategy):
         # if self.partition_mode != "none":
         #     logger.error(f"Partition setup: {self.partition}")
 
+    def observe_packet_for_strategy_state(
+        self,
+        message: Message,
+        packet: packet_pb2.Packet,
+        current_ledger: int,
+    ) -> None:
+        if self.partition_mode == "none" or self.start_partition != "establish":
+            return
+        if not isinstance(message, ripple_pb2.TMStatusChange):
+            return
+
+        sender_node_id = self.network.port_to_id(packet.from_port)
+        with self.partition_lock:
+            self.partition_node_states[sender_node_id] = (
+                int(message.ledgerSeq),
+                int(message.newEvent),
+            )
+
+    def _has_establish_started(self) -> bool:
+        return any(
+            ledger_seq == self.partition_seq
+            and event == ripple_pb2.neCLOSING_LEDGER
+            for ledger_seq, event in self.partition_node_states.values()
+        )
+
+    def _should_start_partition(self, current_ledger: int) -> bool:
+        if self.start_partition == "open":
+            return current_ledger == self.partition_seq
+        if self.start_partition == "establish":
+            return self._has_establish_started()
+        raise ValueError(f"Unsupported start_partition: {self.start_partition}")
+
     def _maybe_update_partition_state(self, current_ledger: int, cur_time: float) -> None:
         if self.partition_mode == "none":
             return
@@ -112,8 +152,12 @@ class ComposedStrategy(EvoDelayStrategy):
                     self.partition = None
             return
 
-        if current_ledger == self.partition_seq:
+        if self.start_partition == "establish" and self.partition_started_once:
+            return
+
+        if self._should_start_partition(current_ledger):
             self.partition_start_time = cur_time
+            self.partition_started_once = True
             if self.partition_mode == "random_bipart":
                 self.partition = self._sample_partition_shuffle_cut(
                     self.network.node_amount
@@ -148,7 +192,11 @@ class ComposedStrategy(EvoDelayStrategy):
     def are_partitioned(self, sender_node_id, receiver_node_id):
         if self.partition_mode == "none":
             return False
-        if self.partition_mode in ["random_bipart", "bi_part_groups"]:
+        if self.partition_mode in [
+            "random_bipart",
+            "bi_part_groups",
+            "flex_bi_part_groups",
+        ]:
             partition = self.partition
             if partition is None:
                 return False

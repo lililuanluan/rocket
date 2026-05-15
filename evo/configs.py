@@ -248,9 +248,36 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--partition-duration",
         type=int,
-        default=1000,
+        default=None,
         metavar="PARTITION_DURATION",
-        help="the duration of the network partition in milliseconds (default: 1000)",
+        help=(
+            "deprecated fixed partition duration in milliseconds "
+            "(default: max-partition-duration)"
+        ),
+    )
+
+    parser.add_argument(
+        "--max-partition-duration",
+        type=int,
+        default=1000,
+        metavar="MAX_PARTITION_DURATION",
+        help=(
+            "upper bound in milliseconds for flex_bi_part_groups partition duration "
+            "and fixed duration for legacy partition modes (default: 1000)"
+        ),
+    )
+
+    parser.add_argument(
+        "--start-partition",
+        type=str,
+        default="open",
+        choices=["open", "establish"],
+        metavar="START_PARTITION",
+        help=(
+            "when to start the partition window: open uses the existing ledger "
+            "sequence trigger; establish starts after TMStatusChange neCLOSING_LEDGER "
+            "(default: open)"
+        ),
     )
 
     parser.add_argument(
@@ -264,7 +291,7 @@ def parse_args() -> argparse.Namespace:
         "--partition-mode",
         type=str,
         default=None,
-        choices=["none", "random_bipart", "bi_part_groups"],
+        choices=["none", "random_bipart", "bi_part_groups", "flex_bi_part_groups"],
     )
 
     parser.add_argument(
@@ -307,6 +334,10 @@ def extend_configs(args: argparse.Namespace) -> dict:
 
     # 推导max_generation
     configs["max_generation"] = configs["total_num_tests"] // configs["population_size"]
+    if configs.get("max_partition_duration") is None:
+        configs["max_partition_duration"] = int(configs.get("partition_duration") or 1000)
+    if configs.get("partition_duration") is None:
+        configs["partition_duration"] = configs["max_partition_duration"]
 
     # derive individual timeout when the user did not provide one explicitly
     if configs.get("individual_timeout_sec") is None:
