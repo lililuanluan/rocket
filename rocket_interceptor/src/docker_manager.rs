@@ -745,14 +745,19 @@ impl DockerNetwork {
     /// are saved to /network/validators/\<name\>.
     ///
     /// # Panics
-    /// * If the `rippled_base.cfg` cannot be read.
+    /// * If the selected rippled base config cannot be read.
     /// * If the config could not be written to disk (no permissions/directory does not exist).
     fn generate_validator_configs(
         &self,
         keys: &[ValidatorKeyData],
     ) -> Vec<(String, ValidatorKeyData)> {
         let static_network_root = self.get_static_network_root();
-        let base_config_path = static_network_root.join("rippled_base.cfg");
+        let base_config_name = if self.get_image_from_env().contains("3.1.0") {
+            "rippled_base_3.1.0.cfg"
+        } else {
+            "rippled_base.cfg"
+        };
+        let base_config_path = static_network_root.join(base_config_name);
         let ledger_json_path = static_network_root.join("ledger.json");
         let base_config_file = fs::File::open(&base_config_path);
 
