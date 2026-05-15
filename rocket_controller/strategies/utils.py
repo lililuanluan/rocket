@@ -40,9 +40,37 @@ def normalize_pubhex(val: Any) -> str:
 
 
 BYZZ_MUTATE_METHODS = {
-    # TODO: add mutation for TMGetLedger and TMLedgerData, transaction
-    # TMStatusChange
-    # TMLedgerData
+    ripple_pb2.TMStatusChange: [
+        "do_nothing",
+        "replace_ledger_hash_with_dummy",
+        "replace_prev_lgr_hash_with_dummy",
+        "increment_ledger_sequence",
+        "replace_event_with_lost_sync",
+        # Future candidates:
+        # "decrement_ledger_sequence",
+        # "replace_event_with_switched_ledger",
+        # "replace_status_with_monitoring",
+        # "replace_status_with_shutting",
+        # "skew_network_time",
+        # "replace_seq_range",
+        "drop",
+    ],
+    ripple_pb2.TMLedgerData: [
+        "do_nothing",
+        "set_error_no_ledger",
+        "clear_nodes",
+        "replace_cookie_with_prev",
+        "replace_ledger_hash_with_dummy",
+        # Future candidates:
+        # "set_error_no_node",
+        # "drop_first_node",
+        # "duplicate_first_node",
+        # "corrupt_first_node_id",
+        # "corrupt_first_node_data",
+        # "increment_ledger_sequence",
+        # "replace_type_with_candidate",
+        "drop",
+    ],
     ripple_pb2.TMGetLedger: [
         "do_nothing",
         "replace_ledger_hash_with_dummy",
@@ -56,7 +84,7 @@ BYZZ_MUTATE_METHODS = {
         "increment_close_time_bucket",
         "decrement_close_time_bucket",
         "replace_close_time_with_old",
-        # TODO: replace prev ledger hash
+        "replace_prev_lgr_hash",
         "increment_propose_seq",
         # "repeat_5",
         "drop",
@@ -185,6 +213,17 @@ class ByzzMutator:
                 )
             signed_message = sign_message(new_msg)
             return signed_message, None, None
+        elif method == "replace_prev_lgr_hash":
+            self.debug("Mutate TMProposeSet: replace_prev_lgr_hash")
+            with self.lock:
+                new_msg = replace_prev_lgr_hash_with_old_propose(
+                    msg_copy,
+                    getattr(self.strategy, "old_proposal_prev_ledger_hashes", {}),
+                    getattr(self.strategy, "old_validation_hashes", {}),
+                    self.strategy.dummy_proposal,
+                )
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
         elif method == "increment_propose_seq":
             self.debug("Mutate TMProposeSet: increment_propose_seq")
             new_msg = increment_propose_seq(msg_copy)
@@ -306,6 +345,69 @@ class ByzzMutator:
             logger.error(f"Unsupported mutation method for TMTransaction: {method}")
             raise ValueError(f"Unsupported mutation method for TMTransaction: {method}")
 
+    def mutate_status_change(
+        self, message: ripple_pb2.TMStatusChange, method: str
+    ) -> Tuple[Any, Any, Any]:
+        if method == "do_nothing":
+            return None, None, None
+        elif method == "replace_ledger_hash_with_dummy":
+            msg_copy = copy.deepcopy(message)
+            msg_copy.ledgerHash = bytes.fromhex(self.strategy.dummy_hash)
+            return msg_copy, None, None
+        elif method == "replace_prev_lgr_hash_with_dummy":
+            msg_copy = copy.deepcopy(message)
+            msg_copy.ledgerHashPrevious = bytes.fromhex(self.strategy.dummy_hash)
+            return msg_copy, None, None
+        elif method == "increment_ledger_sequence":
+            msg_copy = copy.deepcopy(message)
+            if msg_copy.ledgerSeq < MAX_U32:
+                msg_copy.ledgerSeq += 1
+            return msg_copy, None, None
+        elif method == "replace_event_with_lost_sync":
+            msg_copy = copy.deepcopy(message)
+            msg_copy.newEvent = ripple_pb2.neLOST_SYNC
+            return msg_copy, None, None
+        elif method == "drop":
+            return None, MAX_U32, 0
+        else:
+            logger.error(f"Unsupported mutation method for TMStatusChange: {method}")
+            raise ValueError(f"Unsupported mutation method for TMStatusChange: {method}")
+
+    def mutate_ledger_data(
+        self, message: ripple_pb2.TMLedgerData, method: str
+    ) -> Tuple[Any, Any, Any]:
+        if method == "do_nothing":
+            return None, None, None
+        elif method == "set_error_no_ledger":
+            msg_copy = copy.deepcopy(message)
+            msg_copy.error = ripple_pb2.reNO_LEDGER
+            del msg_copy.nodes[:]
+            return msg_copy, None, None
+        elif method == "clear_nodes":
+            msg_copy = copy.deepcopy(message)
+            del msg_copy.nodes[:]
+            return msg_copy, None, None
+        elif method == "replace_cookie_with_prev":
+            msg_copy = copy.deepcopy(message)
+            current_cookie = int(msg_copy.requestCookie)
+            with self.lock:
+                old_cookies = list(getattr(self.strategy, "old_ledger_data_cookies", []))
+            candidate_cookies = [c for c in old_cookies if int(c) != current_cookie]
+            if candidate_cookies:
+                msg_copy.requestCookie = int(random.choice(candidate_cookies))
+            else:
+                msg_copy.requestCookie = random.randint(1, MAX_U32)
+            return msg_copy, None, None
+        elif method == "replace_ledger_hash_with_dummy":
+            msg_copy = copy.deepcopy(message)
+            msg_copy.ledgerHash = bytes.fromhex(self.strategy.dummy_hash)
+            return msg_copy, None, None
+        elif method == "drop":
+            return None, MAX_U32, 0
+        else:
+            logger.error(f"Unsupported mutation method for TMLedgerData: {method}")
+            raise ValueError(f"Unsupported mutation method for TMLedgerData: {method}")
+
     def mutate_get_ledger(
         self, message: ripple_pb2.TMGetLedger, method: str
     ) -> Tuple[Any, Any, Any]:
@@ -365,6 +467,10 @@ class ByzzMutator:
             return self.mutate_have_transaction_set(message, method)
         elif isinstance(message, ripple_pb2.TMTransaction):
             return self.mutate_transaction(message, method)
+        elif isinstance(message, ripple_pb2.TMStatusChange):
+            return self.mutate_status_change(message, method)
+        elif isinstance(message, ripple_pb2.TMLedgerData):
+            return self.mutate_ledger_data(message, method)
         elif isinstance(message, ripple_pb2.TMGetLedger):
             return self.mutate_get_ledger(message, method)
         else:
@@ -471,6 +577,39 @@ def _is_all_zero_hash(val) -> bool:
     return False
 
 
+def _hash_to_bytes(val: Any) -> bytes | None:
+    if val is None:
+        return None
+    if isinstance(val, (bytes, bytearray)):
+        hash_bytes = bytes(val)
+    elif isinstance(val, str):
+        s = val.strip()
+        if s.startswith(("0x", "0X")):
+            s = s[2:]
+        s = re.sub(r"[^0-9A-Fa-f]", "", s)
+        if len(s) % 2 == 1:
+            s = "0" + s
+        try:
+            hash_bytes = bytes.fromhex(s)
+        except ValueError:
+            return None
+    else:
+        return None
+
+    if len(hash_bytes) != 32:
+        return None
+    return hash_bytes
+
+
+def _hash_candidates_excluding(current: bytes, values) -> list[bytes]:
+    candidates = []
+    for value in values:
+        hash_bytes = _hash_to_bytes(value)
+        if hash_bytes is not None and hash_bytes != current:
+            candidates.append(hash_bytes)
+    return candidates
+
+
 def replace_txs_with_old_propose(
     message: ripple_pb2.TMProposeSet,
     old_proposals: dict[int, set[bytes]],
@@ -521,4 +660,43 @@ def replace_close_time_with_old_propose(
 
     if candidate_close_times:
         m.closeTime = int(random.choice(candidate_close_times))
+    return m
+
+
+def replace_prev_lgr_hash_with_old_propose(
+    message: ripple_pb2.TMProposeSet,
+    old_prev_ledger_hashes: dict[int, set[bytes]],
+    old_validation_hashes: dict[int, set[str]],
+    dummy_prev_lgr_hash: bytes,
+) -> ripple_pb2.TMProposeSet:
+    """Replace a proposal parent ledger hash with an observed alternative.
+
+    Validations do not carry a previous-ledger field in the decoded form; their
+    LedgerHash can still serve as a plausible parent hash for later proposals.
+    """
+    m = copy.deepcopy(message)
+    current_prev = bytes(m.previousledger)
+
+    candidate_hashes = _hash_candidates_excluding(
+        current_prev, old_prev_ledger_hashes.get(m.proposeSeq - 1, set())
+    )
+    if not candidate_hashes:
+        candidate_hashes = _hash_candidates_excluding(
+            current_prev, old_prev_ledger_hashes.get(m.proposeSeq, set())
+        )
+    if not candidate_hashes:
+        all_prev_hashes = set()
+        for hashes in old_prev_ledger_hashes.values():
+            all_prev_hashes.update(hashes)
+        candidate_hashes = _hash_candidates_excluding(current_prev, all_prev_hashes)
+    if not candidate_hashes:
+        all_validation_hashes = set()
+        for hashes in old_validation_hashes.values():
+            all_validation_hashes.update(hashes)
+        candidate_hashes = _hash_candidates_excluding(current_prev, all_validation_hashes)
+
+    if candidate_hashes:
+        m.previousledger = random.choice(candidate_hashes)
+    else:
+        m.previousledger = dummy_prev_lgr_hash
     return m

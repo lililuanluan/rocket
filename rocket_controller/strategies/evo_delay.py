@@ -60,7 +60,12 @@ class EvoDelayStrategy(Strategy):
         
         self.old_proposals = {-1: set([self.dummy_proposal,])} # seq -> set of proposals
         self.old_proposal_close_times = {-1: set()} # seq -> set of proposal close times
+        self.old_proposal_prev_ledger_hashes = {-1: set([self.dummy_proposal,])} # seq -> set of proposal previous ledger hashes
         self.old_validation_hashes = {-1: set([self.dummy_validation,])} # seq -> set of validations
+        self.old_status_ledger_hashes = {-1: set([self.dummy_proposal,])} # seq -> set of status ledger hashes
+        self.old_status_prev_ledger_hashes = {-1: set([self.dummy_proposal,])} # seq -> set of status previous ledger hashes
+        self.old_ledger_data_hashes = {-1: set([self.dummy_proposal,])} # seq -> set of ledger data hashes
+        self.old_ledger_data_cookies = []
         self.old_transactions = []
         
         self.old_get_ledger = []
@@ -98,6 +103,9 @@ class EvoDelayStrategy(Strategy):
             if prop_seq not in self.old_proposal_close_times:
                 self.old_proposal_close_times[prop_seq] = set()
             self.old_proposal_close_times[prop_seq].add(int(message.closeTime))
+            if prop_seq not in self.old_proposal_prev_ledger_hashes:
+                self.old_proposal_prev_ledger_hashes[prop_seq] = set()
+            self.old_proposal_prev_ledger_hashes[prop_seq].add(bytes(message.previousledger))
         elif isinstance(message, ripple_pb2.TMValidation):
             parsed = PacketEncoderDecoder.decode_validation(message)
             if "error" in parsed:
@@ -113,6 +121,27 @@ class EvoDelayStrategy(Strategy):
                 self.old_validation_hashes[ldgr_seq] = set()
             if lh:
                 self.old_validation_hashes[ldgr_seq].add(lh)
+        elif isinstance(message, ripple_pb2.TMStatusChange):
+            ledger_seq = int(message.ledgerSeq)
+            if ledger_seq not in self.old_status_ledger_hashes:
+                self.old_status_ledger_hashes[ledger_seq] = set()
+            if message.ledgerHash:
+                self.old_status_ledger_hashes[ledger_seq].add(bytes(message.ledgerHash))
+            if ledger_seq not in self.old_status_prev_ledger_hashes:
+                self.old_status_prev_ledger_hashes[ledger_seq] = set()
+            if message.ledgerHashPrevious:
+                self.old_status_prev_ledger_hashes[ledger_seq].add(
+                    bytes(message.ledgerHashPrevious)
+                )
+        elif isinstance(message, ripple_pb2.TMLedgerData):
+            ledger_seq = int(message.ledgerSeq)
+            if ledger_seq not in self.old_ledger_data_hashes:
+                self.old_ledger_data_hashes[ledger_seq] = set()
+            if message.ledgerHash:
+                self.old_ledger_data_hashes[ledger_seq].add(bytes(message.ledgerHash))
+            request_cookie = int(message.requestCookie)
+            if request_cookie not in self.old_ledger_data_cookies:
+                self.old_ledger_data_cookies.append(request_cookie)
         elif isinstance(message, ripple_pb2.TMTransaction):
             tx = message.rawTransaction.hex()
             if tx not in self.old_transactions:
@@ -156,6 +185,14 @@ class EvoDelayStrategy(Strategy):
     ) -> str:
         method = self.byzz_mutator.get_mutation_method_50_percent(message)
         return method
+
+    def observe_packet_for_strategy_state(
+        self,
+        message: Message,
+        packet: packet_pb2.Packet,
+        current_ledger: int,
+    ) -> None:
+        return None
     
     def are_partitioned(self, sender_node_id, receiver_node_id):
         return False
@@ -200,6 +237,7 @@ class EvoDelayStrategy(Strategy):
         except ValueError as e: # byzz_node seq is not in map
             current_ledger = self.iteration_type.get_ledger_sequence_cur_max()     
 
+        self.observe_packet_for_strategy_state(message, packet, current_ledger)
         configed_delay = self.get_delay(message_type, packet, current_ledger, type(message))
 
         # # Debug logging for message routing
@@ -285,6 +323,18 @@ class EvoDelayStrategy(Strategy):
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
 
                 # print(f"chosen mutation method: {method}")
+                return handle_mutated_message(mutated_message, delay, repeat)
+            elif isinstance(message, ripple_pb2.TMLedgerData):
+                if sender_node_id not in (self.byzz_nodes or []):
+                    return packet.data, configed_delay, 1
+                method = self.get_mutation_method(message, packet, current_ledger)
+                mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
+                return handle_mutated_message(mutated_message, delay, repeat)
+            elif isinstance(message, ripple_pb2.TMStatusChange):
+                if sender_node_id not in (self.byzz_nodes or []):
+                    return packet.data, configed_delay, 1
+                method = self.get_mutation_method(message, packet, current_ledger)
+                mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(mutated_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMTransaction):
                 if sender_node_id not in (self.byzz_nodes or []):
