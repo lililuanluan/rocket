@@ -69,6 +69,19 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--seqcheck",
+        type=str,
+        default="statuschange",
+        choices=["fullyval", "statuschange"],
+        metavar="SEQCHECK",
+        help=(
+            "source for seq-scoped delay/byzz rules: fullyval uses the "
+            "ledgerClosed subscription state; statuschange uses TMStatusChange "
+            "(default: statuschange)"
+        ),
+    )
+
+    parser.add_argument(
         "--max-ledger-seq",
         type=int,
         default=15,

@@ -100,6 +100,7 @@ def run_rocket_and_evaluate(
     ripple_image: str,
     rust_log_level: str,
     fitness_function: str,
+    seqcheck: str = "statuschange",
     individual_timeout_sec: int = 300,
 ):
     cur_dir = os.getcwd()
@@ -143,6 +144,7 @@ def run_rocket_and_evaluate(
                     "min_delay_ms": min_delay_ms,
                     "max_delay_ms": max_delay_ms,
                     "timeout_sec_per_seq": timeout_sec_per_seq,
+                    "seqcheck": seqcheck,
                 },
                 f,
             )

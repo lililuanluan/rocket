@@ -51,6 +51,11 @@ class EvoDelayStrategy(Strategy):
         self.encoding: dict = self.params["encoding"]
         self.byzz_min_seq: int = self.params.get("byzz_min_seq", 5)
         self.byzz_max_seq: int = self.params.get("byzz_max_seq", 10)
+        self.seqcheck: str = str(self.params.get("seqcheck", "statuschange")).lower()
+        if self.seqcheck not in ("fullyval", "statuschange"):
+            raise ValueError(
+                "Invalid seqcheck value. Expected one of: fullyval, statuschange"
+            )
 
 
         self.dummy_hash = "E803E1999369975AED1BFD2444A3552A73383C03A2004CB784CE07E13EBD7D7C"
@@ -197,6 +202,40 @@ class EvoDelayStrategy(Strategy):
     def are_partitioned(self, sender_node_id, receiver_node_id):
         return False
 
+    def _get_fully_validated_ledger(self, sender_node_id: int) -> int:
+        try:
+            return self.iteration_type.get_ledger_sequence(sender_node_id)
+        except ValueError:
+            return self.iteration_type.get_ledger_sequence_cur_max()
+
+    def _get_status_change_ledger(
+        self,
+        sender_node_id: int,
+        message: Message | None = None,
+    ) -> int:
+        try:
+            current_ledger = self.iteration_type.get_status_change_sequence(
+                sender_node_id
+            )
+        except ValueError:
+            current_ledger = self.iteration_type.get_status_change_sequence_cur_max()
+
+        if isinstance(message, ripple_pb2.TMStatusChange):
+            current_ledger = max(current_ledger, int(message.ledgerSeq))
+
+        if current_ledger > 0:
+            return current_ledger
+        return self._get_fully_validated_ledger(sender_node_id)
+
+    def _get_current_ledger(
+        self,
+        sender_node_id: int,
+        message: Message | None = None,
+    ) -> int:
+        if self.seqcheck == "fullyval":
+            return self._get_fully_validated_ledger(sender_node_id)
+        return self._get_status_change_ledger(sender_node_id, message)
+
     def handle_packet(self, packet: packet_pb2.Packet) -> Tuple[bytes, int, int]:
         """
         Implements the handle_packet method with an encoding of delays.
@@ -232,10 +271,7 @@ class EvoDelayStrategy(Strategy):
         # 35: ripple_pb2.TMHaveTransactionSet
         # 41: ripple_pb2.TMValidation
 
-        try:
-            current_ledger = self.iteration_type.get_ledger_sequence(sender_node_id)
-        except ValueError as e: # byzz_node seq is not in map
-            current_ledger = self.iteration_type.get_ledger_sequence_cur_max()     
+        current_ledger = self._get_current_ledger(sender_node_id, message)
 
         self.observe_packet_for_strategy_state(message, packet, current_ledger)
         configed_delay = self.get_delay(message_type, packet, current_ledger, type(message))

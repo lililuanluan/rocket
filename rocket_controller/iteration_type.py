@@ -75,6 +75,7 @@ class TimeBasedIteration:
 
         self._max_ledger_seq = max_ledger_seq
         self.ledger_validation_map: Dict[int, LedgerValidationInfo] = {}
+        self.status_change_sequence_map: Dict[int, LedgerValidationInfo] = {}
         self.ledger_validation_history: Dict[int, Dict[int, Dict]] = {} # node -> {seq -> {seq, time, deltatime}}
         self._lock = threading.Lock()
         # Set of byzantine node ids to exclude from spec checks (populated via set_log_dir)
@@ -268,6 +269,9 @@ class TimeBasedIteration:
             self.ledger_validation_map = {
                 node.id: {"seq": 1, "time": _now} for node in validator_nodes
             }
+            self.status_change_sequence_map = {
+                node.id: {"seq": 1, "time": _now} for node in validator_nodes
+            }
             self.ledger_validation_history = {node.id: {} for node in validator_nodes}
             self._validator_nodes = validator_nodes
 
@@ -344,6 +348,7 @@ class TimeBasedIteration:
             self._timer.cancel()
         self._timer = None
         self.ledger_validation_map = {}
+        self.status_change_sequence_map = {}
 
     def set_grpc_port(self, grpc_port: int):
         """Update the controller gRPC port before starting the interceptor."""
@@ -461,6 +466,8 @@ class TimeBasedIteration:
         if not self._validator_nodes:
             raise ValueError("Validator nodes not initialized.")
 
+        self.record_status_change_sequence(from_id, int(status.ledgerSeq), timestamp)
+
         if (status.newEvent == ripple_pb2.neACCEPTED_LEDGER) and self._network:
             self.perform_genesis_transactions_if_not_performed()
         if status.newEvent == ripple_pb2.neACCEPTED_LEDGER:
@@ -573,6 +580,41 @@ class TimeBasedIteration:
             return 0
         seqs = [
             info["seq"] for node_id, info in self.ledger_validation_map.items()
+            if node_id not in self._byzantine_nodes
+        ]
+        return max(seqs) if seqs else 0
+
+    def record_status_change_sequence(
+        self, node_id: int, seq: int, timestamp: datetime
+    ) -> None:
+        """
+        Record the latest ledger sequence announced by TMStatusChange.
+
+        This is intentionally separate from ledger_validation_map, which tracks
+        fully validated ledgers from the WebSocket ledgerClosed subscription and
+        drives termination/result logging.
+        """
+        with self._lock:
+            if node_id not in self.status_change_sequence_map:
+                return
+            if seq > self.status_change_sequence_map[node_id]["seq"]:
+                self.status_change_sequence_map[node_id]["seq"] = seq
+                self.status_change_sequence_map[node_id]["time"] = timestamp
+
+    def get_status_change_sequence(self, node_id: int) -> int:
+        """
+        Get the latest ledger sequence announced by TMStatusChange for a node.
+        """
+        if node_id not in self.status_change_sequence_map:
+            raise ValueError(f"Node {node_id} not found in status change map.")
+        return self.status_change_sequence_map[node_id]["seq"]
+
+    def get_status_change_sequence_cur_max(self) -> int:
+        # Return the maximum TMStatusChange sequence among non-byzantine nodes.
+        if not self.status_change_sequence_map:
+            return 0
+        seqs = [
+            info["seq"] for node_id, info in self.status_change_sequence_map.items()
             if node_id not in self._byzantine_nodes
         ]
         return max(seqs) if seqs else 0

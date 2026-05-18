@@ -152,6 +152,7 @@ def evaluate_individual_worker(args):
             ripple_image=config.get("ripple_image", ""),
             rust_log_level=config.get("rust_log_level", "info"),
             fitness_function=fitness_function,
+            seqcheck=config.get("seqcheck", "statuschange"),
             individual_timeout_sec=config.get("individual_timeout_sec", 300),
         )
         if not result.get("runtime_invalid", False):

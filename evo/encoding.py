@@ -1442,6 +1442,7 @@ def _build_strategy_input_payload(encoding_dict, configs, seed=42):
         "min_delay_ms": configs["min_delay_ms"],
         "max_delay_ms": configs["max_delay_ms"],
         "timeout_sec_per_seq": configs["timeout_sec_per_seq"],
+        "seqcheck": configs.get("seqcheck", "statuschange"),
     }
 
 

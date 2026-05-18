@@ -95,6 +95,10 @@ def validate_config(config: dict):
     if config.get("start_partition") not in (None, "open", "establish"):
         raise ValueError("Config key 'start_partition' must be one of: open, establish")
 
+    seqcheck = config.get("seqcheck")
+    if seqcheck is not None and str(seqcheck).lower() not in ("fullyval", "statuschange"):
+        raise ValueError("Config key 'seqcheck' must be one of: fullyval, statuschange")
+
 
 def get_parallel_mode(config: dict) -> str:
     """Return 'serial' or 'parallel' from config (default: serial)."""
@@ -129,6 +133,7 @@ def print_config_summary(config: dict, parallel_mode: str):
     print(f"  Total num tests:      {config.get('total_num_tests', 500)}")
     print(f"  Individual timeout:   {config.get('individual_timeout_sec', 180)}s")
     print(f"  Runtime retries:     {config.get('runtime_retries', 1)}")
+    print(f"  Seq check:           {config.get('seqcheck', 'statuschange')}")
     print(
         f"  Delay bounds:         {config.get('min_delay_ms', 0)}-{config.get('max_delay_ms', 100)} ms"
     )
@@ -200,6 +205,7 @@ def main():
     partition_duration = config.get("partition_duration")
     max_partition_duration = config.get("max_partition_duration")
     start_partition = config.get("start_partition")
+    seqcheck = str(config.get("seqcheck", "statuschange")).lower()
 
     log_dir = Path(dirs["logs_dir"]) / get_date_time_strf()
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -257,6 +263,8 @@ def main():
                     cmd.extend(["--max-partition-duration", str(max_partition_duration)])
                 if start_partition is not None:
                     cmd.extend(["--start-partition", str(start_partition)])
+                if seqcheck is not None:
+                    cmd.extend(["--seqcheck", str(seqcheck)])
 
                 # ensure both the repo root AND the evo/ dir are on PYTHONPATH.
                 # evo/evotest_parallel.py uses bare imports (e.g. `from evaluate

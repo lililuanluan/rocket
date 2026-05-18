@@ -25,6 +25,7 @@ rust_log_level: "info"
 
 byzz_min_seq: 5
 byzz_max_seq: 10
+seqcheck: statuschange
 
 
 

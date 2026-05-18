@@ -57,6 +57,7 @@ DEFAULT_EVOTEST_CONFIG: dict[str, Any] = {
     "rust_log_level": "info",
     "byzz_min_seq": 5,
     "byzz_max_seq": 10,
+    "seqcheck": "statuschange",
     "max_ledger_seq": 15,
     "total_num_tests": 500,
     "population_size": 10,
@@ -212,6 +213,10 @@ def validate_config(config: dict[str, Any]):
     if config.get("start_partition") not in (None, "open", "establish"):
         raise ValueError("Config key 'start_partition' must be one of: open, establish")
 
+    seqcheck = config.get("seqcheck")
+    if seqcheck is not None and str(seqcheck).lower() not in ("fullyval", "statuschange"):
+        raise ValueError("Config key 'seqcheck' must be one of: fullyval, statuschange")
+
 
 def get_parallel_mode(config: dict[str, Any]) -> str:
     mode = str(config.get("parallel_mode", "parallel")).lower()
@@ -273,6 +278,7 @@ def extend_run_config(
         config.get("partition_duration") or config["max_partition_duration"]
     )
     config["start_partition"] = config.get("start_partition") or "open"
+    config["seqcheck"] = str(config.get("seqcheck") or "statuschange").lower()
 
     population_size = int(config.get("population_size", 10))
     total_num_tests = int(config.get("total_num_tests", 500))
@@ -356,6 +362,7 @@ def print_config_summary(
     print(f"  Mu:                       {config.get('mu', 4)}")
     print(f"  Total num tests:          {config.get('total_num_tests', 500)}")
     print(f"  Start partition:          {config.get('start_partition', 'open')}")
+    print(f"  Seq check:                {config.get('seqcheck', 'statuschange')}")
     print(f"  Max partition duration:   {config.get('max_partition_duration', 'default')}ms")
     print(f"  Individual timeout:       {config.get('individual_timeout_sec')}s")
     print(f"  Runtime retries:          {config.get('runtime_retries', 1)}")
@@ -455,6 +462,7 @@ def evaluate_task_worker(task: EvaluationTask) -> dict[str, Any]:
             ripple_image=config.get("ripple_image", ""),
             rust_log_level=config.get("rust_log_level", "info"),
             fitness_function=config.get("fitness_function"),
+            seqcheck=config.get("seqcheck", "statuschange"),
             individual_timeout_sec=config.get("individual_timeout_sec", 300),
         )
         if not result.get("runtime_invalid", False):
