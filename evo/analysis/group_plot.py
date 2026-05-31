@@ -14,10 +14,20 @@ def evolution_report(fitness_dir: Path) -> list[Path]:
     if not csv_path.is_file():
         raise FileNotFoundError(f"Could not find evo_result.csv under {fitness_dir}")
 
-    out_path = fitness_dir / legacy_plot.FITNESS_REPORT_NAME
+    plot_data = legacy_plot.load_plot_data(csv_path, messages=[])
+    if plot_data is None:
+        raise RuntimeError(f"Could not load plot data from {csv_path}")
+
+    df, metrics, _ = plot_data
+    is_multi_objective = legacy_plot.has_effective_objectives(df, metrics)
+    out_path = fitness_dir / (
+        legacy_plot.MULTI_OBJECTIVE_REPORT_NAME
+        if is_multi_objective
+        else legacy_plot.FITNESS_REPORT_NAME
+    )
     legacy_plot.generate_reports_for_csvs(
         [csv_path],
-        custom_output=out_path,
+        custom_output=fitness_dir / legacy_plot.FITNESS_REPORT_NAME,
         strategy_root_dir=None,
         jobs=1,
     )
@@ -51,22 +61,46 @@ def fitness_trend_report(encoding_dir: Path) -> list[Path]:
     strategy_groups = legacy_plot.collect_strategy_entries(
         report_results, root_dir=encoding_dir
     )
-    if not strategy_groups:
-        raise RuntimeError(f"Could not build strategy entries under {encoding_dir}")
-
+    output_paths: list[Path] = []
     strategy_tasks = [
         (strategy_dir, plot_entries, strategy_dir / legacy_plot.STRATEGY_REPORT_NAME)
         for strategy_dir, plot_entries in strategy_groups.items()
     ]
-    strategy_results = legacy_plot.run_strategy_tasks_parallel(
-        strategy_tasks,
-        legacy_plot.resolve_jobs(1, len(strategy_tasks)),
-    )
-    for messages in strategy_results:
-        for message in messages:
-            print(message)
+    if strategy_tasks:
+        strategy_results = legacy_plot.run_strategy_tasks_parallel(
+            strategy_tasks,
+            legacy_plot.resolve_jobs(1, len(strategy_tasks)),
+        )
+        for messages in strategy_results:
+            for message in messages:
+                print(message)
+        output_paths.extend(task[2] for task in strategy_tasks)
 
-    return [task[2] for task in strategy_tasks]
+    strategy_objective_groups = legacy_plot.collect_strategy_objective_entries(
+        report_results, root_dir=encoding_dir
+    )
+    strategy_objective_tasks = [
+        (
+            strategy_dir,
+            plot_entries,
+            strategy_dir / legacy_plot.STRATEGY_MULTI_OBJECTIVE_REPORT_NAME,
+        )
+        for strategy_dir, plot_entries in strategy_objective_groups.items()
+    ]
+    if strategy_objective_tasks:
+        strategy_objective_results = legacy_plot.run_strategy_multi_objective_tasks_parallel(
+            strategy_objective_tasks,
+            legacy_plot.resolve_jobs(1, len(strategy_objective_tasks)),
+        )
+        for messages in strategy_objective_results:
+            for message in messages:
+                print(message)
+        output_paths.extend(task[2] for task in strategy_objective_tasks)
+
+    if not output_paths:
+        raise RuntimeError(f"Could not build any strategy report under {encoding_dir}")
+
+    return output_paths
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

@@ -13,7 +13,7 @@ from concurrent.futures import ProcessPoolExecutor
 from collections import Counter
 from io import StringIO
 from pathlib import Path
-from typing import Tuple, Set
+from typing import Tuple, Set, Callable, Any
 from itertools import combinations
 import yaml
 from utils import *
@@ -24,7 +24,12 @@ repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 # Retry import; if it still fails, let the exception propagate so the caller can see the underlying issue
-from evo.preferred import get_max_tip_distance, get_sum_tip_distance
+from evo.preferred import (
+    get_max_tip_distance,
+    get_sum_tip_distance,
+    get_tip_distance_sums_by_seq,
+    parse_trie,
+)
 from protos.packet_pb2 import Packet as ProtoPacket
 from rocket_controller.encoder_decoder import (
     PacketEncoderDecoder,
@@ -44,6 +49,252 @@ GOSSIP_MESSAGE_WEIGHTS = {
     "TMGetLedger": 0.2,
     "TMLedgerData": 0.2,
 }
+
+DEFAULT_OBJECTIVE_SEQS = tuple(range(5, 11))
+
+
+def aggregate_mean(values: list[float | None]) -> float | None:
+    valid = [float(value) for value in values if value is not None]
+    if not valid:
+        return None
+    return float(np.mean(valid))
+
+
+def aggregate_sum(values: list[float | None]) -> float | None:
+    valid = [float(value) for value in values if value is not None]
+    if not valid:
+        return None
+    return float(np.sum(valid))
+
+
+def aggregate_max(values: list[float | None]) -> float | None:
+    valid = [float(value) for value in values if value is not None]
+    if not valid:
+        return None
+    return float(np.max(valid))
+
+
+OBJECTIVE_AGGREGATORS: dict[str, Callable[[list[float | None]], float | None]] = {
+    "mean_validation_time": aggregate_mean,
+    "var_validation_time": aggregate_mean,
+    "diff_validation_time_max": aggregate_max,
+    "num_propose_set": aggregate_sum,
+    "num_getledger_hashes": aggregate_sum,
+    "num_getledger_messages": aggregate_sum,
+    "validation_distribution_entropy": aggregate_mean,
+    "validation_distribution_entropy_max": aggregate_max,
+    "validation_distribution_entropy_unl": aggregate_mean,
+    "validation_distribution_entropy_max_unl": aggregate_max,
+    "proposal_distribution_entropy": aggregate_mean,
+    "proposal_position_entropy": aggregate_mean,
+    "proposal_position_entropy_max": aggregate_max,
+    "proposal_late_position_entropy_max": aggregate_max,
+    "proposal_close_time_entropy_max": aggregate_max,
+    "message_entropy_integral": aggregate_sum,
+    "message_entropy_average": aggregate_mean,
+    "markov_matrix_non_similarity": aggregate_mean,
+    "gossip_fiedler": aggregate_mean,
+    "max_tip_distance": aggregate_max,
+    "sum_tip_distance": aggregate_sum,
+}
+
+
+def normalize_objective_seqs(objective_seqs: list[int] | tuple[int, ...] | None) -> tuple[int, ...]:
+    seqs = DEFAULT_OBJECTIVE_SEQS if objective_seqs is None else objective_seqs
+    normalized = sorted({int(seq) for seq in seqs})
+    return tuple(normalized)
+
+
+def build_hash_to_ledger_seq(df_result: pd.DataFrame) -> dict[str, int]:
+    hash_to_seq = {}
+    for _, row in df_result.iterrows():
+        ledger_hash = row.get("ledger_hash")
+        ledger_index = row.get("ledger_index")
+        if pd.isna(ledger_hash) or ledger_hash in ("", None):
+            continue
+        if pd.isna(ledger_index):
+            continue
+        try:
+            hash_to_seq[str(ledger_hash)] = int(ledger_index)
+        except (TypeError, ValueError):
+            continue
+    return hash_to_seq
+
+
+def augment_hash_to_ledger_seq_from_action(
+    df_action: pd.DataFrame,
+    node_info: dict,
+    hash_to_seq: dict[str, int],
+) -> dict[str, int]:
+    augmented = dict(hash_to_seq)
+
+    for _, row in df_action.iterrows():
+        msg_type = row.get("message_type")
+        if pd.isna(msg_type):
+            continue
+
+        try:
+            message, _ = _decode_message_from_row(row)
+        except (ValueError, DecodingNotSupportedError, Exception):
+            continue
+
+        if message is None:
+            continue
+
+        try:
+            if msg_type == "TMValidation":
+                parsed = PacketEncoderDecoder.decode_validation(message)
+                ledger_seq = parsed.get("LedgerSequence")
+                ledger_hash = parsed.get("LedgerHash")
+                if ledger_seq is not None and ledger_hash:
+                    augmented[str(ledger_hash)] = int(ledger_seq)
+                continue
+
+            ledger_seq = getattr(message, "ledgerSeq", None)
+            ledger_hash = getattr(message, "ledgerHash", None)
+            if ledger_seq and ledger_hash:
+                augmented[bytes(ledger_hash).hex()] = int(ledger_seq)
+
+            previous_hash = getattr(message, "ledgerHashPrevious", None)
+            if ledger_seq and previous_hash and int(ledger_seq) > 0:
+                augmented[bytes(previous_hash).hex()] = int(ledger_seq) - 1
+        except Exception:
+            continue
+
+    return augmented
+
+
+def get_validation_time_values_by_seq(validation_times: dict) -> dict[int, list[float]]:
+    seq_to_times = {}
+    for node_times in validation_times.values():
+        for seq, value in node_times.items():
+            seq_to_times.setdefault(int(seq), []).append(float(value))
+    return seq_to_times
+
+
+def get_validation_distribution_stats_by_seq(validation_distribution) -> dict[int, dict[str, float]]:
+    seq_to_entropies = {}
+    for _, ledger_dict in validation_distribution.items():
+        for seq, validations in ledger_dict.items():
+            hash_counts = {}
+            total = 0
+            for _, ledger_hash in validations.items():
+                hash_counts[ledger_hash] = hash_counts.get(ledger_hash, 0) + 1
+                total += 1
+            if total == 0:
+                continue
+            entropy = 0.0
+            for count in hash_counts.values():
+                p = count / total
+                entropy -= p * np.log2(p)
+            seq_to_entropies.setdefault(int(seq), []).append(float(entropy))
+
+    stats = {}
+    for seq, entropies in seq_to_entropies.items():
+        stats[seq] = {
+            "mean": float(np.mean(entropies)),
+            "max": float(np.max(entropies)),
+        }
+    return stats
+
+
+def _decode_message_from_row(row: pd.Series):
+    packet_hex = row.get("possibly_mutated_packet_data")
+    if pd.isna(packet_hex) or not packet_hex:
+        packet_hex = row.get("packet_data")
+    if pd.isna(packet_hex) or not packet_hex:
+        return None, None
+
+    packet_bytes = bytes.fromhex(packet_hex)
+    packet = ProtoPacket(data=packet_bytes)
+    return PacketEncoderDecoder.decode_packet(packet)
+
+
+def _extract_row_sequences(
+    row: pd.Series,
+    node_info: dict,
+    ledger_hash_to_seq: dict[str, int],
+) -> set[int]:
+    msg_type = row.get("message_type")
+    if pd.isna(msg_type):
+        return set()
+
+    try:
+        message, _ = _decode_message_from_row(row)
+    except (ValueError, DecodingNotSupportedError, Exception):
+        return set()
+
+    if message is None:
+        return set()
+
+    sequences = set()
+
+    try:
+        if msg_type == "TMValidation":
+            parsed = PacketEncoderDecoder.decode_validation(message)
+            ledger_seq = parsed.get("LedgerSequence")
+            if ledger_seq is not None:
+                sequences.add(int(ledger_seq))
+        elif msg_type == "TMProposeSet":
+            previous_hash = bytes(message.previousledger).hex()
+            previous_seq = ledger_hash_to_seq.get(previous_hash)
+            if previous_seq is not None:
+                sequences.add(int(previous_seq) + 1)
+        elif msg_type in {"TMGetLedger", "TMLedgerData", "TMStatusChange"}:
+            ledger_seq = getattr(message, "ledgerSeq", None)
+            if ledger_seq:
+                sequences.add(int(ledger_seq))
+            else:
+                ledger_hash = getattr(message, "ledgerHash", None)
+                if ledger_hash:
+                    mapped_seq = ledger_hash_to_seq.get(bytes(ledger_hash).hex())
+                    if mapped_seq is not None:
+                        sequences.add(int(mapped_seq))
+                previous_hash = getattr(message, "ledgerHashPrevious", None)
+                if previous_hash:
+                    previous_seq = ledger_hash_to_seq.get(bytes(previous_hash).hex())
+                    if previous_seq is not None:
+                        sequences.add(int(previous_seq) + 1)
+    except Exception:
+        return set()
+
+    return sequences
+
+
+def get_action_rows_by_seq(
+    df_action: pd.DataFrame,
+    node_info: dict,
+    ledger_hash_to_seq: dict[str, int],
+    objective_seqs: tuple[int, ...],
+) -> dict[int, pd.DataFrame]:
+    seq_to_indices = {seq: [] for seq in objective_seqs}
+    objective_seq_set = set(objective_seqs)
+
+    for idx, row in df_action.iterrows():
+        sequences = _extract_row_sequences(row, node_info, ledger_hash_to_seq)
+        for seq in sequences:
+            if seq in objective_seq_set:
+                seq_to_indices[seq].append(idx)
+
+    return {
+        seq: df_action.loc[indices].copy()
+        for seq, indices in seq_to_indices.items()
+        if indices
+    }
+
+
+def build_objective_result(
+    metric_name: str,
+    objective_values: list[float | None],
+    original_value: float | None,
+) -> dict[str, Any]:
+    aggregate_fn = OBJECTIVE_AGGREGATORS[metric_name]
+    return {
+        "objectives": objective_values,
+        "aggregate_fn": aggregate_fn,
+        "aggregate_name": aggregate_fn.__name__,
+        "original_value": original_value,
+    }
 
 
 def base58_encode_ripple(data: bytes) -> str:
@@ -727,9 +978,16 @@ def get_gossip_fiedler(
 
 # 对每个时间窗口内发送的消息，根据类型分组，计算信息熵
 def get_message_entropy_integration(df_exec):
+    if df_exec.empty:
+        return None, None
+
     integral = 0
     start_time = df_exec["timestamp"].min()
     end_time = df_exec["timestamp"].max()
+    duration_ms = end_time - start_time
+    if duration_ms <= 0:
+        return 0.0, 0.0
+
     window_size = 100  # 0.1 second windows
     for window_start in range(start_time, end_time, window_size):
         window_end = window_start + window_size
@@ -746,7 +1004,7 @@ def get_message_entropy_integration(df_exec):
         entropy = -np.sum(probabilities * np.log2(probabilities))
         # 积分（简单累加）
         integral += entropy * (window_size / 1000.0)  # 转换为秒
-    return integral, integral / ((end_time - start_time) / 1000.0)
+    return integral, integral / (duration_ms / 1000.0)
 
 
 # 对每个节点发送/接收的消息组成的序列，计算马尔可夫转移矩阵，然后求所有节点矩阵的相似度
@@ -880,6 +1138,213 @@ def get_node_info(log_dir: Path):
     }
 
 
+def compute_objective_results(
+    log_dir: Path,
+    objective_seqs: tuple[int, ...],
+    df_action: pd.DataFrame,
+    df_result: pd.DataFrame,
+    node_info: dict,
+    byzz_nodes: list,
+    trusted_nodes: dict[int, set[int]] | None,
+    scalar_results: dict[str, Any],
+):
+    ledger_hash_to_seq = build_hash_to_ledger_seq(df_result)
+    ledger_hash_to_seq = augment_hash_to_ledger_seq_from_action(
+        df_action,
+        node_info=node_info,
+        hash_to_seq=ledger_hash_to_seq,
+    )
+    action_rows_by_seq = get_action_rows_by_seq(
+        df_action,
+        node_info=node_info,
+        ledger_hash_to_seq=ledger_hash_to_seq,
+        objective_seqs=objective_seqs,
+    )
+
+    validation_times = get_validation_times(df_result, node_info)
+    validation_time_values_by_seq = get_validation_time_values_by_seq(validation_times or {})
+
+    validation_distribution = get_validation_distribution(df_action, node_info, byzz_nodes)
+    validation_distribution_unl = get_validation_distribution_unl(
+        df_action,
+        node_info,
+        byzz_nodes,
+        trusted_nodes=trusted_nodes,
+    )
+    validation_distribution_stats = get_validation_distribution_stats_by_seq(
+        validation_distribution
+    )
+    validation_distribution_unl_stats = get_validation_distribution_stats_by_seq(
+        validation_distribution_unl
+    )
+
+    tip_distance_by_seq = get_tip_distance_sums_by_seq(parse_trie(log_dir))
+
+    objective_results = {}
+
+    objective_results["mean_validation_time"] = build_objective_result(
+        "mean_validation_time",
+        [
+            float(np.mean(validation_time_values_by_seq[seq]))
+            if seq in validation_time_values_by_seq and validation_time_values_by_seq[seq]
+            else None
+            for seq in objective_seqs
+        ],
+        scalar_results.get("mean_validation_time"),
+    )
+    objective_results["var_validation_time"] = build_objective_result(
+        "var_validation_time",
+        [
+            float(np.var(validation_time_values_by_seq[seq]))
+            if seq in validation_time_values_by_seq and len(validation_time_values_by_seq[seq]) > 1
+            else None
+            for seq in objective_seqs
+        ],
+        scalar_results.get("var_validation_time"),
+    )
+    objective_results["diff_validation_time_max"] = build_objective_result(
+        "diff_validation_time_max",
+        [
+            float(max(validation_time_values_by_seq[seq]) - min(validation_time_values_by_seq[seq]))
+            if seq in validation_time_values_by_seq and len(validation_time_values_by_seq[seq]) > 1
+            else None
+            for seq in objective_seqs
+        ],
+        scalar_results.get("diff_validation_time_max"),
+    )
+
+    objective_results["validation_distribution_entropy"] = build_objective_result(
+        "validation_distribution_entropy",
+        [
+            validation_distribution_stats.get(seq, {}).get("mean")
+            for seq in objective_seqs
+        ],
+        scalar_results.get("validation_distribution_entropy"),
+    )
+    objective_results["validation_distribution_entropy_max"] = build_objective_result(
+        "validation_distribution_entropy_max",
+        [
+            validation_distribution_stats.get(seq, {}).get("max")
+            for seq in objective_seqs
+        ],
+        scalar_results.get("validation_distribution_entropy_max"),
+    )
+    objective_results["validation_distribution_entropy_unl"] = build_objective_result(
+        "validation_distribution_entropy_unl",
+        [
+            validation_distribution_unl_stats.get(seq, {}).get("mean")
+            for seq in objective_seqs
+        ],
+        scalar_results.get("validation_distribution_entropy_unl"),
+    )
+    objective_results["validation_distribution_entropy_max_unl"] = build_objective_result(
+        "validation_distribution_entropy_max_unl",
+        [
+            validation_distribution_unl_stats.get(seq, {}).get("max")
+            for seq in objective_seqs
+        ],
+        scalar_results.get("validation_distribution_entropy_max_unl"),
+    )
+
+    objective_results["max_tip_distance"] = build_objective_result(
+        "max_tip_distance",
+        [tip_distance_by_seq.get(seq) for seq in objective_seqs],
+        scalar_results.get("max_tip_distance"),
+    )
+    objective_results["sum_tip_distance"] = build_objective_result(
+        "sum_tip_distance",
+        [tip_distance_by_seq.get(seq) for seq in objective_seqs],
+        scalar_results.get("sum_tip_distance"),
+    )
+
+    for metric_name in (
+        "num_propose_set",
+        "num_getledger_hashes",
+        "num_getledger_messages",
+        "proposal_distribution_entropy",
+        "proposal_position_entropy",
+        "proposal_position_entropy_max",
+        "proposal_late_position_entropy_max",
+        "proposal_close_time_entropy_max",
+        "message_entropy_integral",
+        "message_entropy_average",
+        "markov_matrix_non_similarity",
+        "gossip_fiedler",
+    ):
+        values: list[float | None] = []
+        for seq in objective_seqs:
+            df_seq = action_rows_by_seq.get(seq)
+            if df_seq is None or df_seq.empty:
+                values.append(None)
+                continue
+
+            if metric_name == "num_propose_set":
+                values.append(float(get_prop_set_count(df_seq)))
+                continue
+
+            if metric_name == "num_getledger_hashes":
+                requested_hashes, _ = get_getledger_stats(df_seq)
+                values.append(float(len(requested_hashes)))
+                continue
+
+            if metric_name == "num_getledger_messages":
+                _, num_requests = get_getledger_stats(df_seq)
+                values.append(float(num_requests))
+                continue
+
+            if metric_name.startswith("proposal_"):
+                proposal_distribution = get_proposal_distribution(df_seq, node_info, byzz_nodes)
+                if metric_name == "proposal_distribution_entropy":
+                    values.append(get_proposal_distribution_entropy(proposal_distribution))
+                    continue
+
+                (
+                    proposal_position_entropy,
+                    proposal_position_entropy_max,
+                    proposal_late_position_entropy_max,
+                    proposal_close_time_entropy_max,
+                ) = get_proposal_position_entropy_stats(proposal_distribution)
+                metric_value_map = {
+                    "proposal_position_entropy": proposal_position_entropy,
+                    "proposal_position_entropy_max": proposal_position_entropy_max,
+                    "proposal_late_position_entropy_max": proposal_late_position_entropy_max,
+                    "proposal_close_time_entropy_max": proposal_close_time_entropy_max,
+                }
+                values.append(metric_value_map[metric_name])
+                continue
+
+            if metric_name in {"message_entropy_integral", "message_entropy_average"}:
+                entropy_integral, entropy_average = get_message_entropy_integration(df_seq)
+                metric_value_map = {
+                    "message_entropy_integral": entropy_integral,
+                    "message_entropy_average": entropy_average,
+                }
+                values.append(metric_value_map[metric_name])
+                continue
+
+            if metric_name == "markov_matrix_non_similarity":
+                values.append(get_msg_sending_markov_matrix_non_similarity(df_seq))
+                continue
+
+            if metric_name == "gossip_fiedler":
+                values.append(
+                    get_gossip_fiedler(
+                        df_seq,
+                        node_info=node_info,
+                        byzz_nodes=byzz_nodes,
+                    )
+                )
+                continue
+
+        objective_results[metric_name] = build_objective_result(
+            metric_name,
+            values,
+            scalar_results.get(metric_name),
+        )
+
+    return objective_results
+
+
 FITNESS_FUNCTIONS = [
     "num_propose_set",
     "num_getledger_hashes",
@@ -905,7 +1370,12 @@ FITNESS_FUNCTIONS = [
 ]
 
 
-def evaluate_log(log_dir: Path, byzz_nodes: list):
+def evaluate_log(
+    log_dir: Path,
+    byzz_nodes: list,
+    objective_seqs: list[int] | tuple[int, ...] | None = None,
+    return_objectives: bool = False,
+):
 
     res = {i: None for i in FITNESS_FUNCTIONS}
 
@@ -1093,6 +1563,19 @@ def evaluate_log(log_dir: Path, byzz_nodes: list):
             "agg_spec_check": agg_spec_check,
         }
     )
+
+    if return_objectives:
+        objective_results = compute_objective_results(
+            log_dir=log_dir,
+            objective_seqs=normalize_objective_seqs(objective_seqs),
+            df_action=df_action,
+            df_result=df_result,
+            node_info=node_info,
+            byzz_nodes=byzz_nodes,
+            trusted_nodes=trusted_nodes,
+            scalar_results=res,
+        )
+        return res, objective_results
 
     return res
 

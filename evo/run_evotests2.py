@@ -10,11 +10,13 @@ evaluations are submitted to one global ``ProcessPoolExecutor``.
 from __future__ import annotations
 
 import copy
+import csv
 import os
 import queue
 import random
 import re
 import signal
+import shutil
 import sys
 import threading
 import time
@@ -78,6 +80,8 @@ DEFAULT_EVOTEST_CONFIG: dict[str, Any] = {
     "partition_mode": None,
     "byzz_mode": None,
     "force_exit_on_second_sigint": False,
+    "objective_mode": "single",
+    "objective_seqs": [5, 6, 7, 8, 9, 10],
 }
 
 
@@ -87,6 +91,15 @@ _active_pool: "SharedEvaluationPool | None" = None
 _main_stop_event: threading.Event | None = None
 _signal_count = 0
 _force_exit_on_second_sigint = False
+POPULATION_MEMBERSHIP_FIELDS = [
+    "generation",
+    "individual_id",
+    "fitness_type",
+    "selected_for_next_population",
+    "pareto_rank",
+    "crowding_distance",
+    "log_dir",
+]
 
 
 @dataclass(frozen=True)
@@ -105,7 +118,7 @@ class RunnerSummary:
     status: str
     evaluations: int
     elapsed_sec: float
-    best_fitness: float | None = None
+    best_fitness: Any | None = None
     best_log_dir: str | None = None
 
 
@@ -216,6 +229,18 @@ def validate_config(config: dict[str, Any]):
     seqcheck = config.get("seqcheck")
     if seqcheck is not None and str(seqcheck).lower() not in ("fullyval", "statuschange"):
         raise ValueError("Config key 'seqcheck' must be one of: fullyval, statuschange")
+
+    objective_mode = str(config.get("objective_mode", "single")).lower()
+    if objective_mode not in ("single", "multi"):
+        raise ValueError("Config key 'objective_mode' must be one of: single, multi")
+
+    objective_seqs = config.get("objective_seqs")
+    if objective_seqs is not None:
+        if not isinstance(objective_seqs, list) or not objective_seqs:
+            raise ValueError("Config key 'objective_seqs' must be a non-empty list")
+        for seq in objective_seqs:
+            if not isinstance(seq, int):
+                raise ValueError("Config key 'objective_seqs' must contain integers only")
 
 
 def get_parallel_mode(config: dict[str, Any]) -> str:
@@ -332,10 +357,17 @@ def build_run_configs(
     return run_configs, root_log_dir
 
 
+def snapshot_run_config(config_file: Path, root_log_dir: Path) -> Path:
+    snapshot_path = root_log_dir / config_file.name
+    shutil.copy2(config_file, snapshot_path)
+    return snapshot_path
+
+
 def print_config_summary(
     config: dict[str, Any],
     run_configs: list[dict[str, Any]],
     root_log_dir: Path,
+    config_snapshot_path: Path,
     max_concurrent_tasks: int,
     config_thread_limit: int,
 ):
@@ -349,10 +381,13 @@ def print_config_summary(
     print("RUN_EVOTESTS2 CONFIGURATION SUMMARY")
     print("=" * 70)
     print(f"  Config file:              evo/run_evotests.yaml")
+    print(f"  Config snapshot:          {config_snapshot_path}")
     print(f"  Root log dir:             {root_log_dir}")
     print(f"  Ripple images ({len(images)}):        {', '.join(images)}")
     print(f"  Mode combos ({len(strategies)}):        {', '.join(strategy_labels)}")
     print(f"  Fitness functions ({len(fitnesses)}):  {', '.join(fitnesses)}")
+    print(f"  Objective mode:           {config.get('objective_mode', 'single')}")
+    print(f"  Objective seqs:           {get_objective_seqs(config)}")
     if any(is_pure_random_strategy_combo(combo) for combo in strategies):
         print("  Pure random combos:       use no_fitness placeholder")
     print(f"  Total config runners:     {len(run_configs)}")
@@ -372,16 +407,91 @@ def print_config_summary(
 
 def setup_deap_types():
     with _deap_setup_lock:
-        if not hasattr(creator, "FitnessMax"):
-            creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+        if not hasattr(creator, "FitnessSingle"):
+            creator.create("FitnessSingle", base.Fitness, weights=(1.0,))
         if not hasattr(creator, "Individual"):
             creator.create(
                 "Individual",
                 list,
-                fitness=creator.FitnessMax,
+                fitness=creator.FitnessSingle,
                 log_dir=None,
                 evaluation_result=None,
             )
+
+
+def is_multi_objective(config: dict[str, Any]) -> bool:
+    return str(config.get("objective_mode", "single")).lower() == "multi"
+
+
+def get_objective_seqs(config: dict[str, Any]) -> tuple[int, ...]:
+    from evo.evaluate import normalize_objective_seqs
+
+    return normalize_objective_seqs(config.get("objective_seqs"))
+
+
+def get_fitness_class(config: dict[str, Any]):
+    setup_deap_types()
+    if not is_multi_objective(config):
+        return creator.FitnessSingle
+
+    objective_count = len(get_objective_seqs(config))
+    class_name = f"FitnessMulti_{objective_count}"
+    if not hasattr(creator, class_name):
+        creator.create(class_name, base.Fitness, weights=(1.0,) * objective_count)
+    return getattr(creator, class_name)
+
+
+def get_result_fitness_values(result: dict[str, Any], config: dict[str, Any]) -> tuple[float, ...]:
+    fitness_values = result.get("fitness_values")
+    if fitness_values is not None:
+        return tuple(float(value) for value in fitness_values)
+
+    if is_multi_objective(config):
+        return tuple(
+            INVALID_RUNTIME_FITNESS for _ in range(len(get_objective_seqs(config)))
+        )
+    return (float(result.get("fitness", INVALID_RUNTIME_FITNESS)),)
+
+
+def format_best_fitness(best_fitness: Any | None) -> str:
+    if best_fitness is None:
+        return "N/A"
+    if isinstance(best_fitness, (tuple, list)):
+        return "[" + ", ".join(f"{float(value):.6g}" for value in best_fitness) + "]"
+    return f"{float(best_fitness):.6g}"
+
+
+def init_population_membership_log(output_dir: Path) -> Path:
+    output_path = Path(output_dir) / "population_membership.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=POPULATION_MEMBERSHIP_FIELDS)
+        writer.writeheader()
+    return output_path
+
+
+def annotate_pareto_metadata(individuals: list[Any]) -> None:
+    if not individuals:
+        return
+
+    if not hasattr(tools, "sortNondominated"):
+        for ind in individuals:
+            ind.pareto_rank = None
+            ind.crowding_distance = None
+        return
+
+    from deap.tools.emo import assignCrowdingDist
+
+    for ind in individuals:
+        ind.pareto_rank = None
+        ind.crowding_distance = None
+
+    fronts = tools.sortNondominated(individuals, len(individuals), first_front_only=False)
+    for rank, front in enumerate(fronts):
+        assignCrowdingDist(front)
+        for ind in front:
+            ind.pareto_rank = rank
+            ind.crowding_distance = getattr(ind.fitness, "crowding_dist", None)
 
 
 def use_composed_encoding(config: dict[str, Any]) -> bool:
@@ -399,10 +509,9 @@ def get_encoding_cls(config: dict[str, Any]):
 
 
 def sample_individual(config: dict[str, Any]):
-    setup_deap_types()
     encoding_cls = get_encoding_cls(config)
     ind = encoding_cls.sample(config)
-    ind.fitness = creator.FitnessMax()
+    ind.fitness = get_fitness_class(config)()
     ind.log_dir = None
     ind.evaluation_result = None
     return ind
@@ -464,6 +573,8 @@ def evaluate_task_worker(task: EvaluationTask) -> dict[str, Any]:
             fitness_function=config.get("fitness_function"),
             seqcheck=config.get("seqcheck", "statuschange"),
             individual_timeout_sec=config.get("individual_timeout_sec", 300),
+            objective_mode=config.get("objective_mode", "single"),
+            objective_seqs=config.get("objective_seqs"),
         )
         if not result.get("runtime_invalid", False):
             break
@@ -487,7 +598,11 @@ def evaluate_task_worker(task: EvaluationTask) -> dict[str, Any]:
         "generation": task.generation,
         "individual_id": task.individual_id,
         "fitness": fitness,
+        "fitness_values": result.get("fitness_values"),
         "eval_result": result.get("eval_result", {}),
+        "objective_result": result.get("objective_result"),
+        "objective_mode": result.get("objective_mode", config.get("objective_mode", "single")),
+        "objective_seqs": result.get("objective_seqs", config.get("objective_seqs")),
         "log_dir": str(full_log_dir),
         "genes": task.genes,
         "run_status": result.get("run_status", "ok"),
@@ -541,6 +656,7 @@ class ExperimentRunner:
         self.pool = pool
         self.stop_event = stop_event
         self.experiment_id = config["experiment_id"]
+        self.population_membership_path = Path(config["test_log_dir"]) / "population_membership.csv"
         self.label = (
             f"{config['ripple_image']} / "
             f"{format_strategy_combo(config)} / "
@@ -553,7 +669,12 @@ class ExperimentRunner:
     def run(self) -> RunnerSummary:
         started_at = time.time()
         setup_deap_types()
-        EvoLogger.init_log(self.config["test_log_dir"])
+        EvoLogger.init_log(
+            self.config["test_log_dir"],
+            objective_mode=self.config.get("objective_mode", "single"),
+            objective_seqs=self.config.get("objective_seqs"),
+        )
+        init_population_membership_log(Path(self.config["test_log_dir"]))
 
         lambda_ = int(self.config["population_size"])
         mu = min(lambda_, int(self.config["mu"]))
@@ -565,7 +686,10 @@ class ExperimentRunner:
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         toolbox.register("mate", encoding_cls.mate)
         toolbox.register("mutate", encoding_cls.mutate)
-        toolbox.register("select", tools.selBest)
+        toolbox.register(
+            "select",
+            tools.selNSGA2 if is_multi_objective(self.config) else tools.selBest,
+        )
 
         stats = tools.Statistics(lambda ind: ind.fitness.values)
         stats.register("avg", np.mean)
@@ -573,7 +697,7 @@ class ExperimentRunner:
         stats.register("min", np.min)
         stats.register("max", np.max)
 
-        hof = tools.HallOfFame(1)
+        hof = tools.ParetoFront() if is_multi_objective(self.config) else tools.HallOfFame(1)
         logbook = tools.Logbook()
         logbook.header = ["gen", "nevals"] + stats.fields
 
@@ -592,7 +716,14 @@ class ExperimentRunner:
         logbook.record(gen=0, nevals=len(population), **record)
         self.log(logbook.stream)
 
-        population = toolbox.select(population, mu)
+        initial_population = population
+        population = toolbox.select(initial_population, mu)
+        self.write_population_membership(
+            generation=0,
+            evaluated_individuals=initial_population,
+            candidate_individuals=initial_population,
+            selected_individuals=population,
+        )
 
         for gen in range(1, max_generation + 1):
             if self.stop_event.is_set():
@@ -617,7 +748,15 @@ class ExperimentRunner:
                 evaluation_count += len(results)
                 self.apply_results(invalid_ind, results, generation=gen)
 
-            population = toolbox.select(population + offspring, mu)
+            combined_population = population + offspring
+            selected_population = toolbox.select(combined_population, mu)
+            self.write_population_membership(
+                generation=gen,
+                evaluated_individuals=invalid_ind,
+                candidate_individuals=combined_population,
+                selected_individuals=selected_population,
+            )
+            population = selected_population
             hof.update(population)
             record = stats.compile(population)
             logbook.record(gen=gen, nevals=len(invalid_ind), **record)
@@ -626,7 +765,11 @@ class ExperimentRunner:
         self.log("Evolution complete")
         if len(hof) > 0:
             best_ind = hof[0]
-            best_fit = best_ind.fitness.values[0]
+            best_fit = (
+                tuple(float(value) for value in best_ind.fitness.values)
+                if is_multi_objective(self.config)
+                else best_ind.fitness.values[0]
+            )
             best_log_dir = getattr(best_ind, "log_dir", None)
             self.log(f"Best fitness: {best_fit}")
             self.log(f"Best log dir: {best_log_dir}")
@@ -685,9 +828,56 @@ class ExperimentRunner:
             result = by_individual_id.get(idx)
             if result is None:
                 result = self.missing_result(generation=generation, individual_id=idx, ind=ind)
-            ind.fitness.values = (float(result.get("fitness", INVALID_RUNTIME_FITNESS)),)
+            ind.fitness.values = get_result_fitness_values(result, self.config)
             ind.log_dir = result.get("log_dir")
             ind.evaluation_result = result.get("eval_result", {})
+            ind.eval_generation = generation
+            ind.eval_individual_id = idx
+
+    def write_population_membership(
+        self,
+        *,
+        generation: int,
+        evaluated_individuals: list[Any],
+        candidate_individuals: list[Any],
+        selected_individuals: list[Any],
+    ) -> None:
+        if not evaluated_individuals:
+            return
+
+        annotate_pareto_metadata(candidate_individuals)
+        selected_ids = {id(ind) for ind in selected_individuals}
+        fitness_type = self.config["fitness_function"]
+
+        with open(self.population_membership_path, "a", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=POPULATION_MEMBERSHIP_FIELDS)
+            for ind in evaluated_individuals:
+                pareto_rank = getattr(ind, "pareto_rank", None)
+                crowding_distance = getattr(ind, "crowding_distance", None)
+                writer.writerow(
+                    {
+                        "generation": generation,
+                        "individual_id": getattr(ind, "eval_individual_id", None),
+                        "fitness_type": fitness_type,
+                        "selected_for_next_population": int(id(ind) in selected_ids),
+                        "pareto_rank": (
+                            pareto_rank
+                            if is_multi_objective(self.config) and pareto_rank is not None
+                            else "-"
+                        ),
+                        "crowding_distance": round(float(crowding_distance), 6)
+                        if is_multi_objective(self.config)
+                        and crowding_distance is not None
+                        and np.isfinite(float(crowding_distance))
+                        else (
+                            "inf"
+                            if is_multi_objective(self.config)
+                            and crowding_distance is not None
+                            else "-"
+                        ),
+                        "log_dir": getattr(ind, "log_dir", None),
+                    }
+                )
 
     def write_result(self, result: dict[str, Any]):
         test_log_dir = Path(self.config["test_log_dir"])
@@ -697,6 +887,8 @@ class ExperimentRunner:
                 result,
                 fitness_function,
                 test_log_dir / "evo_result.csv",
+                objective_mode=self.config.get("objective_mode", "single"),
+                objective_seqs=self.config.get("objective_seqs"),
             )
         else:
             EvoLogger.write_excluded_run_to_csv(
@@ -715,11 +907,15 @@ class ExperimentRunner:
             "generation": task.generation,
             "individual_id": task.individual_id,
             "fitness": INVALID_RUNTIME_FITNESS,
+            "fitness_values": tuple(
+                INVALID_RUNTIME_FITNESS for _ in range(len(get_objective_seqs(self.config)))
+            ) if is_multi_objective(self.config) else (INVALID_RUNTIME_FITNESS,),
             "eval_result": {
                 "runtime_invalid": True,
                 "runtime_invalid_reason": reason,
                 "worker_exception": str(exc),
             },
+            "objective_result": None,
             "log_dir": str(Path(self.config["test_log_dir"]) / f"G{task.generation}T{task.individual_id}"),
             "genes": task.genes,
             "run_status": "worker_exception",
@@ -735,10 +931,14 @@ class ExperimentRunner:
             "generation": generation,
             "individual_id": individual_id,
             "fitness": INVALID_RUNTIME_FITNESS,
+            "fitness_values": tuple(
+                INVALID_RUNTIME_FITNESS for _ in range(len(get_objective_seqs(self.config)))
+            ) if is_multi_objective(self.config) else (INVALID_RUNTIME_FITNESS,),
             "eval_result": {
                 "runtime_invalid": True,
                 "runtime_invalid_reason": "missing_result",
             },
+            "objective_result": None,
             "log_dir": str(Path(self.config["test_log_dir"]) / f"G{generation}T{individual_id}"),
             "genes": genes,
             "run_status": "missing_result",
@@ -760,7 +960,10 @@ class ExperimentRunner:
         if len(hof) > 0:
             best_ind = hof[0]
             if best_ind.fitness.valid:
-                best_fitness = float(best_ind.fitness.values[0])
+                if is_multi_objective(self.config):
+                    best_fitness = tuple(float(value) for value in best_ind.fitness.values)
+                else:
+                    best_fitness = float(best_ind.fitness.values[0])
             best_log_dir = getattr(best_ind, "log_dir", None)
 
         return RunnerSummary(
@@ -877,6 +1080,11 @@ def main() -> int:
     parallel_mode = get_parallel_mode(config)
     max_concurrent_tasks = get_max_concurrent_tasks(config)
     run_configs, root_log_dir = build_run_configs(config, dirs)
+    try:
+        config_snapshot_path = snapshot_run_config(config_file, root_log_dir)
+    except OSError as exc:
+        log_line(f"Failed to copy config snapshot into log root: {exc}")
+        return 1
     if not run_configs:
         log_line("No run configurations were generated.")
         return 1
@@ -891,6 +1099,7 @@ def main() -> int:
         config,
         run_configs,
         root_log_dir,
+        config_snapshot_path,
         max_concurrent_tasks,
         config_thread_limit,
     )
@@ -929,7 +1138,7 @@ def main() -> int:
 
     log_line("\n=== run_evotests2 Summary ===")
     for summary in sorted(summaries, key=lambda item: item.experiment_id):
-        best = "N/A" if summary.best_fitness is None else f"{summary.best_fitness:.6g}"
+        best = format_best_fitness(summary.best_fitness)
         log_line(
             f"[{summary.experiment_id}] status={summary.status} "
             f"evals={summary.evaluations} elapsed={summary.elapsed_sec:.1f}s "

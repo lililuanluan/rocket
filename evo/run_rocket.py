@@ -18,7 +18,7 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 from rocket_controller.helper import format_datetime
-from evo.evaluate import FITNESS_FUNCTIONS, evaluate_log
+from evo.evaluate import FITNESS_FUNCTIONS, evaluate_log, normalize_objective_seqs
 
 
 INVALID_RUNTIME_FITNESS = -1e12
@@ -65,6 +65,7 @@ def _runtime_invalid_result(
     reason: str,
     retcode: int,
     eval_result: dict | None = None,
+    fitness_values: tuple[float, ...] | None = None,
 ) -> dict:
     result = eval_result or {}
     result["runtime_invalid"] = True
@@ -72,6 +73,7 @@ def _runtime_invalid_result(
     return {
         "eval_result": result,
         "fitness": INVALID_RUNTIME_FITNESS,
+        "fitness_values": fitness_values or (INVALID_RUNTIME_FITNESS,),
         "run_status": "runtime_invalid",
         "runtime_invalid": True,
         "runtime_invalid_reason": reason,
@@ -102,6 +104,8 @@ def run_rocket_and_evaluate(
     fitness_function: str,
     seqcheck: str = "statuschange",
     individual_timeout_sec: int = 300,
+    objective_mode: str = "single",
+    objective_seqs: list[int] | tuple[int, ...] | None = None,
 ):
     cur_dir = os.getcwd()
     proc: subprocess.Popen | None = None
@@ -239,12 +243,30 @@ def run_rocket_and_evaluate(
     # Some panics leave partial logs that make evaluate_log raise before retry
     # can see runtime_invalid=True.
     runtime_invalid_reason = _detect_runtime_invalid_reason(log_dir, retcode)
+    normalized_objective_mode = str(objective_mode or "single").lower()
+    normalized_objective_seqs = normalize_objective_seqs(objective_seqs)
+    invalid_multi_values = tuple(
+        INVALID_RUNTIME_FITNESS for _ in normalized_objective_seqs
+    )
     if timed_out:
         if runtime_invalid_reason is not None:
-            return _runtime_invalid_result(runtime_invalid_reason, retcode)
+            return _runtime_invalid_result(
+                runtime_invalid_reason,
+                retcode,
+                fitness_values=(
+                    invalid_multi_values
+                    if normalized_objective_mode == "multi"
+                    else (INVALID_RUNTIME_FITNESS,)
+                ),
+            )
         return {
             "eval_result": {"timed_out": True},
             "fitness": 0.0,
+            "fitness_values": (
+                invalid_multi_values
+                if normalized_objective_mode == "multi"
+                else (0.0,)
+            ),
             "run_status": "timed_out",
             "runtime_invalid": False,
             "runtime_invalid_reason": None,
@@ -256,8 +278,17 @@ def run_rocket_and_evaluate(
         byzz_nodes = network_config["byzz_nodes"]
 
     raw_eval_result = None
+    objective_results = None
     try:
-        raw_eval_result = evaluate_log(log_dir, byzz_nodes=byzz_nodes)
+        if normalized_objective_mode == "multi" and fitness_function != "no_fitness":
+            raw_eval_result, objective_results = evaluate_log(
+                log_dir,
+                byzz_nodes=byzz_nodes,
+                objective_seqs=normalized_objective_seqs,
+                return_objectives=True,
+            )
+        else:
+            raw_eval_result = evaluate_log(log_dir, byzz_nodes=byzz_nodes)
     except Exception as exc:
         traceback_path = log_dir / "evaluation_error.log"
         traceback_path.write_text(
@@ -272,21 +303,51 @@ def run_rocket_and_evaluate(
 
     runtime_invalid = runtime_invalid_reason is not None
     eval_result = raw_eval_result or {}
+    objective_result = None
 
     if runtime_invalid:
         eval_result["runtime_invalid"] = True
         eval_result["runtime_invalid_reason"] = runtime_invalid_reason
         fitness = INVALID_RUNTIME_FITNESS
+        fitness_values = (
+            invalid_multi_values
+            if normalized_objective_mode == "multi"
+            else (INVALID_RUNTIME_FITNESS,)
+        )
         run_status = "runtime_invalid"
     else:
         fitness = 0.0
+        fitness_values = (0.0,)
+        objective_result = None
         if fitness_function in eval_result:
             fitness = eval_result[fitness_function] if eval_result[fitness_function] else 0.0
+        if normalized_objective_mode == "multi" and fitness_function != "no_fitness":
+            objective_result = (objective_results or {}).get(fitness_function)
+            if objective_result is not None:
+                objective_values = []
+                for value in objective_result.get("objectives", []):
+                    if value is None:
+                        objective_values.append(INVALID_RUNTIME_FITNESS)
+                    else:
+                        objective_values.append(float(value))
+                fitness_values = tuple(objective_values) or invalid_multi_values
+                original_value = objective_result.get("original_value")
+                if original_value is not None:
+                    fitness = float(original_value)
+        elif normalized_objective_mode == "multi":
+            fitness_values = tuple(0.0 for _ in normalized_objective_seqs)
+        else:
+            objective_result = None
+
         run_status = "ok"
 
     return {
         "eval_result": eval_result,
         "fitness": fitness,
+        "fitness_values": fitness_values,
+        "objective_result": objective_result,
+        "objective_mode": normalized_objective_mode,
+        "objective_seqs": list(normalized_objective_seqs),
         "run_status": run_status,
         "runtime_invalid": runtime_invalid,
         "runtime_invalid_reason": runtime_invalid_reason,
