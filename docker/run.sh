@@ -63,7 +63,7 @@ exec docker run --rm \
     -e ROCKET_HOST_GID="$(id -g)" \
     -e USER="$(id -un)" \
     "${image_name}" \
-    python evo/run_evotests.py "$@"
+    python -m evo.run_evotests2 "$@"
 
 # 杀死所有容器（放在这里防止忘了），不要删！！
 docker rm -f evo-runner || true
@@ -71,7 +71,7 @@ docker ps --format '{{.Names}}' | grep -E "^${USER}_.*(validator_[0-9]+|key_gene
 # docker ps --format '{{.Names}}' | grep -E '(^validator_|_validator_|^key_generator$|_key_generator$)' | xargs -r docker rm -f
 
 
-rm -rf "${workspace_cache_root}/tmp"
+# rm -rf /data/workspace/lli21/docker_cache/tmp
 
 
 # 删掉数据库目录以及临时文件目录：

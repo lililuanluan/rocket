@@ -7,7 +7,7 @@ from .cases import find_latest_run_dir
 
 
 def evolution_report(fitness_dir: Path) -> list[Path]:
-    from evo.analysis_bak import plot as legacy_plot
+    from . import plot as legacy_plot
 
     fitness_dir = fitness_dir.expanduser().resolve()
     csv_path = fitness_dir / "evo_result.csv"
@@ -35,7 +35,7 @@ def evolution_report(fitness_dir: Path) -> list[Path]:
 
 
 def fitness_trend_report(encoding_dir: Path) -> list[Path]:
-    from evo.analysis_bak import plot as legacy_plot
+    from . import plot as legacy_plot
 
     encoding_dir = encoding_dir.expanduser().resolve()
     csv_files = legacy_plot.collect_csvs_from_logs_dir(encoding_dir)
@@ -127,6 +127,6 @@ def main(argv: list[str] | None = None) -> None:
         if target is None:
             raise SystemExit("Could not find the latest logs run directory.")
 
-    from evo.analysis_bak.plot import main as legacy_main
+    from .plot import main as legacy_main
 
     legacy_main([str(target)])

@@ -360,6 +360,7 @@ def build_run_configs(
 def snapshot_run_config(config_file: Path, root_log_dir: Path) -> Path:
     snapshot_path = root_log_dir / config_file.name
     shutil.copy2(config_file, snapshot_path)
+    shutil.copy2(config_file.parent / "network.yaml", root_log_dir / "network.yaml")
     return snapshot_path
 
 

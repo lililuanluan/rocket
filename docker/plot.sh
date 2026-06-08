@@ -22,18 +22,27 @@ else
   echo "Using existing image rocket-plot:latest; skipping docker build (set ROCKET_PLOT_FORCE_BUILD=1 to rebuild)."
 fi
 
-exec docker run --rm -it \
-  --user "$(id -u):$(id -g)" \
-  -v "${repo_root}:${repo_root}" \
-  -v "${log_root}:${log_root}" \
-  -v "${data_root}:${data_root}" \
-  -v "${plot_home_root}:${container_home}" \
-  -v "${plot_tmp_root}:${container_tmp}" \
-  -w "${repo_root}" \
-  -e HOME="${container_home}" \
-  -e TMPDIR="${container_tmp}" \
-  -e MPLCONFIGDIR="${container_home}/.config/matplotlib" \
-  -e XDG_CONFIG_HOME="${container_home}/.config" \
-  -e ROCKET_LOG_ROOT="${log_root}" \
+docker_run_args=(
+  --rm
+  --user "$(id -u):$(id -g)"
+  -v "${repo_root}:${repo_root}"
+  -v "${log_root}:${log_root}"
+  -v "${data_root}:${data_root}"
+  -v "${plot_home_root}:${container_home}"
+  -v "${plot_tmp_root}:${container_tmp}"
+  -w "${repo_root}"
+  -e HOME="${container_home}"
+  -e TMPDIR="${container_tmp}"
+  -e MPLCONFIGDIR="${container_home}/.config/matplotlib"
+  -e XDG_CONFIG_HOME="${container_home}/.config"
+  -e ROCKET_LOG_ROOT="${log_root}"
+)
+
+if [ -t 0 ] && [ -t 1 ]; then
+  docker_run_args+=(-it)
+fi
+
+exec docker run \
+  "${docker_run_args[@]}" \
   rocket-plot:latest \
   python -m evo.analysis.cli "$@"

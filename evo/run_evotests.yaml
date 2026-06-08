@@ -3,14 +3,19 @@
 # ============================================================================
 # serial: Run evotest_parallel instances sequentially (safe for WSL2)
 # parallel: Run evotest_parallel instances concurrently (faster for servers)
-parallel_mode: serial  # serial or "parallel"
+parallel_mode: parallel  # serial or "parallel"
 
 # ============================================================================
 # RIPPLE IMAGES
 # ============================================================================
 ripple_images:
+  - xrpld:3.1.0-local
   # - xrpllabsofficial/xrpld:2.6.0
-  - xrpld:2.6.0-bug0-local
+  # - xrpld:2.6.0-bug0-local
+  # - xrpld:2.6.0-bug1-local
+  # - xrpld:2.6.0-bug2-local
+  # - xrpld:2.6.0-bug3-local
+  # - xrpld:2.6.0-bug4-local
 
 # ============================================================================
 # STRATEGY MODE COMBINATIONS
@@ -19,27 +24,44 @@ ripple_images:
 # Each image × mode-combo × fitness combination will generate a separate run.
 # Format: [delay_mode, partition_mode, byzz_mode]
 strategies:
-  # - [none, none, none]
-  - [none, bi_part_groups, sparse_rules]
-  - [dense_seq_rules, bi_part_groups, sparse_rules]
-  - [sparse_rules, bi_part_groups, sparse_rules]
+  # - [random, none, none]
+  # - [none, random_bipart, none]
+  # - [none, none, random]
+  - [random, random_bipart, random]
+  # - [none, bi_part_groups, sparse_rules]
+  # - [dense_seq_rules, bi_part_groups, sparse_rules]
+  - [sparse_rules, flex_bi_part_groups, sparse_rules]
 
 # ============================================================================
 # FITNESS FUNCTIONS
 # ============================================================================
 # List of fitness metrics to optimize for. Each fitness function will result in
 # separate evolutionary runs.
+objective_mode: single  # single | multi
+objective_seqs: [5, 6, 7, 8, 9, 10]
+
 fitness_functions:
-  # - mean_validation_time
-  # - var_validation_time
-  # - num_getledger_messages
-  # - message_entropy_integral
-  # - markov_matrix_non_similarity
-  - gossip_fiedler 
-  - validation_distribution_entropy
-  # - message_entropy_average
-  # - num_propose_set
-  # - num_getledger_hashes
+  # - "num_propose_set"
+  - "num_getledger_hashes"
+  # - "num_getledger_messages"
+  - "mean_validation_time"
+  # - "var_validation_time"
+  # - "diff_validation_time_max"
+  - "validation_distribution_entropy"
+  - "validation_distribution_entropy_max" # 对所有seq和nodes取双重max
+  # - "validation_distribution_entropy_unl"
+  # - "validation_distribution_entropy_max_unl"
+  # - "proposal_distribution_entropy"
+  # - "proposal_position_entropy"
+  # - "proposal_position_entropy_max"
+  # - "proposal_late_position_entropy_max"
+  # - "proposal_close_time_entropy_max"
+  - "message_entropy_integral"
+  # - "message_entropy_average"
+  # - "markov_matrix_non_similarity"
+  # - "gossip_fiedler"
+  # - "max_tip_distance"
+  # - "sum_tip_distance"
 
 # ============================================================================
 # PORT CONFIGURATION
@@ -61,36 +83,50 @@ port_start: 10000   # must be below the OS ephemeral range (32768-60999 on this 
 #
 # Note: This is independent of parallel_mode. Even in serial mode, each instance
 # will use max_parallel_workers internally.
-max_parallel_workers: 10
+max_parallel_workers: 4
 
 # ============================================================================
 # TEST CONFIGURATION
 # ============================================================================
 # Number of tests per evotest_parallel run
-total_num_tests: 500
+total_num_tests: 2000 # 100 generations
 
 # Population size for genetic algorithm
-population_size: 10
+population_size: 20
 
 # Parent count (μ) for (μ+λ) selection in DEAP.
 # Note: λ = population_size. If mu > population_size, code will clamp to population_size.
-mu: 5
+mu: 10
 
 # Maximum ledger sequence to run
 max_ledger_seq: 15
 
 # Delay bounds (milliseconds) passed to evotest_parallel -> ComposedStrategy
 min_delay_ms: 0
-max_delay_ms: 3000
+max_delay_ms: 1000
+
+# Partition timing. flex_bi_part_groups evolves partition_seq in
+# [byzz_min_seq, byzz_max_seq] and partition_duration in
+# [1, max_partition_duration]. Legacy fixed partition modes use seq=5 and
+# duration=max_partition_duration.
+# start_partition: open uses the old ledger-seq trigger; establish waits for
+# TMStatusChange neCLOSING_LEDGER on the selected ledger.
+max_partition_duration: 2000
+start_partition: open # open ｜ establish
 
 # Individual test timeout in seconds
-individual_timeout_sec: 500
+individual_timeout_sec: 1000
 
 # ============================================================================
 # BYZANTINE CONFIGURATION
 # ============================================================================
 byzz_min_seq: 5
 byzz_max_seq: 10
+
+# Source for seq-scoped delay/byzz rules.
+# statuschange: use latest TMStatusChange from each sender node.
+# fullyval: use the old fully validated ledgerClosed subscription state.
+seqcheck: statuschange # fullyval | statuschange # 这个可能是原因？
 
 # ============================================================================
 # LOGGING
