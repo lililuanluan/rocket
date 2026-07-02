@@ -109,6 +109,16 @@ max_ledger_seq: 15
 min_delay_ms: 0
 max_delay_ms: 1000
 
+# Initial number of delay rules to sample for each individual
+delay_init_num_rules: 5
+# Initial number of partition rules to sample for each individual.
+# This is mainly useful for flex_bi_part_groups, matching the paper's k_p.
+partition_init_num_rules: 2
+# Initial number of byzz rules to sample for each individual
+byzz_init_num_rules: 5
+
+
+
 # Partition timing. flex_bi_part_groups evolves partition_seq in
 # [byzz_min_seq, byzz_max_seq] and partition_duration in
 # [1, max_partition_duration]. Legacy fixed partition modes use seq=5 and

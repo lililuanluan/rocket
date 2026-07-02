@@ -33,6 +33,7 @@ class ComposedStrategy(EvoDelayStrategy):
         self.partition_start_time = None
         self.partition_started_once = False
         self.partition = None
+        self.partition_runtime_rules = []
         self.partition_node_states: Dict[int, Tuple[int, int]] = {}
 
         self.delay_rule_table: Dict[Tuple[int, int, str], int] = {}
@@ -57,25 +58,110 @@ class ComposedStrategy(EvoDelayStrategy):
                 partition[idx] = 1
         return partition
 
+    def _partition_rule_configs(self):
+        if self.partition_cfg.get("partition_rules"):
+            return list(self.partition_cfg["partition_rules"])
+        if self.partition_mode in ["bi_part_groups", "flex_bi_part_groups"]:
+            partition = self.partition_cfg.get("partition")
+            if partition is None:
+                return []
+            return [
+                {
+                    "partition_seq": self.partition_cfg.get("partition_seq"),
+                    "partition_duration": self.partition_cfg.get("partition_duration", 0),
+                    "partition": partition,
+                }
+            ]
+        if self.partition_mode == "random_bipart":
+            return [
+                {
+                    "partition_seq": self.partition_cfg.get("partition_seq"),
+                    "partition_duration": self.partition_cfg.get("partition_duration", 0),
+                    "partition": None,
+                }
+            ]
+        return []
+
+    def _normalize_partition_rule(self, rule):
+        partition = rule.get("partition")
+        normalized_partition = None
+        if partition is not None:
+            normalized_partition = [int(value) for value in partition]
+            if len(normalized_partition) != self.network.node_amount:
+                raise ValueError(
+                    f"partition length {len(normalized_partition)} != node amount "
+                    f"{self.network.node_amount}"
+                )
+            if any(value not in (0, 1) for value in normalized_partition):
+                raise ValueError("partition values must be 0 or 1")
+            if len(set(normalized_partition)) < 2:
+                raise ValueError("partition rules require at least two groups")
+        return {
+            "partition_seq": int(rule["partition_seq"]),
+            "partition_duration": int(rule["partition_duration"]),
+            "partition": normalized_partition,
+            "active_partition": None,
+            "start_partition": str(rule.get("start_partition", self.start_partition)),
+            "start_time": None,
+            "started_once": False,
+        }
+
+    def _sync_legacy_partition_state(self):
+        active_rule = next(
+            (
+                rule
+                for rule in self.partition_runtime_rules
+                if rule["start_time"] is not None
+            ),
+            None,
+        )
+        if active_rule is not None:
+            self.partition_seq = active_rule["partition_seq"]
+            self.partition_duration = active_rule["partition_duration"]
+            self.partition_start_time = active_rule["start_time"]
+            self.partition_started_once = bool(active_rule["started_once"])
+            self.partition = (
+                list(active_rule["active_partition"])
+                if active_rule["active_partition"] is not None
+                else None
+            )
+            return
+
+        self.partition_start_time = None
+        self.partition_started_once = any(
+            rule["started_once"] for rule in self.partition_runtime_rules
+        )
+        if self.partition_runtime_rules:
+            first_rule = self.partition_runtime_rules[0]
+            self.partition_seq = first_rule["partition_seq"]
+            self.partition_duration = first_rule["partition_duration"]
+            if first_rule["partition"] is not None:
+                self.partition = list(first_rule["partition"])
+            else:
+                self.partition = None
+        else:
+            self.partition = None
+
+    def _get_rule_partition(self, rule):
+        if rule["active_partition"] is not None:
+            return rule["active_partition"]
+        return rule["partition"]
+
     def setup(self):
         self.delay_rule_table.clear()
         self.delay_rule_table_by_seq.clear()
         self.byzz_rule_table.clear()
         self.partition_start_time = None
         self.partition_started_once = False
+        self.partition = None
+        self.partition_runtime_rules.clear()
         self.partition_node_states.clear()
 
-        if self.partition_mode == "random_bipart":
-            self.partition = None
-        elif self.partition_mode in ["bi_part_groups", "flex_bi_part_groups"]:
-            self.partition = self.partition_cfg["partition"]
-            if len(self.partition) != self.network.node_amount:
-                raise ValueError(
-                    f"partition length {len(self.partition)} != node amount "
-                    f"{self.network.node_amount}"
-                )
-        else:
-            self.partition = None
+        self.partition_runtime_rules = [
+            self._normalize_partition_rule(rule)
+            for rule in self._partition_rule_configs()
+        ]
+        self._sync_legacy_partition_state()
 
         for rule in self.delay_cfg.get("delays", []):
             if self.delay_mode == "dense_rules":
@@ -115,7 +201,12 @@ class ComposedStrategy(EvoDelayStrategy):
         packet: packet_pb2.Packet,
         current_ledger: int,
     ) -> None:
-        if self.partition_mode == "none" or self.start_partition != "establish":
+        if self.partition_mode == "none":
+            return
+        if not any(
+            rule["start_partition"] == "establish"
+            for rule in self.partition_runtime_rules
+        ):
             return
         if not isinstance(message, ripple_pb2.TMStatusChange):
             return
@@ -127,41 +218,48 @@ class ComposedStrategy(EvoDelayStrategy):
                 int(message.newEvent),
             )
 
-    def _has_establish_started(self) -> bool:
+    def _has_establish_started(self, target_seq: int) -> bool:
         return any(
-            ledger_seq == self.partition_seq
+            ledger_seq == target_seq
             and event == ripple_pb2.neCLOSING_LEDGER
             for ledger_seq, event in self.partition_node_states.values()
         )
 
-    def _should_start_partition(self, current_ledger: int) -> bool:
-        if self.start_partition == "open":
-            return current_ledger == self.partition_seq
-        if self.start_partition == "establish":
-            return self._has_establish_started()
-        raise ValueError(f"Unsupported start_partition: {self.start_partition}")
+    def _should_start_partition(self, rule, current_ledger: int) -> bool:
+        if rule["start_partition"] == "open":
+            return current_ledger == rule["partition_seq"]
+        if rule["start_partition"] == "establish":
+            return self._has_establish_started(rule["partition_seq"])
+        raise ValueError(f"Unsupported start_partition: {rule['start_partition']}")
 
     def _maybe_update_partition_state(self, current_ledger: int, cur_time: float) -> None:
         if self.partition_mode == "none":
             return
 
-        if self.partition_start_time is not None:
-            if cur_time - self.partition_start_time >= self.partition_duration / 1000.0:
-                self.partition_start_time = None
+        for rule in self.partition_runtime_rules:
+            if rule["start_time"] is not None:
+                if (
+                    cur_time - rule["start_time"]
+                    >= rule["partition_duration"] / 1000.0
+                ):
+                    rule["start_time"] = None
+                    rule["active_partition"] = None
+                continue
+
+            if rule["started_once"]:
+                continue
+
+            if self._should_start_partition(rule, current_ledger):
+                rule["start_time"] = cur_time
+                rule["started_once"] = True
                 if self.partition_mode == "random_bipart":
-                    self.partition = None
-            return
+                    rule["active_partition"] = self._sample_partition_shuffle_cut(
+                        self.network.node_amount
+                    )
+                else:
+                    rule["active_partition"] = list(rule["partition"])
 
-        if self.start_partition == "establish" and self.partition_started_once:
-            return
-
-        if self._should_start_partition(current_ledger):
-            self.partition_start_time = cur_time
-            self.partition_started_once = True
-            if self.partition_mode == "random_bipart":
-                self.partition = self._sample_partition_shuffle_cut(
-                    self.network.node_amount
-                )
+        self._sync_legacy_partition_state()
 
     def get_delay(self, message_type, packet, current_ledger, message_cls):
         sender_node_id = self.network.port_to_id(packet.from_port)
@@ -184,33 +282,53 @@ class ComposedStrategy(EvoDelayStrategy):
         cur_time = time.time()
         with self.partition_lock:
             self._maybe_update_partition_state(current_ledger, cur_time)
-            if self.are_partitioned(sender_node_id, receiver_node_id):
-                return self.get_partition_delay(cur_time)
+            partition_delay = self.get_partition_delay(
+                cur_time, sender_node_id, receiver_node_id
+            )
+            if partition_delay > 0:
+                return partition_delay
 
         return base_delay
 
     def are_partitioned(self, sender_node_id, receiver_node_id):
         if self.partition_mode == "none":
             return False
-        if self.partition_mode in [
-            "random_bipart",
-            "bi_part_groups",
-            "flex_bi_part_groups",
-        ]:
-            partition = self.partition
+        for rule in self.partition_runtime_rules:
+            if rule["start_time"] is None:
+                continue
+            partition = self._get_rule_partition(rule)
             if partition is None:
-                return False
-            return partition[sender_node_id] != partition[receiver_node_id]
+                continue
+            if partition[sender_node_id] != partition[receiver_node_id]:
+                return True
         return False
 
-    def get_partition_delay(self, cur_time):
+    def get_partition_delay(
+        self,
+        cur_time,
+        sender_node_id: int | None = None,
+        receiver_node_id: int | None = None,
+    ):
         if self.partition_mode == "none":
             return 0
-        start = self.partition_start_time
-        if start is None:
-            return 0
-        remaining = int((start * 1000 + self.partition_duration) - (cur_time * 1000))
-        return max(0, remaining)
+
+        max_remaining = 0
+        for rule in self.partition_runtime_rules:
+            start = rule["start_time"]
+            if start is None:
+                continue
+            partition = self._get_rule_partition(rule)
+            if partition is None:
+                continue
+            if sender_node_id is not None and receiver_node_id is not None:
+                if partition[sender_node_id] == partition[receiver_node_id]:
+                    continue
+            remaining = int(
+                (start * 1000 + rule["partition_duration"]) - (cur_time * 1000)
+            )
+            if remaining > max_remaining:
+                max_remaining = remaining
+        return max(0, max_remaining)
 
     def get_mutation_method(
         self,

@@ -204,6 +204,7 @@ class PartitionEncoding:
         byzz_max_seq=None,
         max_partition_duration=1000,
         start_partition="open",
+        init_num_rules=1,
     ):
         if mode not in self.partition_modes:
             raise ValueError(f"Invalid partition mode: {mode}")
@@ -219,6 +220,7 @@ class PartitionEncoding:
         self.start_partition = start_partition
         self.partition_seq = int(partition_seq)
         self.partition_duration = int(partition_duration)
+        self.init_num_rules = int(init_num_rules)
         self.num_nodes = int(num_nodes)
         self.byzz_min_seq = int(
             byzz_min_seq if byzz_min_seq is not None else partition_seq
@@ -235,10 +237,29 @@ class PartitionEncoding:
             raise ValueError(
                 f"Invalid partition seq range: {self.byzz_min_seq} > {self.byzz_max_seq}"
             )
+        if self.init_num_rules <= 0:
+            raise ValueError("init_num_rules must be positive")
         if self.max_partition_duration <= 0:
             raise ValueError("max_partition_duration must be positive")
-        self.partition = None  # list of 0/1, length = number_of_nodes
-        self._sample_partition()
+        self.partition = None  # legacy compatibility: mirrors the first rule
+        self.partition_rules = []
+        self._sample_partition_rules()
+
+    def _build_partition_rule(self, partition, partition_seq, partition_duration):
+        return {
+            "partition_seq": int(partition_seq),
+            "partition_duration": int(partition_duration),
+            "partition": [int(value) for value in partition],
+        }
+
+    def _sync_legacy_partition_fields(self):
+        if not self.partition_rules:
+            self.partition = None
+            return
+        first_rule = self.partition_rules[0]
+        self.partition_seq = int(first_rule["partition_seq"])
+        self.partition_duration = int(first_rule["partition_duration"])
+        self.partition = list(first_rule["partition"])
 
     def _sample_partition_groups(self):
         if self.num_nodes < 2:
@@ -265,53 +286,89 @@ class PartitionEncoding:
             value = random.randint(low, high)
         return value
 
-    def _repair_flex_partition_groups(self):
-        if self.partition is None or self.mode != "flex_bi_part_groups":
+    def _repair_partition_groups(self, rule):
+        partition = rule["partition"]
+        if len(set(partition)) > 1:
             return
-        if len(set(self.partition)) > 1:
-            return
-        if len(self.partition) < 2:
-            raise ValueError("flex_bi_part_groups requires at least two nodes")
+        if len(partition) < 2:
+            raise ValueError("partition rules require at least two nodes")
 
-        flip_idx = random.randint(0, len(self.partition) - 1)
-        self.partition[flip_idx] = 1 - self.partition[flip_idx]
+        flip_idx = random.randint(0, len(partition) - 1)
+        partition[flip_idx] = 1 - partition[flip_idx]
 
-    def _repair_flex_bounds(self):
-        if self.mode != "flex_bi_part_groups":
-            return
-        self.partition_seq = int(
-            max(self.byzz_min_seq, min(self.byzz_max_seq, self.partition_seq))
+    def _repair_partition_rule(self, rule):
+        rule["partition_seq"] = int(
+            max(self.byzz_min_seq, min(self.byzz_max_seq, rule["partition_seq"]))
         )
-        self.partition_duration = int(
-            max(1, min(self.max_partition_duration, self.partition_duration))
+        rule["partition_duration"] = int(
+            max(1, min(self.max_partition_duration, rule["partition_duration"]))
         )
+        if len(rule["partition"]) != self.num_nodes:
+            raise ValueError(
+                f"partition length {len(rule['partition'])} != num_nodes {self.num_nodes}"
+            )
+        if any(value not in (0, 1) for value in rule["partition"]):
+            raise ValueError("partition values must be 0 or 1")
+        self._repair_partition_groups(rule)
 
-    def _sample_partition(self):
+    def _sample_partition_rules(self):
         if self.mode in ["none", "random_bipart"]:
             return
-        elif self.mode == "bi_part_groups":
-            self.partition = self._sample_partition_groups()
+
+        if (
+            self.mode == "flex_bi_part_groups"
+            and self.init_num_rules > (self.byzz_max_seq - self.byzz_min_seq + 1)
+        ):
+            raise ValueError(
+                "partition_init_num_rules cannot exceed the number of injectable "
+                "sequence numbers for flex_bi_part_groups"
+            )
+
+        self.partition_rules = []
+        if self.mode == "bi_part_groups":
+            for _ in range(self.init_num_rules):
+                self.partition_rules.append(
+                    self._build_partition_rule(
+                        partition=self._sample_partition_groups(),
+                        partition_seq=self.partition_seq,
+                        partition_duration=self.partition_duration,
+                    )
+                )
         elif self.mode == "flex_bi_part_groups":
-            self.partition = self._sample_partition_groups()
-            self.partition_seq = random.randint(self.byzz_min_seq, self.byzz_max_seq)
-            self.partition_duration = random.randint(1, self.max_partition_duration)
+            selected_seqs = random.sample(
+                range(self.byzz_min_seq, self.byzz_max_seq + 1),
+                self.init_num_rules,
+            )
+            for seq in selected_seqs:
+                self.partition_rules.append(
+                    self._build_partition_rule(
+                        partition=self._sample_partition_groups(),
+                        partition_seq=seq,
+                        partition_duration=random.randint(1, self.max_partition_duration),
+                    )
+                )
         else:
             raise ValueError(f"Invalid partition mode: {self.mode}")
 
-    def _mutate_partition_assignment(self):
-        if self.partition is None:
-            return
-        flip_idx = random.randint(0, len(self.partition) - 1)
-        self.partition[flip_idx] = 1 - self.partition[flip_idx]
+        for rule in self.partition_rules:
+            self._repair_partition_rule(rule)
+        self._sync_legacy_partition_fields()
+
+    def _mutate_partition_assignment(self, rule):
+        flip_idx = random.randint(0, len(rule["partition"]) - 1)
+        rule["partition"][flip_idx] = 1 - rule["partition"][flip_idx]
 
     def mutate_self(self, force=False):
         if self.mode not in ["bi_part_groups", "flex_bi_part_groups"]:
             return
-        if self.partition is None:
+        if not self.partition_rules:
             return
 
+        rule = random.choice(self.partition_rules)
         if self.mode == "bi_part_groups":
-            self._mutate_partition_assignment()
+            self._mutate_partition_assignment(rule)
+            self._repair_partition_rule(rule)
+            self._sync_legacy_partition_fields()
             return
 
         ops = ["partition"]
@@ -322,21 +379,21 @@ class PartitionEncoding:
 
         op = random.choice(ops)
         if op == "partition":
-            self._mutate_partition_assignment()
-            self._repair_flex_partition_groups()
+            self._mutate_partition_assignment(rule)
         elif op == "seq":
-            self.partition_seq = self._random_int_excluding(
+            rule["partition_seq"] = self._random_int_excluding(
                 self.byzz_min_seq,
                 self.byzz_max_seq,
-                self.partition_seq,
+                rule["partition_seq"],
             )
         elif op == "duration":
-            self.partition_duration = self._random_int_excluding(
+            rule["partition_duration"] = self._random_int_excluding(
                 1,
                 self.max_partition_duration,
-                self.partition_duration,
+                rule["partition_duration"],
             )
-        self._repair_flex_bounds()
+        self._repair_partition_rule(rule)
+        self._sync_legacy_partition_fields()
 
     def mate_with(self, other: "PartitionEncoding"):
         if self.mode != other.mode:
@@ -345,39 +402,58 @@ class PartitionEncoding:
             )
         if self.mode not in ["bi_part_groups", "flex_bi_part_groups"]:
             return
-        if self.partition is None or other.partition is None:
+        if not self.partition_rules or not other.partition_rules:
             return
+        if len(self.partition_rules) != len(other.partition_rules):
+            raise ValueError(
+                "PartitionEncoding crossover requires the same number of partition rules"
+            )
 
-        new_partition_1 = []
-        new_partition_2 = []
-        for value1, value2 in zip(self.partition, other.partition):
-            if value1 == value2:
-                new_partition_1.append(value1)
-                new_partition_2.append(value2)
-            elif random.random() < 0.5:
-                new_partition_1.append(value1)
-                new_partition_2.append(value2)
-            else:
-                new_partition_1.append(value2)
-                new_partition_2.append(value1)
+        new_rules_self = []
+        new_rules_other = []
+        for left_rule, right_rule in zip(self.partition_rules, other.partition_rules):
+            left_seq = int(left_rule["partition_seq"])
+            right_seq = int(right_rule["partition_seq"])
+            left_duration = int(left_rule["partition_duration"])
+            right_duration = int(right_rule["partition_duration"])
+            left_partition = list(left_rule["partition"])
+            right_partition = list(right_rule["partition"])
 
-        self.partition = new_partition_1
-        other.partition = new_partition_2
-        if self.mode == "flex_bi_part_groups":
             if random.random() < 0.5:
-                self.partition_seq, other.partition_seq = (
-                    other.partition_seq,
-                    self.partition_seq,
-                )
+                left_seq, right_seq = right_seq, left_seq
             if random.random() < 0.5:
-                self.partition_duration, other.partition_duration = (
-                    other.partition_duration,
-                    self.partition_duration,
-                )
-            self._repair_flex_partition_groups()
-            other._repair_flex_partition_groups()
-            self._repair_flex_bounds()
-            other._repair_flex_bounds()
+                left_duration, right_duration = right_duration, left_duration
+
+            child_partition_left = list(left_partition)
+            child_partition_right = list(right_partition)
+            for idx, (left_value, right_value) in enumerate(
+                zip(left_partition, right_partition)
+            ):
+                if left_value != right_value and random.random() < 0.5:
+                    child_partition_left[idx], child_partition_right[idx] = (
+                        child_partition_right[idx],
+                        child_partition_left[idx],
+                    )
+
+            child_rule_left = self._build_partition_rule(
+                partition=child_partition_left,
+                partition_seq=left_seq,
+                partition_duration=left_duration,
+            )
+            child_rule_right = self._build_partition_rule(
+                partition=child_partition_right,
+                partition_seq=right_seq,
+                partition_duration=right_duration,
+            )
+            self._repair_partition_rule(child_rule_left)
+            other._repair_partition_rule(child_rule_right)
+            new_rules_self.append(child_rule_left)
+            new_rules_other.append(child_rule_right)
+
+        self.partition_rules = new_rules_self
+        other.partition_rules = new_rules_other
+        self._sync_legacy_partition_fields()
+        other._sync_legacy_partition_fields()
 
     def to_dict(self):
         res = {
@@ -388,8 +464,17 @@ class PartitionEncoding:
         }
         if self.mode == "flex_bi_part_groups":
             res["max_partition_duration"] = self.max_partition_duration
+        if self.partition_rules:
+            res["partition_rules"] = [
+                {
+                    "partition_seq": int(rule["partition_seq"]),
+                    "partition_duration": int(rule["partition_duration"]),
+                    "partition": list(rule["partition"]),
+                }
+                for rule in self.partition_rules
+            ]
         if self.partition is not None:
-            res["partition"] = self.partition
+            res["partition"] = list(self.partition)
         return res
 
     def to_yaml(self):
@@ -758,33 +843,57 @@ class ComposeEncoding(BaseEncoding):
                 f"start_partition {other.partition_encoding.start_partition} -> "
                 f"{self.partition_encoding.start_partition}"
             )
-        if self.partition_encoding.partition_seq != other.partition_encoding.partition_seq:
+        current_rules = self.partition_encoding.partition_rules or []
+        previous_rules = other.partition_encoding.partition_rules or []
+
+        if len(current_rules) != len(previous_rules):
             lines.append(
                 "PartitionEncoding: "
-                f"partition_seq {other.partition_encoding.partition_seq} -> "
-                f"{self.partition_encoding.partition_seq}"
-            )
-        if (
-            self.partition_encoding.partition_duration
-            != other.partition_encoding.partition_duration
-        ):
-            lines.append(
-                "PartitionEncoding: "
-                f"partition_duration {other.partition_encoding.partition_duration} -> "
-                f"{self.partition_encoding.partition_duration}"
+                f"rule_count {len(previous_rules)} -> {len(current_rules)}"
             )
 
-        current = self.partition_encoding.partition or []
-        previous = other.partition_encoding.partition or []
-        changed = [
-            (idx, old_value, new_value)
-            for idx, (old_value, new_value) in enumerate(zip(previous, current))
-            if old_value != new_value
-        ]
-        if changed:
-            lines.append(f"PartitionEncoding: {len(changed)} node(s) changed")
-            for idx, old_value, new_value in changed:
-                lines.append(f"  node {idx}: {old_value} -> {new_value}")
+        for idx in range(max(len(current_rules), len(previous_rules))):
+            if idx >= len(previous_rules):
+                lines.append(f"PartitionEncoding rule[{idx}] added: {current_rules[idx]}")
+                continue
+            if idx >= len(current_rules):
+                lines.append(
+                    f"PartitionEncoding rule[{idx}] removed: {previous_rules[idx]}"
+                )
+                continue
+
+            current_rule = current_rules[idx]
+            previous_rule = previous_rules[idx]
+            if current_rule["partition_seq"] != previous_rule["partition_seq"]:
+                lines.append(
+                    "PartitionEncoding: "
+                    f"rule[{idx}].partition_seq {previous_rule['partition_seq']} -> "
+                    f"{current_rule['partition_seq']}"
+                )
+            if (
+                current_rule["partition_duration"]
+                != previous_rule["partition_duration"]
+            ):
+                lines.append(
+                    "PartitionEncoding: "
+                    f"rule[{idx}].partition_duration "
+                    f"{previous_rule['partition_duration']} -> "
+                    f"{current_rule['partition_duration']}"
+                )
+
+            changed = [
+                (node_idx, old_value, new_value)
+                for node_idx, (old_value, new_value) in enumerate(
+                    zip(previous_rule["partition"], current_rule["partition"])
+                )
+                if old_value != new_value
+            ]
+            if changed:
+                lines.append(
+                    f"PartitionEncoding: rule[{idx}] {len(changed)} node(s) changed"
+                )
+                for node_idx, old_value, new_value in changed:
+                    lines.append(f"  node {node_idx}: {old_value} -> {new_value}")
         return lines
 
     def _diff_delay(self, other):
@@ -940,6 +1049,7 @@ class ComposeEncoding(BaseEncoding):
             byzz_max_seq=configs["byzz_max_seq"],
             max_partition_duration=configs.get("max_partition_duration", 1000),
             start_partition=configs.get("start_partition", "open"),
+            init_num_rules=configs.get("partition_init_num_rules", 1),
         )
 
         return ComposeEncoding(

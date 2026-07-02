@@ -74,6 +74,7 @@ DEFAULT_EVOTEST_CONFIG: dict[str, Any] = {
     "output_screen": False,
     "partition_seq": 5,
     "partition_duration": None,
+    "partition_init_num_rules": 1,
     "max_partition_duration": 1000,
     "start_partition": "open",
     "delay_mode": None,
@@ -210,6 +211,7 @@ def validate_config(config: dict[str, Any]):
         "population_size",
         "total_num_tests",
         "mu",
+        "partition_init_num_rules",
         "partition_seq",
         "partition_duration",
         "max_partition_duration",
@@ -398,6 +400,7 @@ def print_config_summary(
     print(f"  Mu:                       {config.get('mu', 4)}")
     print(f"  Total num tests:          {config.get('total_num_tests', 500)}")
     print(f"  Start partition:          {config.get('start_partition', 'open')}")
+    print(f"  Partition init rules:     {config.get('partition_init_num_rules', 1)}")
     print(f"  Seq check:                {config.get('seqcheck', 'statuschange')}")
     print(f"  Max partition duration:   {config.get('max_partition_duration', 'default')}ms")
     print(f"  Individual timeout:       {config.get('individual_timeout_sec')}s")
