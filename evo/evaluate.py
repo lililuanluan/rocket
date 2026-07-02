@@ -80,6 +80,7 @@ OBJECTIVE_AGGREGATORS: dict[str, Callable[[list[float | None]], float | None]] =
     "diff_validation_time_max": aggregate_max,
     "num_propose_set": aggregate_sum,
     "num_getledger_hashes": aggregate_sum,
+    "num_getledger_hashes_max_seq": aggregate_max,
     "num_getledger_messages": aggregate_sum,
     "validation_distribution_entropy": aggregate_mean,
     "validation_distribution_entropy_max": aggregate_max,
@@ -91,6 +92,7 @@ OBJECTIVE_AGGREGATORS: dict[str, Callable[[list[float | None]], float | None]] =
     "proposal_late_position_entropy_max": aggregate_max,
     "proposal_close_time_entropy_max": aggregate_max,
     "message_entropy_integral": aggregate_sum,
+    "message_entropy_integral_max_seq": aggregate_max,
     "message_entropy_average": aggregate_mean,
     "markov_matrix_non_similarity": aggregate_mean,
     "gossip_fiedler": aggregate_mean,
@@ -265,16 +267,21 @@ def get_action_rows_by_seq(
     df_action: pd.DataFrame,
     node_info: dict,
     ledger_hash_to_seq: dict[str, int],
-    objective_seqs: tuple[int, ...],
+    objective_seqs: tuple[int, ...] | None,
 ) -> dict[int, pd.DataFrame]:
-    seq_to_indices = {seq: [] for seq in objective_seqs}
-    objective_seq_set = set(objective_seqs)
+    if objective_seqs is None:
+        seq_to_indices = {}
+        objective_seq_set = None
+    else:
+        seq_to_indices = {seq: [] for seq in objective_seqs}
+        objective_seq_set = set(objective_seqs)
 
     for idx, row in df_action.iterrows():
         sequences = _extract_row_sequences(row, node_info, ledger_hash_to_seq)
         for seq in sequences:
-            if seq in objective_seq_set:
-                seq_to_indices[seq].append(idx)
+            if objective_seq_set is not None and seq not in objective_seq_set:
+                continue
+            seq_to_indices.setdefault(seq, []).append(idx)
 
     return {
         seq: df_action.loc[indices].copy()
@@ -431,6 +438,19 @@ def get_getledger_stats(df_exec) -> Tuple[Set[str], int]:
             continue
 
     return requested_ledger_hashes, total_requests
+
+
+def get_getledger_stats_by_seq(
+    action_rows_by_seq: dict[int, pd.DataFrame],
+) -> dict[int, dict[str, float]]:
+    stats = {}
+    for seq, df_seq in action_rows_by_seq.items():
+        requested_hashes, total_requests = get_getledger_stats(df_seq)
+        stats[int(seq)] = {
+            "distinct_hashes": float(len(requested_hashes)),
+            "num_requests": float(total_requests),
+        }
+    return stats
 
 
 # fully validated
@@ -1007,6 +1027,19 @@ def get_message_entropy_integration(df_exec):
     return integral, integral / (duration_ms / 1000.0)
 
 
+def get_message_entropy_stats_by_seq(
+    action_rows_by_seq: dict[int, pd.DataFrame],
+) -> dict[int, dict[str, float | None]]:
+    stats = {}
+    for seq, df_seq in action_rows_by_seq.items():
+        entropy_integral, entropy_average = get_message_entropy_integration(df_seq)
+        stats[int(seq)] = {
+            "integral": entropy_integral,
+            "average": entropy_average,
+        }
+    return stats
+
+
 # 对每个节点发送/接收的消息组成的序列，计算马尔可夫转移矩阵，然后求所有节点矩阵的相似度
 def get_msg_sending_markov_matrix_non_similarity(df_exec):
     """
@@ -1160,6 +1193,10 @@ def compute_objective_results(
         ledger_hash_to_seq=ledger_hash_to_seq,
         objective_seqs=objective_seqs,
     )
+    getledger_stats_by_seq = get_getledger_stats_by_seq(action_rows_by_seq)
+    message_entropy_stats_by_seq = get_message_entropy_stats_by_seq(
+        action_rows_by_seq
+    )
 
     validation_times = get_validation_times(df_result, node_info)
     validation_time_values_by_seq = get_validation_time_values_by_seq(validation_times or {})
@@ -1260,6 +1297,7 @@ def compute_objective_results(
     for metric_name in (
         "num_propose_set",
         "num_getledger_hashes",
+        "num_getledger_hashes_max_seq",
         "num_getledger_messages",
         "proposal_distribution_entropy",
         "proposal_position_entropy",
@@ -1267,6 +1305,7 @@ def compute_objective_results(
         "proposal_late_position_entropy_max",
         "proposal_close_time_entropy_max",
         "message_entropy_integral",
+        "message_entropy_integral_max_seq",
         "message_entropy_average",
         "markov_matrix_non_similarity",
         "gossip_fiedler",
@@ -1282,14 +1321,19 @@ def compute_objective_results(
                 values.append(float(get_prop_set_count(df_seq)))
                 continue
 
-            if metric_name == "num_getledger_hashes":
-                requested_hashes, _ = get_getledger_stats(df_seq)
-                values.append(float(len(requested_hashes)))
+            if metric_name in {
+                "num_getledger_hashes",
+                "num_getledger_hashes_max_seq",
+            }:
+                values.append(
+                    getledger_stats_by_seq.get(seq, {}).get("distinct_hashes")
+                )
                 continue
 
             if metric_name == "num_getledger_messages":
-                _, num_requests = get_getledger_stats(df_seq)
-                values.append(float(num_requests))
+                values.append(
+                    getledger_stats_by_seq.get(seq, {}).get("num_requests")
+                )
                 continue
 
             if metric_name.startswith("proposal_"):
@@ -1313,11 +1357,21 @@ def compute_objective_results(
                 values.append(metric_value_map[metric_name])
                 continue
 
-            if metric_name in {"message_entropy_integral", "message_entropy_average"}:
-                entropy_integral, entropy_average = get_message_entropy_integration(df_seq)
+            if metric_name in {
+                "message_entropy_integral",
+                "message_entropy_integral_max_seq",
+                "message_entropy_average",
+            }:
                 metric_value_map = {
-                    "message_entropy_integral": entropy_integral,
-                    "message_entropy_average": entropy_average,
+                    "message_entropy_integral": message_entropy_stats_by_seq.get(
+                        seq, {}
+                    ).get("integral"),
+                    "message_entropy_integral_max_seq": message_entropy_stats_by_seq.get(
+                        seq, {}
+                    ).get("integral"),
+                    "message_entropy_average": message_entropy_stats_by_seq.get(
+                        seq, {}
+                    ).get("average"),
                 }
                 values.append(metric_value_map[metric_name])
                 continue
@@ -1348,6 +1402,7 @@ def compute_objective_results(
 FITNESS_FUNCTIONS = [
     "num_propose_set",
     "num_getledger_hashes",
+    "num_getledger_hashes_max_seq",
     "num_getledger_messages",
     "mean_validation_time",
     "var_validation_time",
@@ -1362,6 +1417,7 @@ FITNESS_FUNCTIONS = [
     "proposal_late_position_entropy_max",
     "proposal_close_time_entropy_max",
     "message_entropy_integral",
+    "message_entropy_integral_max_seq",
     "message_entropy_average",
     "markov_matrix_non_similarity",
     "gossip_fiedler",
@@ -1412,6 +1468,22 @@ def evaluate_log(
             "ledger_hash": "string",
         },
     )
+    ledger_hash_to_seq = build_hash_to_ledger_seq(df_result)
+    ledger_hash_to_seq = augment_hash_to_ledger_seq_from_action(
+        df_action,
+        node_info=node_info,
+        hash_to_seq=ledger_hash_to_seq,
+    )
+    all_action_rows_by_seq = get_action_rows_by_seq(
+        df_action,
+        node_info=node_info,
+        ledger_hash_to_seq=ledger_hash_to_seq,
+        objective_seqs=None,
+    )
+    getledger_stats_by_seq = get_getledger_stats_by_seq(all_action_rows_by_seq)
+    message_entropy_stats_by_seq = get_message_entropy_stats_by_seq(
+        all_action_rows_by_seq
+    )
     validation_times = get_validation_times(df_result, node_info)
     # print(f"Validation times: {validation_times}")
     mean_validation_time = get_avg_validation_time(validation_times)
@@ -1427,7 +1499,16 @@ def evaluate_log(
     requested_ledger_hashes, num_getledger_messages = get_getledger_stats(df_action)
     num_getledger_hashes = len(requested_ledger_hashes)
     res["num_getledger_hashes"] = num_getledger_hashes
+    num_getledger_hashes_max_seq = max(
+        (
+            stats["distinct_hashes"]
+            for stats in getledger_stats_by_seq.values()
+        ),
+        default=None,
+    )
+    res["num_getledger_hashes_max_seq"] = num_getledger_hashes_max_seq
     res["num_getledger_messages"] = num_getledger_messages
+    print(f"Num getledger hashes max seq: {num_getledger_hashes_max_seq}")
 
     validation_distribution = get_validation_distribution(df_action, node_info, byzz_nodes)
     validation_distribution_entropy = get_validation_distribution_entropy(
@@ -1506,8 +1587,18 @@ def evaluate_log(
         df_action
     )
     res["message_entropy_integral"] = message_entropy_integral
+    message_entropy_integral_max_seq = max(
+        (
+            stats["integral"]
+            for stats in message_entropy_stats_by_seq.values()
+            if stats.get("integral") is not None
+        ),
+        default=None,
+    )
+    res["message_entropy_integral_max_seq"] = message_entropy_integral_max_seq
     res["message_entropy_average"] = message_entropy_average
     print(f"Message entropy integral: {message_entropy_integral}")
+    print(f"Message entropy integral max seq: {message_entropy_integral_max_seq}")
     print(f"Message entropy average: {message_entropy_average}")
 
     markov_matrix_non_similarity = get_msg_sending_markov_matrix_non_similarity(

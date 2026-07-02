@@ -12,6 +12,7 @@ from evo.utils import get_logs_root
 titles = {
     "num_propose_set": "number of proposeset",
     "num_getledger_hashes": "number of distinct getledger hashes",
+    "num_getledger_hashes_max_seq": "max per-seq distinct getledger hashes",
     "num_getledger_messages": "number of getledger messages",
     "mean_validation_time": "mean validation time",
     "var_validation_time": "variance of validation time",
@@ -22,6 +23,7 @@ titles = {
     "validation_distribution_entropy_max_unl": "max validation distribution entropy (UNL)",
     "proposal_distribution_entropy": "proposal distribution entropy",
     "message_entropy_integral": "integral of message entropy over time",
+    "message_entropy_integral_max_seq": "max per-seq message entropy integral",
     "markov_matrix_non_similarity": "message markov matrix non similarity",
     "message_entropy_average": "message entropy per second",
     "gossip_fiedler": "gossip graph fiedler value",
@@ -795,7 +797,7 @@ def generate_single_csv_report(task) -> dict:
                 )
         else:
             write_metric_report(df, metrics, fitness_label, output_path)
-            emit("📌 未检测到多目标结果，仅生成单目标报告。", messages)
+            # emit("📌 未检测到多目标结果，仅生成单目标报告。", messages)
             emit(f"✅ 成功！报告已保存至: {output_path.resolve()}", messages)
             emit(f"输出 evolution_report 到 {output_path.resolve()}", messages)
 

@@ -112,6 +112,7 @@ def parse_args() -> argparse.Namespace:
         choices=[
             "num_propose_set",
             "num_getledger_hashes",
+            "num_getledger_hashes_max_seq",
             "num_getledger_messages",
             "mean_validation_time",
             "var_validation_time",
@@ -126,6 +127,7 @@ def parse_args() -> argparse.Namespace:
             "proposal_late_position_entropy_max",
             "proposal_close_time_entropy_max",
             "message_entropy_integral",
+            "message_entropy_integral_max_seq",
             "message_entropy_average",
             "markov_matrix_non_similarity",
             "gossip_fiedler",
