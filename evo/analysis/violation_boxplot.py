@@ -24,6 +24,7 @@ UNKNOWN_GROUP = "Unknown"
 METRIC_TITLES = {
     "num_propose_set": "Number of proposeSet messages",
     "num_getledger_hashes": "Number of distinct getLedger hashes",
+    "num_getledger_hashes_max_seq": "Max per-seq distinct getLedger hashes",
     "num_getledger_messages": "Number of getLedger messages",
     "mean_validation_time": "Mean validation time",
     "var_validation_time": "Validation time variance",
@@ -38,6 +39,7 @@ METRIC_TITLES = {
     "proposal_late_position_entropy_max": "Max late proposal position entropy",
     "proposal_close_time_entropy_max": "Max proposal close-time entropy",
     "message_entropy_integral": "Message entropy integral",
+    "message_entropy_integral_max_seq": "Max per-seq message entropy integral",
     "message_entropy_average": "Mean message entropy per second",
     "markov_matrix_non_similarity": "Message Markov non-similarity",
     "gossip_fiedler": "Gossip graph Fiedler value",
