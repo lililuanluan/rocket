@@ -317,6 +317,9 @@ def run_rocket_and_evaluate(
         run_status = "runtime_invalid"
     else:
         fitness = 0.0
+        # Keep the DEAP-facing single-objective fitness tuple aligned with the
+        # scalar fitness we compute below. Otherwise selection sees all
+        # successful runs as identical 0.0-fitness individuals.
         fitness_values = (0.0,)
         objective_result = None
         if fitness_function in eval_result:
@@ -337,6 +340,7 @@ def run_rocket_and_evaluate(
         elif normalized_objective_mode == "multi":
             fitness_values = tuple(0.0 for _ in normalized_objective_seqs)
         else:
+            fitness_values = (float(fitness),)
             objective_result = None
 
         run_status = "ok"
