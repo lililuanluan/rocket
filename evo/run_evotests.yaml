@@ -27,10 +27,13 @@ strategies:
   # - [random, none, none]
   # - [none, random_bipart, none]
   # - [none, none, random]
-  - [random, random_bipart, random]
+  # - [random, random_bipart, random]
   # - [none, bi_part_groups, sparse_rules]
   # - [dense_seq_rules, bi_part_groups, sparse_rules]
-  - [sparse_rules, flex_bi_part_groups, sparse_rules]
+  # - [sparse_rules, flex_bi_part_groups, sparse_rules]
+  # - [sparse_seq_proposal_rules, flex_msg_part_groups, sparse_seq_proposal_rules]
+  - [sparse_set_rules, flex_msg_part_groups, sparse_set_rules]
+  - [sparse_seq_proposal_set_rules, flex_msg_part_groups, sparse_seq_proposal_set_rules]
 
 # ============================================================================
 # FITNESS FUNCTIONS
@@ -87,7 +90,7 @@ port_start: 10000   # must be below the OS ephemeral range (32768-60999 on this 
 #
 # Note: This is independent of parallel_mode. Even in serial mode, each instance
 # will use max_parallel_workers internally.
-max_parallel_workers: 4
+max_parallel_workers: 7
 
 # ============================================================================
 # TEST CONFIGURATION
@@ -137,10 +140,14 @@ individual_timeout_sec: 1000
 byzz_min_seq: 5
 byzz_max_seq: 10
 
+# Bound for sparse_seq_proposal*_rules. pro_seq=-1 means open/no proposal,
+# and normal proposal rounds are overwhelmingly 0/1, with rare 2.
+max_proposal_seq: 2
+
 # Source for seq-scoped delay/byzz rules.
 # statuschange: use latest TMStatusChange from each sender node.
 # fullyval: use the old fully validated ledgerClosed subscription state.
-seqcheck: statuschange # fullyval | statuschange # 这个可能是原因？
+seqcheck: statuschange # fullyval | statuschange
 
 # ============================================================================
 # LOGGING

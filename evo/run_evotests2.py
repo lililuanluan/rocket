@@ -76,7 +76,9 @@ DEFAULT_EVOTEST_CONFIG: dict[str, Any] = {
     "partition_duration": None,
     "partition_init_num_rules": 1,
     "max_partition_duration": 1000,
+    "max_partition_start_after_ms": None,
     "start_partition": "open",
+    "max_proposal_seq": 5,
     "delay_mode": None,
     "partition_mode": None,
     "byzz_mode": None,
@@ -221,6 +223,12 @@ def validate_config(config: dict[str, Any]):
             if not isinstance(config[key], int) or config[key] <= 0:
                 raise ValueError(f"Config key '{key}' must be a positive integer")
 
+    nonnegative_int_keys = ["max_partition_start_after_ms", "max_proposal_seq"]
+    for key in nonnegative_int_keys:
+        if key in config and config[key] is not None:
+            if not isinstance(config[key], int) or config[key] < 0:
+                raise ValueError(f"Config key '{key}' must be a non-negative integer")
+
     if "runtime_retries" in config and config["runtime_retries"] is not None:
         if not isinstance(config["runtime_retries"], int) or config["runtime_retries"] < 0:
             raise ValueError("Config key 'runtime_retries' must be a non-negative integer")
@@ -300,11 +308,18 @@ def extend_run_config(
         config["max_partition_duration"] = int(config.get("partition_duration") or 1000)
     else:
         config["max_partition_duration"] = int(config["max_partition_duration"])
+    if config.get("max_partition_start_after_ms") is None:
+        config["max_partition_start_after_ms"] = config["max_partition_duration"]
+    else:
+        config["max_partition_start_after_ms"] = int(
+            config["max_partition_start_after_ms"]
+        )
     config["partition_seq"] = int(config.get("partition_seq") or 5)
     config["partition_duration"] = int(
         config.get("partition_duration") or config["max_partition_duration"]
     )
     config["start_partition"] = config.get("start_partition") or "open"
+    config["max_proposal_seq"] = int(config.get("max_proposal_seq", 5))
     config["seqcheck"] = str(config.get("seqcheck") or "statuschange").lower()
 
     population_size = int(config.get("population_size", 10))
