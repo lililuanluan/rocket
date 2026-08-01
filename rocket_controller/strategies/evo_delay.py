@@ -158,7 +158,14 @@ class EvoDelayStrategy(Strategy):
                 self.old_get_ledger.append(gl_tuple)
 
 
-    def get_delay(self, message_type: int, packet: packet_pb2.Packet, current_ledger: int, message_cls: type) -> int:
+    def get_delay(
+        self,
+        message_type: int,
+        packet: packet_pb2.Packet,
+        current_ledger: int,
+        message_cls: type,
+        pro_seq: int | None = None,
+    ) -> int:
         sender_node_id = self.network.port_to_id(packet.from_port)
         receiver_node_id = self.network.port_to_id(packet.to_port)
         # To get type index -> subtract 30, for validation, subtract 35
@@ -187,6 +194,7 @@ class EvoDelayStrategy(Strategy):
         message,
         packet: packet_pb2.Packet | None = None,
         current_ledger: int | None = None,
+        pro_seq: int | None = None,
     ) -> str:
         method = self.byzz_mutator.get_mutation_method_50_percent(message)
         return method
@@ -198,6 +206,14 @@ class EvoDelayStrategy(Strategy):
         current_ledger: int,
     ) -> None:
         return None
+
+    def get_proposal_sequence_for_packet(
+        self,
+        message: Message,
+        packet: packet_pb2.Packet,
+        current_ledger: int,
+    ) -> int:
+        return -1
     
     def are_partitioned(self, sender_node_id, receiver_node_id):
         return False
@@ -274,7 +290,18 @@ class EvoDelayStrategy(Strategy):
         current_ledger = self._get_current_ledger(sender_node_id, message)
 
         self.observe_packet_for_strategy_state(message, packet, current_ledger)
-        configed_delay = self.get_delay(message_type, packet, current_ledger, type(message))
+        current_pro_seq = self.get_proposal_sequence_for_packet(
+            message,
+            packet,
+            current_ledger,
+        )
+        configed_delay = self.get_delay(
+            message_type,
+            packet,
+            current_ledger,
+            type(message),
+            current_pro_seq,
+        )
 
         # # Debug logging for message routing
         # if isinstance(message, ripple_pb2.TMProposeSet):
@@ -328,7 +355,12 @@ class EvoDelayStrategy(Strategy):
                 #     f"Mutating propose from non-byzz node {original_sender}, sender_node_id={sender_node_id}"
                 # )
                 # message sent by byzz nodes:
-                method = self.get_mutation_method(message, packet, current_ledger)
+                method = self.get_mutation_method(
+                    message,
+                    packet,
+                    current_ledger,
+                    current_pro_seq,
+                )
 
                 signed_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(signed_message, delay, repeat)
@@ -348,14 +380,24 @@ class EvoDelayStrategy(Strategy):
                 # logger.debug(
                 #     f"Mutating validation from non-byzz node {original_sender}, sender_node_id={sender_node_id}"
                 # )
-                method = self.get_mutation_method(message, packet, current_ledger)
+                method = self.get_mutation_method(
+                    message,
+                    packet,
+                    current_ledger,
+                    current_pro_seq,
+                )
 
                 signed_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(signed_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMHaveTransactionSet):
                 if sender_node_id not in (self.byzz_nodes or []):
                     return packet.data, configed_delay, 1
-                method = self.get_mutation_method(message, packet, current_ledger)
+                method = self.get_mutation_method(
+                    message,
+                    packet,
+                    current_ledger,
+                    current_pro_seq,
+                )
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
 
                 # print(f"chosen mutation method: {method}")
@@ -363,25 +405,45 @@ class EvoDelayStrategy(Strategy):
             elif isinstance(message, ripple_pb2.TMLedgerData):
                 if sender_node_id not in (self.byzz_nodes or []):
                     return packet.data, configed_delay, 1
-                method = self.get_mutation_method(message, packet, current_ledger)
+                method = self.get_mutation_method(
+                    message,
+                    packet,
+                    current_ledger,
+                    current_pro_seq,
+                )
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(mutated_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMStatusChange):
                 if sender_node_id not in (self.byzz_nodes or []):
                     return packet.data, configed_delay, 1
-                method = self.get_mutation_method(message, packet, current_ledger)
+                method = self.get_mutation_method(
+                    message,
+                    packet,
+                    current_ledger,
+                    current_pro_seq,
+                )
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(mutated_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMTransaction):
                 if sender_node_id not in (self.byzz_nodes or []):
                     return packet.data, configed_delay, 1
-                method = self.get_mutation_method(message, packet, current_ledger)
+                method = self.get_mutation_method(
+                    message,
+                    packet,
+                    current_ledger,
+                    current_pro_seq,
+                )
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 return handle_mutated_message(mutated_message, delay, repeat)
             elif isinstance(message, ripple_pb2.TMGetLedger):
                 if sender_node_id not in (self.byzz_nodes or []):
                     return packet.data, configed_delay, 1
-                method = self.get_mutation_method(message, packet, current_ledger)
+                method = self.get_mutation_method(
+                    message,
+                    packet,
+                    current_ledger,
+                    current_pro_seq,
+                )
                 mutated_message, delay, repeat = self.byzz_mutator.mutate(message, method)
                 
                 # logger.error(f"mutation res: {mutated_message}, delay: {delay}, repeat: {repeat}") if method != "do_nothing" else None

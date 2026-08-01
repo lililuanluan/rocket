@@ -283,6 +283,17 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--max-partition-start-after-ms",
+        type=int,
+        default=None,
+        metavar="MAX_PARTITION_START_AFTER_MS",
+        help=(
+            "upper bound in milliseconds for flex_msg_part_groups start_after_ms "
+            "(default: max-partition-duration)"
+        ),
+    )
+
+    parser.add_argument(
         "--start-partition",
         type=str,
         default="open",
@@ -299,21 +310,55 @@ def parse_args() -> argparse.Namespace:
         "--delay-mode",
         type=str,
         default=None,
-        choices=["none", "random", "dense_rules", "dense_seq_rules", "sparse_rules"],
+        choices=[
+            "none",
+            "random",
+            "dense_rules",
+            "dense_seq_rules",
+            "sparse_rules",
+            "sparse_set_rules",
+            "sparse_seq_proposal_rules",
+            "sparse_seq_proposal_set_rules",
+        ],
     )
 
     parser.add_argument(
         "--partition-mode",
         type=str,
         default=None,
-        choices=["none", "random_bipart", "bi_part_groups", "flex_bi_part_groups"],
+        choices=[
+            "none",
+            "random_bipart",
+            "bi_part_groups",
+            "flex_bi_part_groups",
+            "flex_msg_part_groups",
+        ],
     )
 
     parser.add_argument(
         "--byzz-mode",
         type=str,
         default=None,
-        choices=["none", "random", "sparse_rules"],
+        choices=[
+            "none",
+            "random",
+            "sparse_rules",
+            "sparse_set_rules",
+            "sparse_seq_proposal_rules",
+            "sparse_seq_proposal_set_rules",
+        ],
+    )
+
+    parser.add_argument(
+        "--max-proposal-seq",
+        type=int,
+        default=5,
+        metavar="MAX_PROPOSAL_SEQ",
+        help=(
+            "maximum TMProposeSet proposeSeq bucket used by "
+            "sparse_seq_proposal_rules; pro_seq=-1 represents open/no proposal "
+            "observed yet (default: 5)"
+        ),
     )
 
     parser.add_argument(
@@ -353,6 +398,11 @@ def extend_configs(args: argparse.Namespace) -> dict:
         configs["max_partition_duration"] = int(configs.get("partition_duration") or 1000)
     if configs.get("partition_duration") is None:
         configs["partition_duration"] = configs["max_partition_duration"]
+    if configs.get("max_partition_start_after_ms") is None:
+        configs["max_partition_start_after_ms"] = configs["max_partition_duration"]
+    configs["max_proposal_seq"] = int(configs.get("max_proposal_seq", 5))
+    if configs["max_proposal_seq"] < 0:
+        raise ValueError("max_proposal_seq must be non-negative")
 
     # derive individual timeout when the user did not provide one explicitly
     if configs.get("individual_timeout_sec") is None:

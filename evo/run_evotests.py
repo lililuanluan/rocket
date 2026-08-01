@@ -78,11 +78,25 @@ def validate_config(config: dict):
         "partition_seq",
         "partition_duration",
         "max_partition_duration",
+        "max_partition_start_after_ms",
+        "max_proposal_seq",
     ]:
         if key in config and config[key] is not None and (
-            not isinstance(config[key], int) or config[key] <= 0
+            not isinstance(config[key], int)
+            or (
+                config[key] <= 0
+                and key not in ["max_partition_start_after_ms", "max_proposal_seq"]
+            )
+            or (
+                config[key] < 0
+                and key in ["max_partition_start_after_ms", "max_proposal_seq"]
+            )
         ):
-            raise ValueError(f"Config key '{key}' must be a positive integer")
+            raise ValueError(
+                f"Config key '{key}' must be a non-negative integer"
+                if key in ["max_partition_start_after_ms", "max_proposal_seq"]
+                else f"Config key '{key}' must be a positive integer"
+            )
 
     if "mu" in config and (not isinstance(config["mu"], int) or config["mu"] <= 0):
         raise ValueError("Config key 'mu' must be a positive integer")
@@ -204,6 +218,8 @@ def main():
     partition_seq = config.get("partition_seq")
     partition_duration = config.get("partition_duration")
     max_partition_duration = config.get("max_partition_duration")
+    max_partition_start_after_ms = config.get("max_partition_start_after_ms")
+    max_proposal_seq = config.get("max_proposal_seq")
     start_partition = config.get("start_partition")
     seqcheck = str(config.get("seqcheck", "statuschange")).lower()
 
@@ -261,6 +277,15 @@ def main():
                     cmd.extend(["--partition-duration", str(partition_duration)])
                 if max_partition_duration is not None:
                     cmd.extend(["--max-partition-duration", str(max_partition_duration)])
+                if max_partition_start_after_ms is not None:
+                    cmd.extend(
+                        [
+                            "--max-partition-start-after-ms",
+                            str(max_partition_start_after_ms),
+                        ]
+                    )
+                if max_proposal_seq is not None:
+                    cmd.extend(["--max-proposal-seq", str(max_proposal_seq)])
                 if start_partition is not None:
                     cmd.extend(["--start-partition", str(start_partition)])
                 if seqcheck is not None:

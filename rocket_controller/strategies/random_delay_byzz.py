@@ -96,6 +96,7 @@ class EvoDelayByzzPartitionStrategy(EvoDelayStrategy):
         packet: packet_pb2.Packet,
         current_ledger: int,
         message_cls: type,
+        pro_seq: int | None = None,
     ) -> int:
 
         sender_node_id = self.network.port_to_id(packet.from_port)
@@ -138,6 +139,7 @@ class EvoDelayByzzPartitionStrategy(EvoDelayStrategy):
         message,
         packet: packet_pb2.Packet | None = None,
         current_ledger: int | None = None,
+        pro_seq: int | None = None,
     ) -> str:
         to_node_id = self.network.port_to_id(packet.to_port)
         msg_type = type(message)
@@ -169,6 +171,7 @@ class RandomDelayByzzStrategy(EvoDelayStrategy):
         packet: packet_pb2.Packet,
         current_ledger: int,
         message_cls: type,
+        pro_seq: int | None = None,
     ) -> int:
         # randomly choose a delay between min and max
         delay = random.randint(self.delay_min, self.delay_max)
@@ -229,6 +232,7 @@ class RandomDelayByzzPartitionStrategy(EvoDelayStrategy):
         packet: packet_pb2.Packet,
         current_ledger: int,
         message_cls: type,
+        pro_seq: int | None = None,
     ) -> int:
 
         sender_node_id = self.network.port_to_id(packet.from_port)
@@ -280,6 +284,7 @@ class RandomByzzStrategy(EvoDelayStrategy):
         packet: packet_pb2.Packet,
         current_ledger: int,
         message_cls: type,
+        pro_seq: int | None = None,
     ) -> int:
         return 0
 
@@ -305,6 +310,7 @@ class RandomDelayStrategy(EvoDelayStrategy):
         packet: packet_pb2.Packet,
         current_ledger: int,
         message_cls: type,
+        pro_seq: int | None = None,
     ) -> int:
         # randomly choose a delay between min and max
         delay = random.randint(self.delay_min, self.delay_max)
@@ -315,6 +321,7 @@ class RandomDelayStrategy(EvoDelayStrategy):
         message,
         packet: packet_pb2.Packet | None = None,
         current_ledger: int | None = None,
+        pro_seq: int | None = None,
     ):
         return "do_nothing"
 
@@ -349,6 +356,7 @@ class EvoDelayBySeqStrategy(EvoDelayStrategy):
         packet: packet_pb2.Packet,
         current_ledger: int,
         message_cls: type,
+        pro_seq: int | None = None,
     ) -> int:
 
         sender_node_id = self.network.port_to_id(packet.from_port)

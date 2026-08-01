@@ -21,6 +21,11 @@ MESSAGE_TYPE_MAP = {
     41: ripple_pb2.TMValidation,
 }
 
+SPARSE_SET_RULES = "sparse_set_rules"
+SPARSE_SEQ_PROPOSAL_RULES = "sparse_seq_proposal_rules"
+SPARSE_SEQ_PROPOSAL_SET_RULES = "sparse_seq_proposal_set_rules"
+OPEN_PROPOSAL_SEQ = -1
+
 
 class BaseEncoding:
     def __init__(self):
@@ -55,11 +60,22 @@ class ByzzEncoding:
         "none",  # no byzantine behavior
         "random",  # random byzantine behavior
         "sparse_rules",  # a set of rules: (seq, to_node, message_type) -> mutation method
+        SPARSE_SET_RULES,  # (seq, to_nodes, message_type) -> mutation method
+        SPARSE_SEQ_PROPOSAL_RULES,  # (seq, pro_seq, to_node, message_type) -> mutation method
+        # (seq, pro_seq, to_nodes, message_type) -> mutation method
+        SPARSE_SEQ_PROPOSAL_SET_RULES,
     ]
     _message_types = MESSAGE_TYPE_MAP
 
     def __init__(
-        self, mode, num_nodes, byzz_nodes, byzz_min_seq, byzz_max_seq, init_num_rules=5
+        self,
+        mode,
+        num_nodes,
+        byzz_nodes,
+        byzz_min_seq,
+        byzz_max_seq,
+        init_num_rules=5,
+        max_proposal_seq=5,
     ):
         if mode not in self.byzz_modes:
             raise ValueError(f"Invalid byzz mode: {mode}")
@@ -68,7 +84,10 @@ class ByzzEncoding:
         self.byzz_nodes = byzz_nodes or []
         self.byzz_min_seq = byzz_min_seq
         self.byzz_max_seq = byzz_max_seq
-        self.byzz_rules = None  # list of (seq, to_node, message_type, mutation_method)
+        self.max_proposal_seq = int(max_proposal_seq)
+        if self.max_proposal_seq < 0:
+            raise ValueError("max_proposal_seq must be non-negative")
+        self.byzz_rules = None
         self.init_num_rules = init_num_rules
         self._sample_byzz_rules()
 
@@ -80,8 +99,79 @@ class ByzzEncoding:
             methods = [m for m in methods if m != exclude]
         return random.choice(methods)
 
+    def _honest_nodes(self):
+        return [node for node in range(self.num_nodes) if node not in self.byzz_nodes]
+
+    @staticmethod
+    def _random_subset(candidates):
+        if not candidates:
+            return tuple()
+        size = random.randint(1, len(candidates))
+        return tuple(sorted(random.sample(candidates, size)))
+
+    def _repair_receiver_set(self, to_nodes):
+        allowed = set(self._honest_nodes())
+        repaired = sorted({int(node) for node in to_nodes if int(node) in allowed})
+        if repaired:
+            return tuple(repaired)
+        if not allowed:
+            return tuple()
+        return (random.choice(sorted(allowed)),)
+
+    def _random_receiver_set(self, exclude=None):
+        allowed = self._honest_nodes()
+        if not allowed:
+            return tuple()
+        receiver_set = self._random_subset(allowed)
+        if exclude is not None and len(allowed) > 1:
+            attempts = 0
+            while receiver_set == exclude and attempts < 20:
+                receiver_set = self._random_subset(allowed)
+                attempts += 1
+        return self._repair_receiver_set(receiver_set)
+
+    def _random_byzz_key(self):
+        supported_message_types = [
+            msg_type
+            for msg_type in self._message_types.values()
+            if msg_type in BYZZ_MUTATE_METHODS
+        ]
+        if not supported_message_types:
+            return None
+
+        seq = random.randint(self.byzz_min_seq, self.byzz_max_seq)
+        message_type = random.choice(supported_message_types)
+        if self.mode == "sparse_rules":
+            candidates = self._honest_nodes()
+            if not candidates:
+                return None
+            return (seq, random.choice(candidates), message_type)
+        if self.mode == SPARSE_SEQ_PROPOSAL_RULES:
+            candidates = self._honest_nodes()
+            if not candidates:
+                return None
+            pro_seq = random.randint(OPEN_PROPOSAL_SEQ, self.max_proposal_seq)
+            return (seq, pro_seq, random.choice(candidates), message_type)
+        if self.mode == SPARSE_SET_RULES:
+            receiver_set = self._random_receiver_set()
+            if not receiver_set:
+                return None
+            return (seq, receiver_set, message_type)
+        if self.mode == SPARSE_SEQ_PROPOSAL_SET_RULES:
+            receiver_set = self._random_receiver_set()
+            if not receiver_set:
+                return None
+            pro_seq = random.randint(OPEN_PROPOSAL_SEQ, self.max_proposal_seq)
+            return (seq, pro_seq, receiver_set, message_type)
+        return None
+
     def add_random_byzz_rules(self, to_add=1):
-        if self.mode != "sparse_rules":
+        if self.mode not in [
+            "sparse_rules",
+            SPARSE_SET_RULES,
+            SPARSE_SEQ_PROPOSAL_RULES,
+            SPARSE_SEQ_PROPOSAL_SET_RULES,
+        ]:
             return
         if self.byzz_rules is None:
             self.byzz_rules = set()
@@ -91,18 +181,68 @@ class ByzzEncoding:
             for msg_type in self._message_types.values()
             if msg_type in BYZZ_MUTATE_METHODS
         ]
-        existing_keys = {(seq, to_node, message_type) for seq, to_node, message_type, _ in self.byzz_rules}
-        choices = [
-            (seq, to_node, message_type)
-            for seq in range(self.byzz_min_seq, self.byzz_max_seq + 1)
-            for to_node in range(self.num_nodes)
-            if to_node not in self.byzz_nodes
-            for message_type in supported_message_types
-            if (seq, to_node, message_type) not in existing_keys
-        ]
+        if self.mode == "sparse_rules":
+            existing_keys = {
+                (seq, to_node, message_type)
+                for seq, to_node, message_type, _ in self.byzz_rules
+            }
+            choices = [
+                (seq, to_node, message_type)
+                for seq in range(self.byzz_min_seq, self.byzz_max_seq + 1)
+                for to_node in range(self.num_nodes)
+                if to_node not in self.byzz_nodes
+                for message_type in supported_message_types
+                if (seq, to_node, message_type) not in existing_keys
+            ]
+        elif self.mode == SPARSE_SEQ_PROPOSAL_RULES:
+            existing_keys = {
+                (seq, pro_seq, to_node, message_type)
+                for seq, pro_seq, to_node, message_type, _ in self.byzz_rules
+            }
+            choices = [
+                (seq, pro_seq, to_node, message_type)
+                for seq in range(self.byzz_min_seq, self.byzz_max_seq + 1)
+                for pro_seq in range(OPEN_PROPOSAL_SEQ, self.max_proposal_seq + 1)
+                for to_node in range(self.num_nodes)
+                if to_node not in self.byzz_nodes
+                for message_type in supported_message_types
+                if (seq, pro_seq, to_node, message_type) not in existing_keys
+            ]
+        elif self.mode == SPARSE_SET_RULES:
+            existing_keys = {
+                (seq, to_nodes, message_type)
+                for seq, to_nodes, message_type, _ in self.byzz_rules
+            }
+            # Receiver-set rules have a combinatorial key space. Sampling directly
+            # avoids materializing all possible node subsets.
+            choices = []
+            attempts = 0
+            max_attempts = max(100, to_add * 50)
+            while len(choices) < to_add and attempts < max_attempts:
+                attempts += 1
+                key = self._random_byzz_key()
+                if key is None or key in existing_keys or key in choices:
+                    continue
+                choices.append(key)
+        elif self.mode == SPARSE_SEQ_PROPOSAL_SET_RULES:
+            existing_keys = {
+                (seq, pro_seq, to_nodes, message_type)
+                for seq, pro_seq, to_nodes, message_type, _ in self.byzz_rules
+            }
+            # Receiver-set rules have a combinatorial key space. Sampling directly
+            # avoids materializing all possible node subsets.
+            choices = []
+            attempts = 0
+            max_attempts = max(100, to_add * 50)
+            while len(choices) < to_add and attempts < max_attempts:
+                attempts += 1
+                key = self._random_byzz_key()
+                if key is None or key in existing_keys or key in choices:
+                    continue
+                choices.append(key)
         selected = random.sample(choices, min(to_add, len(choices)))
         for c in selected:
-            method = self._random_byzz_method(c[2], include_noop=False)
+            method = self._random_byzz_method(c[-1], include_noop=False)
             self.byzz_rules.add((*c, method))
 
     def _sample_byzz_rules(self):
@@ -111,8 +251,91 @@ class ByzzEncoding:
         self.byzz_rules = set()
         self.add_random_byzz_rules(to_add=self.init_num_rules)
 
+    def _mutate_set_rule_key(self, rule):
+        seq, pro_seq, to_nodes, message_type, method = rule
+        op = random.choice(["seq", "pro_seq", "to_nodes", "message_type", "method"])
+        if op == "seq":
+            seq = random.randint(self.byzz_min_seq, self.byzz_max_seq)
+        elif op == "pro_seq":
+            pro_seq = random.randint(OPEN_PROPOSAL_SEQ, self.max_proposal_seq)
+        elif op == "to_nodes":
+            to_nodes = list(to_nodes)
+            if random.random() < 0.5 and len(to_nodes) > 1:
+                to_nodes.remove(random.choice(to_nodes))
+            else:
+                candidates = [node for node in self._honest_nodes() if node not in to_nodes]
+                if candidates:
+                    to_nodes.append(random.choice(candidates))
+                elif to_nodes:
+                    to_nodes.remove(random.choice(to_nodes))
+            to_nodes = self._repair_receiver_set(to_nodes)
+        elif op == "message_type":
+            candidates = [
+                msg_type
+                for msg_type in self._message_types.values()
+                if msg_type in BYZZ_MUTATE_METHODS and msg_type != message_type
+            ]
+            if candidates:
+                message_type = random.choice(candidates)
+                method = self._random_byzz_method(message_type, include_noop=False)
+        elif op == "method":
+            method = self._random_byzz_method(
+                message_type,
+                exclude=method,
+                include_noop=True,
+            )
+        to_nodes = self._repair_receiver_set(to_nodes)
+        if not to_nodes:
+            return None
+        if method not in BYZZ_MUTATE_METHODS[message_type]:
+            method = self._random_byzz_method(message_type, include_noop=False)
+        return (seq, pro_seq, to_nodes, message_type, method)
+
+    def _mutate_receiver_set_rule_key(self, rule):
+        seq, to_nodes, message_type, method = rule
+        op = random.choice(["seq", "to_nodes", "message_type", "method"])
+        if op == "seq":
+            seq = random.randint(self.byzz_min_seq, self.byzz_max_seq)
+        elif op == "to_nodes":
+            to_nodes = list(to_nodes)
+            if random.random() < 0.5 and len(to_nodes) > 1:
+                to_nodes.remove(random.choice(to_nodes))
+            else:
+                candidates = [node for node in self._honest_nodes() if node not in to_nodes]
+                if candidates:
+                    to_nodes.append(random.choice(candidates))
+                elif to_nodes:
+                    to_nodes.remove(random.choice(to_nodes))
+            to_nodes = self._repair_receiver_set(to_nodes)
+        elif op == "message_type":
+            candidates = [
+                msg_type
+                for msg_type in self._message_types.values()
+                if msg_type in BYZZ_MUTATE_METHODS and msg_type != message_type
+            ]
+            if candidates:
+                message_type = random.choice(candidates)
+                method = self._random_byzz_method(message_type, include_noop=False)
+        elif op == "method":
+            method = self._random_byzz_method(
+                message_type,
+                exclude=method,
+                include_noop=True,
+            )
+        to_nodes = self._repair_receiver_set(to_nodes)
+        if not to_nodes:
+            return None
+        if method not in BYZZ_MUTATE_METHODS[message_type]:
+            method = self._random_byzz_method(message_type, include_noop=False)
+        return (seq, to_nodes, message_type, method)
+
     def mutate_self(self, force=False):
-        if self.mode != "sparse_rules":
+        if self.mode not in [
+            "sparse_rules",
+            SPARSE_SET_RULES,
+            SPARSE_SEQ_PROPOSAL_RULES,
+            SPARSE_SEQ_PROPOSAL_SET_RULES,
+        ]:
             return
         if self.byzz_rules is None:
             self.byzz_rules = set()
@@ -127,12 +350,21 @@ class ByzzEncoding:
                 return
             rule_to_modify = random.choice(list(self.byzz_rules))
             self.byzz_rules.discard(rule_to_modify)
-            new_method = self._random_byzz_method(
-                rule_to_modify[2],
-                exclude=rule_to_modify[3],
-                include_noop=True,
-            )
-            self.byzz_rules.add(rule_to_modify[:-1] + (new_method,))
+            if self.mode == SPARSE_SET_RULES:
+                mutated = self._mutate_receiver_set_rule_key(rule_to_modify)
+                if mutated is not None:
+                    self.byzz_rules.add(mutated)
+            elif self.mode == SPARSE_SEQ_PROPOSAL_SET_RULES:
+                mutated = self._mutate_set_rule_key(rule_to_modify)
+                if mutated is not None:
+                    self.byzz_rules.add(mutated)
+            else:
+                new_method = self._random_byzz_method(
+                    rule_to_modify[-2],
+                    exclude=rule_to_modify[-1],
+                    include_noop=True,
+                )
+                self.byzz_rules.add(rule_to_modify[:-1] + (new_method,))
         elif op == "add":
             prev_len = len(self.byzz_rules)
             self.add_random_byzz_rules(to_add=1)
@@ -149,7 +381,12 @@ class ByzzEncoding:
             raise ValueError(
                 f"ByzzEncoding mode mismatch: self={self.mode}, other={other.mode}"
             )
-        if self.mode != "sparse_rules":
+        if self.mode not in [
+            "sparse_rules",
+            SPARSE_SET_RULES,
+            SPARSE_SEQ_PROPOSAL_RULES,
+            SPARSE_SEQ_PROPOSAL_SET_RULES,
+        ]:
             return
 
         child1 = set(self.byzz_rules or set())
@@ -160,26 +397,159 @@ class ByzzEncoding:
             rule2 = random.choice(list(child2))
             child1.remove(rule1)
             child2.remove(rule2)
-            child1.add(rule2)
-            child2.add(rule1)
+            if self.mode == SPARSE_SET_RULES:
+                child_rule1, child_rule2 = self._crossover_receiver_set_rules(rule1, rule2)
+                if child_rule1 is not None:
+                    child1.add(child_rule1)
+                if child_rule2 is not None:
+                    child2.add(child_rule2)
+            elif self.mode == SPARSE_SEQ_PROPOSAL_SET_RULES:
+                child_rule1, child_rule2 = self._crossover_set_rules(rule1, rule2)
+                if child_rule1 is not None:
+                    child1.add(child_rule1)
+                if child_rule2 is not None:
+                    child2.add(child_rule2)
+            else:
+                child1.add(rule2)
+                child2.add(rule1)
 
         self.byzz_rules = child1
         other.byzz_rules = child2
+
+    def _crossover_receiver_set_rules(self, left, right):
+        left_seq, left_to, left_msg, left_method = left
+        right_seq, right_to, right_msg, right_method = right
+
+        if random.random() < 0.5:
+            left_seq, right_seq = right_seq, left_seq
+        if random.random() < 0.5:
+            left_msg, right_msg = right_msg, left_msg
+
+        left_to, right_to = self._crossover_node_sets(
+            left_to,
+            right_to,
+            allowed_nodes=self._honest_nodes(),
+        )
+
+        if left_method not in BYZZ_MUTATE_METHODS[left_msg]:
+            left_method = self._random_byzz_method(left_msg, include_noop=False)
+        if right_method not in BYZZ_MUTATE_METHODS[right_msg]:
+            right_method = self._random_byzz_method(right_msg, include_noop=False)
+
+        left_to = self._repair_receiver_set(left_to)
+        right_to = self._repair_receiver_set(right_to)
+        child_left = (left_seq, left_to, left_msg, left_method) if left_to else None
+        child_right = (right_seq, right_to, right_msg, right_method) if right_to else None
+        return child_left, child_right
+
+    def _crossover_set_rules(self, left, right):
+        left_seq, left_pro_seq, left_to, left_msg, left_method = left
+        right_seq, right_pro_seq, right_to, right_msg, right_method = right
+
+        if random.random() < 0.5:
+            left_seq, right_seq = right_seq, left_seq
+        if random.random() < 0.5:
+            left_pro_seq, right_pro_seq = right_pro_seq, left_pro_seq
+        if random.random() < 0.5:
+            left_msg, right_msg = right_msg, left_msg
+
+        left_to, right_to = self._crossover_node_sets(
+            left_to,
+            right_to,
+            allowed_nodes=self._honest_nodes(),
+        )
+
+        if left_method not in BYZZ_MUTATE_METHODS[left_msg]:
+            left_method = self._random_byzz_method(left_msg, include_noop=False)
+        if right_method not in BYZZ_MUTATE_METHODS[right_msg]:
+            right_method = self._random_byzz_method(right_msg, include_noop=False)
+
+        left_to = self._repair_receiver_set(left_to)
+        right_to = self._repair_receiver_set(right_to)
+        child_left = (
+            (left_seq, left_pro_seq, left_to, left_msg, left_method)
+            if left_to
+            else None
+        )
+        child_right = (
+            (right_seq, right_pro_seq, right_to, right_msg, right_method)
+            if right_to
+            else None
+        )
+        return child_left, child_right
+
+    @staticmethod
+    def _crossover_node_sets(left_nodes, right_nodes, allowed_nodes):
+        left = set(left_nodes)
+        right = set(right_nodes)
+        child_left = set(left)
+        child_right = set(right)
+        for node in allowed_nodes:
+            if (node in left) != (node in right) and random.random() < 0.5:
+                if node in child_left:
+                    child_left.remove(node)
+                    child_right.add(node)
+                else:
+                    child_left.add(node)
+                    child_right.discard(node)
+        if not child_left and allowed_nodes:
+            child_left.add(random.choice(allowed_nodes))
+        if not child_right and allowed_nodes:
+            child_right.add(random.choice(allowed_nodes))
+        return tuple(sorted(child_left)), tuple(sorted(child_right))
 
     def to_dict(self):
         res = {
             "mode": self.mode,
         }
         if self.byzz_rules is not None:
-            res["byzz_rules"] = [
-                {
-                    "seq": b[0],
-                    "to_node": b[1],
-                    "message_type": b[2].__name__,
-                    "mutation_method": b[3],
-                }
-                for b in self.byzz_rules
-            ]
+            byzz_rules = []
+            for b in self.byzz_rules:
+                if self.mode == "sparse_rules" and len(b) == 4:
+                    seq, to_node, message_type, method = b
+                    byzz_rules.append(
+                        {
+                            "seq": seq,
+                            "to_node": to_node,
+                            "message_type": message_type.__name__,
+                            "mutation_method": method,
+                        }
+                    )
+                elif self.mode == SPARSE_SEQ_PROPOSAL_RULES and len(b) == 5:
+                    seq, pro_seq, to_node, message_type, method = b
+                    byzz_rules.append(
+                        {
+                            "seq": seq,
+                            "pro_seq": pro_seq,
+                            "to_node": to_node,
+                            "message_type": message_type.__name__,
+                            "mutation_method": method,
+                        }
+                    )
+                elif self.mode == SPARSE_SET_RULES and len(b) == 4:
+                    seq, to_nodes, message_type, method = b
+                    byzz_rules.append(
+                        {
+                            "seq": seq,
+                            "to_nodes": list(to_nodes),
+                            "message_type": message_type.__name__,
+                            "mutation_method": method,
+                        }
+                    )
+                elif self.mode == SPARSE_SEQ_PROPOSAL_SET_RULES and len(b) == 5:
+                    seq, pro_seq, to_nodes, message_type, method = b
+                    byzz_rules.append(
+                        {
+                            "seq": seq,
+                            "pro_seq": pro_seq,
+                            "to_nodes": list(to_nodes),
+                            "message_type": message_type.__name__,
+                            "mutation_method": method,
+                        }
+                    )
+                else:
+                    raise ValueError(f"Invalid byzz rule format: {b}")
+            res["byzz_rules"] = byzz_rules
         return res
 
     def to_yaml(self):
@@ -192,7 +562,10 @@ class PartitionEncoding:
         "random_bipart",  # randomly partition into two groups
         "bi_part_groups",  # partition into two groups
         "flex_bi_part_groups",  # two groups with evolvable seq and duration
+        # two groups with evolvable seq/start offset/message type; duration is fixed
+        "flex_msg_part_groups",
     ]
+    _message_types = MESSAGE_TYPE_MAP
 
     def __init__(
         self,
@@ -203,6 +576,7 @@ class PartitionEncoding:
         byzz_min_seq=None,
         byzz_max_seq=None,
         max_partition_duration=1000,
+        max_partition_start_after_ms=None,
         start_partition="open",
         init_num_rules=1,
     ):
@@ -233,6 +607,11 @@ class PartitionEncoding:
             if max_partition_duration is not None
             else partition_duration
         )
+        self.max_partition_start_after_ms = int(
+            max_partition_start_after_ms
+            if max_partition_start_after_ms is not None
+            else self.max_partition_duration
+        )
         if self.byzz_min_seq > self.byzz_max_seq:
             raise ValueError(
                 f"Invalid partition seq range: {self.byzz_min_seq} > {self.byzz_max_seq}"
@@ -241,16 +620,43 @@ class PartitionEncoding:
             raise ValueError("init_num_rules must be positive")
         if self.max_partition_duration <= 0:
             raise ValueError("max_partition_duration must be positive")
+        if self.max_partition_start_after_ms < 0:
+            raise ValueError("max_partition_start_after_ms must be non-negative")
         self.partition = None  # legacy compatibility: mirrors the first rule
         self.partition_rules = []
         self._sample_partition_rules()
 
-    def _build_partition_rule(self, partition, partition_seq, partition_duration):
-        return {
+    @staticmethod
+    def _format_message_type(message_type):
+        if isinstance(message_type, str):
+            return message_type
+        return message_type.__name__
+
+    def _random_partition_message_type(self, exclude=None):
+        message_types = [msg_type.__name__ for msg_type in self._message_types.values()]
+        if exclude is not None and len(message_types) > 1:
+            message_types = [msg for msg in message_types if msg != exclude]
+        return random.choice(message_types)
+
+    def _build_partition_rule(
+        self,
+        partition,
+        partition_seq,
+        partition_duration=None,
+        start_after_ms=None,
+        message_type=None,
+    ):
+        rule = {
             "partition_seq": int(partition_seq),
-            "partition_duration": int(partition_duration),
             "partition": [int(value) for value in partition],
         }
+        if partition_duration is not None:
+            rule["partition_duration"] = int(partition_duration)
+        if start_after_ms is not None:
+            rule["start_after_ms"] = int(start_after_ms)
+        if message_type is not None:
+            rule["message_type"] = self._format_message_type(message_type)
+        return rule
 
     def _sync_legacy_partition_fields(self):
         if not self.partition_rules:
@@ -258,7 +664,9 @@ class PartitionEncoding:
             return
         first_rule = self.partition_rules[0]
         self.partition_seq = int(first_rule["partition_seq"])
-        self.partition_duration = int(first_rule["partition_duration"])
+        self.partition_duration = int(
+            first_rule.get("partition_duration", self.partition_duration)
+        )
         self.partition = list(first_rule["partition"])
 
     def _sample_partition_groups(self):
@@ -300,9 +708,28 @@ class PartitionEncoding:
         rule["partition_seq"] = int(
             max(self.byzz_min_seq, min(self.byzz_max_seq, rule["partition_seq"]))
         )
-        rule["partition_duration"] = int(
-            max(1, min(self.max_partition_duration, rule["partition_duration"]))
-        )
+        if self.mode == "flex_msg_part_groups":
+            rule["start_after_ms"] = int(
+                max(
+                    0,
+                    min(
+                        self.max_partition_start_after_ms,
+                        int(rule.get("start_after_ms", 0)),
+                    ),
+                )
+            )
+            message_types = {
+                msg_type.__name__ for msg_type in self._message_types.values()
+            }
+            if "message_type" not in rule:
+                rule["message_type"] = self._random_partition_message_type()
+            if rule["message_type"] not in message_types:
+                raise ValueError(f"Invalid partition message_type: {rule['message_type']}")
+            rule.pop("partition_duration", None)
+        else:
+            rule["partition_duration"] = int(
+                max(1, min(self.max_partition_duration, rule["partition_duration"]))
+            )
         if len(rule["partition"]) != self.num_nodes:
             raise ValueError(
                 f"partition length {len(rule['partition'])} != num_nodes {self.num_nodes}"
@@ -316,12 +743,12 @@ class PartitionEncoding:
             return
 
         if (
-            self.mode == "flex_bi_part_groups"
-            and self.init_num_rules > (self.byzz_max_seq - self.byzz_min_seq + 1)
+            self.mode in ["flex_bi_part_groups", "flex_msg_part_groups"]
+            and self.init_num_rules > self._max_partition_rule_choices()
         ):
             raise ValueError(
                 "partition_init_num_rules cannot exceed the number of injectable "
-                "sequence numbers for flex_bi_part_groups"
+                "partition rule choices for this mode"
             )
 
         self.partition_rules = []
@@ -347,6 +774,23 @@ class PartitionEncoding:
                         partition_duration=random.randint(1, self.max_partition_duration),
                     )
                 )
+        elif self.mode == "flex_msg_part_groups":
+            choices = [
+                (seq, message_type.__name__)
+                for seq in range(self.byzz_min_seq, self.byzz_max_seq + 1)
+                for message_type in self._message_types.values()
+            ]
+            for seq, message_type in random.sample(choices, self.init_num_rules):
+                self.partition_rules.append(
+                    self._build_partition_rule(
+                        partition=self._sample_partition_groups(),
+                        partition_seq=seq,
+                        start_after_ms=random.randint(
+                            0, self.max_partition_start_after_ms
+                        ),
+                        message_type=message_type,
+                    )
+                )
         else:
             raise ValueError(f"Invalid partition mode: {self.mode}")
 
@@ -354,12 +798,18 @@ class PartitionEncoding:
             self._repair_partition_rule(rule)
         self._sync_legacy_partition_fields()
 
+    def _max_partition_rule_choices(self):
+        num_seqs = self.byzz_max_seq - self.byzz_min_seq + 1
+        if self.mode == "flex_msg_part_groups":
+            return num_seqs * len(self._message_types)
+        return num_seqs
+
     def _mutate_partition_assignment(self, rule):
         flip_idx = random.randint(0, len(rule["partition"]) - 1)
         rule["partition"][flip_idx] = 1 - rule["partition"][flip_idx]
 
     def mutate_self(self, force=False):
-        if self.mode not in ["bi_part_groups", "flex_bi_part_groups"]:
+        if self.mode not in ["bi_part_groups", "flex_bi_part_groups", "flex_msg_part_groups"]:
             return
         if not self.partition_rules:
             return
@@ -374,8 +824,13 @@ class PartitionEncoding:
         ops = ["partition"]
         if self.byzz_min_seq < self.byzz_max_seq:
             ops.append("seq")
-        if self.max_partition_duration > 1:
+        if self.mode == "flex_bi_part_groups" and self.max_partition_duration > 1:
             ops.append("duration")
+        if self.mode == "flex_msg_part_groups":
+            if self.max_partition_start_after_ms > 0:
+                ops.append("start_after")
+            if len(self._message_types) > 1:
+                ops.append("message_type")
 
         op = random.choice(ops)
         if op == "partition":
@@ -392,6 +847,16 @@ class PartitionEncoding:
                 self.max_partition_duration,
                 rule["partition_duration"],
             )
+        elif op == "start_after":
+            rule["start_after_ms"] = self._random_int_excluding(
+                0,
+                self.max_partition_start_after_ms,
+                rule.get("start_after_ms", 0),
+            )
+        elif op == "message_type":
+            rule["message_type"] = self._random_partition_message_type(
+                exclude=rule.get("message_type")
+            )
         self._repair_partition_rule(rule)
         self._sync_legacy_partition_fields()
 
@@ -400,7 +865,7 @@ class PartitionEncoding:
             raise ValueError(
                 f"PartitionEncoding mode mismatch: self={self.mode}, other={other.mode}"
             )
-        if self.mode not in ["bi_part_groups", "flex_bi_part_groups"]:
+        if self.mode not in ["bi_part_groups", "flex_bi_part_groups", "flex_msg_part_groups"]:
             return
         if not self.partition_rules or not other.partition_rules:
             return
@@ -414,15 +879,32 @@ class PartitionEncoding:
         for left_rule, right_rule in zip(self.partition_rules, other.partition_rules):
             left_seq = int(left_rule["partition_seq"])
             right_seq = int(right_rule["partition_seq"])
-            left_duration = int(left_rule["partition_duration"])
-            right_duration = int(right_rule["partition_duration"])
             left_partition = list(left_rule["partition"])
             right_partition = list(right_rule["partition"])
 
             if random.random() < 0.5:
                 left_seq, right_seq = right_seq, left_seq
-            if random.random() < 0.5:
-                left_duration, right_duration = right_duration, left_duration
+
+            if self.mode == "flex_msg_part_groups":
+                left_start_after = int(left_rule.get("start_after_ms", 0))
+                right_start_after = int(right_rule.get("start_after_ms", 0))
+                left_message_type = left_rule.get("message_type")
+                right_message_type = right_rule.get("message_type")
+                if random.random() < 0.5:
+                    left_start_after, right_start_after = (
+                        right_start_after,
+                        left_start_after,
+                    )
+                if random.random() < 0.5:
+                    left_message_type, right_message_type = (
+                        right_message_type,
+                        left_message_type,
+                    )
+            else:
+                left_duration = int(left_rule["partition_duration"])
+                right_duration = int(right_rule["partition_duration"])
+                if random.random() < 0.5:
+                    left_duration, right_duration = right_duration, left_duration
 
             child_partition_left = list(left_partition)
             child_partition_right = list(right_partition)
@@ -435,16 +917,30 @@ class PartitionEncoding:
                         child_partition_left[idx],
                     )
 
-            child_rule_left = self._build_partition_rule(
-                partition=child_partition_left,
-                partition_seq=left_seq,
-                partition_duration=left_duration,
-            )
-            child_rule_right = self._build_partition_rule(
-                partition=child_partition_right,
-                partition_seq=right_seq,
-                partition_duration=right_duration,
-            )
+            if self.mode == "flex_msg_part_groups":
+                child_rule_left = self._build_partition_rule(
+                    partition=child_partition_left,
+                    partition_seq=left_seq,
+                    start_after_ms=left_start_after,
+                    message_type=left_message_type,
+                )
+                child_rule_right = self._build_partition_rule(
+                    partition=child_partition_right,
+                    partition_seq=right_seq,
+                    start_after_ms=right_start_after,
+                    message_type=right_message_type,
+                )
+            else:
+                child_rule_left = self._build_partition_rule(
+                    partition=child_partition_left,
+                    partition_seq=left_seq,
+                    partition_duration=left_duration,
+                )
+                child_rule_right = self._build_partition_rule(
+                    partition=child_partition_right,
+                    partition_seq=right_seq,
+                    partition_duration=right_duration,
+                )
             self._repair_partition_rule(child_rule_left)
             other._repair_partition_rule(child_rule_right)
             new_rules_self.append(child_rule_left)
@@ -464,15 +960,22 @@ class PartitionEncoding:
         }
         if self.mode == "flex_bi_part_groups":
             res["max_partition_duration"] = self.max_partition_duration
+        if self.mode == "flex_msg_part_groups":
+            res["max_partition_start_after_ms"] = self.max_partition_start_after_ms
         if self.partition_rules:
-            res["partition_rules"] = [
-                {
+            rules = []
+            for rule in self.partition_rules:
+                rule_dict = {
                     "partition_seq": int(rule["partition_seq"]),
-                    "partition_duration": int(rule["partition_duration"]),
                     "partition": list(rule["partition"]),
                 }
-                for rule in self.partition_rules
-            ]
+                if self.mode == "flex_msg_part_groups":
+                    rule_dict["start_after_ms"] = int(rule["start_after_ms"])
+                    rule_dict["message_type"] = str(rule["message_type"])
+                else:
+                    rule_dict["partition_duration"] = int(rule["partition_duration"])
+                rules.append(rule_dict)
+            res["partition_rules"] = rules
         if self.partition is not None:
             res["partition"] = list(self.partition)
         return res
@@ -488,6 +991,10 @@ class DelayEncoding:
         "dense_rules",  # <from, to, message_type> -> delay
         "dense_seq_rules",  # <seq, from, to, message_type> -> delay
         "sparse_rules",  # a set of rules: (seq, from, to, message_type) -> delay
+        SPARSE_SET_RULES,  # (seq, from_nodes, to_nodes, message_type) -> delay
+        SPARSE_SEQ_PROPOSAL_RULES,  # (seq, pro_seq, from, to, message_type) -> delay
+        # (seq, pro_seq, from_nodes, to_nodes, message_type) -> delay
+        SPARSE_SEQ_PROPOSAL_SET_RULES,
     ]
 
     def __init__(
@@ -499,6 +1006,7 @@ class DelayEncoding:
         byzz_min_seq,
         byzz_max_seq,
         init_num_rules=5,
+        max_proposal_seq=5,
     ):
         if mode not in self.delay_modes:
             raise ValueError(f"Invalid delay mode: {mode}")
@@ -509,10 +1017,81 @@ class DelayEncoding:
         self.byzz_min_seq = byzz_min_seq
         self.byzz_max_seq = byzz_max_seq
         self.init_num_rules = init_num_rules
+        self.max_proposal_seq = int(max_proposal_seq)
+        if self.max_proposal_seq < 0:
+            raise ValueError("max_proposal_seq must be non-negative")
 
         self.mode = mode
         self.delay_constraints = None
         self._sample_dealy_rules()
+
+    @staticmethod
+    def _random_subset(candidates):
+        if not candidates:
+            return tuple()
+        size = random.randint(1, len(candidates))
+        return tuple(sorted(random.sample(candidates, size)))
+
+    def _repair_delay_node_sets(self, from_nodes, to_nodes):
+        all_nodes = set(range(self.num_nodes))
+        from_set = {int(node) for node in from_nodes if int(node) in all_nodes}
+        to_set = {int(node) for node in to_nodes if int(node) in all_nodes}
+
+        if not from_set:
+            from_set.add(random.randrange(self.num_nodes))
+        to_set -= from_set
+        if not to_set:
+            candidates = sorted(all_nodes - from_set)
+            if candidates:
+                to_set.add(random.choice(candidates))
+            elif self.num_nodes > 1:
+                # If from_set covers every node, shrink it so a non-empty,
+                # disjoint receiver set can exist.
+                moved = random.choice(sorted(from_set))
+                from_set.remove(moved)
+                to_set.add(moved)
+
+        if not from_set or not to_set:
+            raise ValueError("delay set rules require at least two nodes")
+        return tuple(sorted(from_set)), tuple(sorted(to_set))
+
+    def _random_delay_node_sets(self):
+        if self.num_nodes < 2:
+            raise ValueError("delay set rules require at least two nodes")
+        nodes = list(range(self.num_nodes))
+        from_nodes = set(self._random_subset(nodes))
+        to_candidates = [node for node in nodes if node not in from_nodes]
+        if not to_candidates:
+            moved = random.choice(sorted(from_nodes))
+            from_nodes.remove(moved)
+            to_candidates = [moved]
+        to_nodes = set(self._random_subset(to_candidates))
+        return self._repair_delay_node_sets(from_nodes, to_nodes)
+
+    def _random_sparse_delay_key(self):
+        seq = random.randint(self.byzz_min_seq, self.byzz_max_seq)
+        message_type = random.choice(list(MESSAGE_TYPE_MAP.values())).__name__
+        if self.mode == "sparse_rules":
+            from_node = random.randrange(self.num_nodes)
+            to_node = random.randrange(self.num_nodes - 1)
+            if to_node >= from_node:
+                to_node += 1
+            return (seq, from_node, to_node, message_type)
+        if self.mode == SPARSE_SEQ_PROPOSAL_RULES:
+            from_node = random.randrange(self.num_nodes)
+            to_node = random.randrange(self.num_nodes - 1)
+            if to_node >= from_node:
+                to_node += 1
+            pro_seq = random.randint(OPEN_PROPOSAL_SEQ, self.max_proposal_seq)
+            return (seq, pro_seq, from_node, to_node, message_type)
+        if self.mode == SPARSE_SET_RULES:
+            from_nodes, to_nodes = self._random_delay_node_sets()
+            return (seq, from_nodes, to_nodes, message_type)
+        if self.mode == SPARSE_SEQ_PROPOSAL_SET_RULES:
+            from_nodes, to_nodes = self._random_delay_node_sets()
+            pro_seq = random.randint(OPEN_PROPOSAL_SEQ, self.max_proposal_seq)
+            return (seq, pro_seq, from_nodes, to_nodes, message_type)
+        return None
 
     def _random_delay(self, exclude=None):
         delay = random.randint(self.delay_min, self.delay_max)
@@ -547,27 +1126,64 @@ class DelayEncoding:
                             self.delay_constraints[
                                 (seq, from_node, to_node, message_type.__name__)
                             ] = delay
-        elif self.mode == "sparse_rules":
+        elif self.mode in [
+            "sparse_rules",
+            SPARSE_SET_RULES,
+            SPARSE_SEQ_PROPOSAL_RULES,
+            SPARSE_SEQ_PROPOSAL_SET_RULES,
+        ]:
             self.delay_constraints = {}
             self.add_random_sparse_delay_rules(to_add=self.init_num_rules)
         else:
             raise ValueError(f"Invalid delay mode: {self.mode}")
 
     def add_random_sparse_delay_rules(self, to_add=1):
-        if self.mode != "sparse_rules":
+        if self.mode not in [
+            "sparse_rules",
+            SPARSE_SET_RULES,
+            SPARSE_SEQ_PROPOSAL_RULES,
+            SPARSE_SEQ_PROPOSAL_SET_RULES,
+        ]:
             return
         if self.delay_constraints is None:
             self.delay_constraints = {}
-        choices = [
-            (seq, from_node, to_node, message_type.__name__)
-            for seq in range(self.byzz_min_seq, self.byzz_max_seq + 1)
-            for from_node in range(self.num_nodes)
-            for to_node in range(self.num_nodes)
-            if from_node != to_node
-            for message_type in MESSAGE_TYPE_MAP.values()
-            if (seq, from_node, to_node, message_type.__name__)
-            not in self.delay_constraints
-        ]
+        if self.mode == "sparse_rules":
+            choices = [
+                (seq, from_node, to_node, message_type.__name__)
+                for seq in range(self.byzz_min_seq, self.byzz_max_seq + 1)
+                for from_node in range(self.num_nodes)
+                for to_node in range(self.num_nodes)
+                if from_node != to_node
+                for message_type in MESSAGE_TYPE_MAP.values()
+                if (seq, from_node, to_node, message_type.__name__)
+                not in self.delay_constraints
+            ]
+        elif self.mode == SPARSE_SEQ_PROPOSAL_RULES:
+            choices = [
+                (seq, pro_seq, from_node, to_node, message_type.__name__)
+                for seq in range(self.byzz_min_seq, self.byzz_max_seq + 1)
+                for pro_seq in range(OPEN_PROPOSAL_SEQ, self.max_proposal_seq + 1)
+                for from_node in range(self.num_nodes)
+                for to_node in range(self.num_nodes)
+                if from_node != to_node
+                for message_type in MESSAGE_TYPE_MAP.values()
+                if (seq, pro_seq, from_node, to_node, message_type.__name__)
+                not in self.delay_constraints
+            ]
+        elif self.mode in [SPARSE_SET_RULES, SPARSE_SEQ_PROPOSAL_SET_RULES]:
+            choices = []
+            attempts = 0
+            max_attempts = max(100, to_add * 50)
+            while len(choices) < to_add and attempts < max_attempts:
+                attempts += 1
+                key = self._random_sparse_delay_key()
+                if (
+                    key is None
+                    or key in self.delay_constraints
+                    or key in choices
+                ):
+                    continue
+                choices.append(key)
         selected = random.sample(choices, min(to_add, len(choices)))
         for choice in selected:
             self.delay_constraints[choice] = self._random_delay()
@@ -631,13 +1247,107 @@ class DelayEncoding:
             key = random.choice(list(self.delay_constraints.keys()))
             del self.delay_constraints[key]
 
+    def _mutate_sparse_set_rules(self):
+        if self.delay_constraints is None:
+            self.delay_constraints = {}
+
+        op = random.choice(["modify", "add", "delete"])
+
+        if op == "modify":
+            if not self.delay_constraints:
+                self.add_random_sparse_delay_rules(to_add=1)
+                return
+            key = random.choice(list(self.delay_constraints.keys()))
+            delay = self.delay_constraints.pop(key)
+            has_pro_seq = len(key) == 5
+            if has_pro_seq:
+                seq, pro_seq, from_nodes, to_nodes, message_type = key
+                fields = [
+                    "delay",
+                    "seq",
+                    "pro_seq",
+                    "from_nodes",
+                    "to_nodes",
+                    "message_type",
+                ]
+            else:
+                seq, from_nodes, to_nodes, message_type = key
+                pro_seq = None
+                fields = ["delay", "seq", "from_nodes", "to_nodes", "message_type"]
+            field = random.choice(fields)
+            if field == "delay":
+                delay = self._random_delay(exclude=delay)
+            elif field == "seq":
+                seq = random.randint(self.byzz_min_seq, self.byzz_max_seq)
+            elif field == "pro_seq":
+                pro_seq = random.randint(OPEN_PROPOSAL_SEQ, self.max_proposal_seq)
+            elif field == "from_nodes":
+                from_nodes = set(from_nodes)
+                if random.random() < 0.5 and len(from_nodes) > 1:
+                    from_nodes.remove(random.choice(sorted(from_nodes)))
+                else:
+                    candidates = [
+                        node
+                        for node in range(self.num_nodes)
+                        if node not in from_nodes and node not in set(to_nodes)
+                    ]
+                    if candidates:
+                        from_nodes.add(random.choice(candidates))
+                    elif from_nodes:
+                        from_nodes.remove(random.choice(sorted(from_nodes)))
+                from_nodes, to_nodes = self._repair_delay_node_sets(from_nodes, to_nodes)
+            elif field == "to_nodes":
+                to_nodes = set(to_nodes)
+                if random.random() < 0.5 and len(to_nodes) > 1:
+                    to_nodes.remove(random.choice(sorted(to_nodes)))
+                else:
+                    candidates = [
+                        node
+                        for node in range(self.num_nodes)
+                        if node not in to_nodes and node not in set(from_nodes)
+                    ]
+                    if candidates:
+                        to_nodes.add(random.choice(candidates))
+                    elif to_nodes:
+                        to_nodes.remove(random.choice(sorted(to_nodes)))
+                from_nodes, to_nodes = self._repair_delay_node_sets(from_nodes, to_nodes)
+            elif field == "message_type":
+                candidates = [
+                    msg_type.__name__
+                    for msg_type in MESSAGE_TYPE_MAP.values()
+                    if msg_type.__name__ != message_type
+                ]
+                if candidates:
+                    message_type = random.choice(candidates)
+            if has_pro_seq:
+                new_key = (seq, pro_seq, from_nodes, to_nodes, message_type)
+            else:
+                new_key = (seq, from_nodes, to_nodes, message_type)
+            self.delay_constraints[new_key] = delay
+        elif op == "add":
+            prev_len = len(self.delay_constraints)
+            self.add_random_sparse_delay_rules(to_add=1)
+            if len(self.delay_constraints) == prev_len and self.delay_constraints:
+                key = random.choice(list(self.delay_constraints.keys()))
+                self.delay_constraints[key] = self._random_delay(
+                    exclude=self.delay_constraints[key]
+                )
+        elif op == "delete":
+            if not self.delay_constraints:
+                self.add_random_sparse_delay_rules(to_add=1)
+                return
+            key = random.choice(list(self.delay_constraints.keys()))
+            del self.delay_constraints[key]
+
     def mutate_self(self, force=False):
         if self.mode in ["none", "random"]:
             return
         if self.mode in ["dense_rules", "dense_seq_rules"]:
             self._mutate_dense_mapping()
-        elif self.mode == "sparse_rules":
+        elif self.mode in ["sparse_rules", SPARSE_SEQ_PROPOSAL_RULES]:
             self._mutate_sparse_rules()
+        elif self.mode in [SPARSE_SET_RULES, SPARSE_SEQ_PROPOSAL_SET_RULES]:
+            self._mutate_sparse_set_rules()
         else:
             raise ValueError(f"Invalid delay mode: {self.mode}")
 
@@ -688,6 +1398,84 @@ class DelayEncoding:
         self.delay_constraints = child1
         other.delay_constraints = child2
 
+    def _mate_sparse_set_rules(self, other):
+        child1 = dict(self.delay_constraints or {})
+        child2 = dict(other.delay_constraints or {})
+
+        if child1 and child2:
+            key1 = random.choice(list(child1.keys()))
+            key2 = random.choice(list(child2.keys()))
+            delay1 = child1.pop(key1)
+            delay2 = child2.pop(key2)
+            child_key1, child_delay1, child_key2, child_delay2 = (
+                self._crossover_sparse_set_rule(key1, delay1, key2, delay2)
+            )
+            child1[child_key1] = child_delay1
+            child2[child_key2] = child_delay2
+
+        self.delay_constraints = child1
+        other.delay_constraints = child2
+
+    def _crossover_sparse_set_rule(self, key1, delay1, key2, delay2):
+        has_pro_seq = len(key1) == 5
+        if has_pro_seq != (len(key2) == 5):
+            raise ValueError("Sparse set delay rule key shapes must match for crossover")
+        if has_pro_seq:
+            seq1, pro_seq1, from1, to1, msg1 = key1
+            seq2, pro_seq2, from2, to2, msg2 = key2
+        else:
+            seq1, from1, to1, msg1 = key1
+            seq2, from2, to2, msg2 = key2
+            pro_seq1 = None
+            pro_seq2 = None
+
+        if random.random() < 0.5:
+            seq1, seq2 = seq2, seq1
+        if has_pro_seq and random.random() < 0.5:
+            pro_seq1, pro_seq2 = pro_seq2, pro_seq1
+        if random.random() < 0.5:
+            msg1, msg2 = msg2, msg1
+        if random.random() < 0.5:
+            delay1, delay2 = delay2, delay1
+
+        from1, from2 = self._crossover_node_sets(from1, from2)
+        to1, to2 = self._crossover_node_sets(to1, to2)
+        from1, to1 = self._repair_delay_node_sets(from1, to1)
+        from2, to2 = self._repair_delay_node_sets(from2, to2)
+
+        if not has_pro_seq:
+            return (
+                (seq1, from1, to1, msg1),
+                delay1,
+                (seq2, from2, to2, msg2),
+                delay2,
+            )
+        return (
+            (seq1, pro_seq1, from1, to1, msg1),
+            delay1,
+            (seq2, pro_seq2, from2, to2, msg2),
+            delay2,
+        )
+
+    def _crossover_node_sets(self, left_nodes, right_nodes):
+        left = set(left_nodes)
+        right = set(right_nodes)
+        child_left = set(left)
+        child_right = set(right)
+        for node in range(self.num_nodes):
+            if (node in left) != (node in right) and random.random() < 0.5:
+                if node in child_left:
+                    child_left.remove(node)
+                    child_right.add(node)
+                else:
+                    child_left.add(node)
+                    child_right.discard(node)
+        if not child_left:
+            child_left.add(random.randrange(self.num_nodes))
+        if not child_right:
+            child_right.add(random.randrange(self.num_nodes))
+        return tuple(sorted(child_left)), tuple(sorted(child_right))
+
     def mate_with(self, other):
         if self.mode != other.mode:
             raise ValueError(
@@ -697,8 +1485,10 @@ class DelayEncoding:
             return
         if self.mode in ["dense_rules", "dense_seq_rules"]:
             self._mate_dense_mapping(other)
-        elif self.mode == "sparse_rules":
+        elif self.mode in ["sparse_rules", SPARSE_SEQ_PROPOSAL_RULES]:
             self._mate_sparse_rules(other)
+        elif self.mode in [SPARSE_SET_RULES, SPARSE_SEQ_PROPOSAL_SET_RULES]:
+            self._mate_sparse_set_rules(other)
         else:
             raise ValueError(f"Invalid delay mode: {self.mode}")
     
@@ -750,6 +1540,58 @@ class DelayEncoding:
                         seq,
                         from_node,
                         to_node,
+                        message_type,
+                    ), delay in self.delay_constraints.items()
+                ]
+            elif self.mode == SPARSE_SEQ_PROPOSAL_RULES:
+                res["delays"] = [
+                    {
+                        "seq": seq,
+                        "pro_seq": pro_seq,
+                        "from_node": from_node,
+                        "to_node": to_node,
+                        "message_type": message_type,
+                        "delay": delay,
+                    }
+                    for (
+                        seq,
+                        pro_seq,
+                        from_node,
+                        to_node,
+                        message_type,
+                    ), delay in self.delay_constraints.items()
+                ]
+            elif self.mode == SPARSE_SET_RULES:
+                res["delays"] = [
+                    {
+                        "seq": seq,
+                        "from_nodes": list(from_nodes),
+                        "to_nodes": list(to_nodes),
+                        "message_type": message_type,
+                        "delay": delay,
+                    }
+                    for (
+                        seq,
+                        from_nodes,
+                        to_nodes,
+                        message_type,
+                    ), delay in self.delay_constraints.items()
+                ]
+            elif self.mode == SPARSE_SEQ_PROPOSAL_SET_RULES:
+                res["delays"] = [
+                    {
+                        "seq": seq,
+                        "pro_seq": pro_seq,
+                        "from_nodes": list(from_nodes),
+                        "to_nodes": list(to_nodes),
+                        "message_type": message_type,
+                        "delay": delay,
+                    }
+                    for (
+                        seq,
+                        pro_seq,
+                        from_nodes,
+                        to_nodes,
                         message_type,
                     ), delay in self.delay_constraints.items()
                 ]
@@ -807,19 +1649,56 @@ class ComposeEncoding(BaseEncoding):
             )
         if len(key) == 4:
             seq, from_node, to_node, message_type = key
+            if isinstance(from_node, tuple) or isinstance(to_node, tuple):
+                return (
+                    f"seq={seq}, from_nodes={list(from_node)}, "
+                    f"to_nodes={list(to_node)}, "
+                    f"message_type={cls._format_message_type(message_type)}"
+                )
             return (
                 f"seq={seq}, from_node={from_node}, to_node={to_node}, "
+                f"message_type={cls._format_message_type(message_type)}"
+            )
+        if len(key) == 5:
+            seq, pro_seq, from_node, to_node, message_type = key
+            if isinstance(from_node, tuple) or isinstance(to_node, tuple):
+                return (
+                    f"seq={seq}, pro_seq={pro_seq}, from_nodes={list(from_node)}, "
+                    f"to_nodes={list(to_node)}, "
+                    f"message_type={cls._format_message_type(message_type)}"
+                )
+            return (
+                f"seq={seq}, pro_seq={pro_seq}, from_node={from_node}, "
+                f"to_node={to_node}, "
                 f"message_type={cls._format_message_type(message_type)}"
             )
         return str(key)
 
     @classmethod
     def _format_byzz_key(cls, key):
-        seq, to_node, message_type = key
-        return (
-            f"seq={seq}, to_node={to_node}, "
-            f"message_type={cls._format_message_type(message_type)}"
-        )
+        if len(key) == 3:
+            seq, to_node, message_type = key
+            if isinstance(to_node, tuple):
+                return (
+                    f"seq={seq}, to_nodes={list(to_node)}, "
+                    f"message_type={cls._format_message_type(message_type)}"
+                )
+            return (
+                f"seq={seq}, to_node={to_node}, "
+                f"message_type={cls._format_message_type(message_type)}"
+            )
+        if len(key) == 4:
+            seq, pro_seq, to_node, message_type = key
+            if isinstance(to_node, tuple):
+                return (
+                    f"seq={seq}, pro_seq={pro_seq}, to_nodes={list(to_node)}, "
+                    f"message_type={cls._format_message_type(message_type)}"
+                )
+            return (
+                f"seq={seq}, pro_seq={pro_seq}, to_node={to_node}, "
+                f"message_type={cls._format_message_type(message_type)}"
+            )
+        return str(key)
 
     def _check_mode_compatibility(self, other):
         self_modes = (self.byzz_mode, self.delay_mode, self.partition_mode)
@@ -870,15 +1749,30 @@ class ComposeEncoding(BaseEncoding):
                     f"rule[{idx}].partition_seq {previous_rule['partition_seq']} -> "
                     f"{current_rule['partition_seq']}"
                 )
-            if (
-                current_rule["partition_duration"]
-                != previous_rule["partition_duration"]
+            if current_rule.get("partition_duration") != previous_rule.get(
+                "partition_duration"
             ):
                 lines.append(
                     "PartitionEncoding: "
                     f"rule[{idx}].partition_duration "
-                    f"{previous_rule['partition_duration']} -> "
-                    f"{current_rule['partition_duration']}"
+                    f"{previous_rule.get('partition_duration')} -> "
+                    f"{current_rule.get('partition_duration')}"
+                )
+            if current_rule.get("start_after_ms") != previous_rule.get(
+                "start_after_ms"
+            ):
+                lines.append(
+                    "PartitionEncoding: "
+                    f"rule[{idx}].start_after_ms "
+                    f"{previous_rule.get('start_after_ms')} -> "
+                    f"{current_rule.get('start_after_ms')}"
+                )
+            if current_rule.get("message_type") != previous_rule.get("message_type"):
+                lines.append(
+                    "PartitionEncoding: "
+                    f"rule[{idx}].message_type "
+                    f"{previous_rule.get('message_type')} -> "
+                    f"{current_rule.get('message_type')}"
                 )
 
             changed = [
@@ -938,14 +1832,28 @@ class ComposeEncoding(BaseEncoding):
         current_rules = self.byzz_encoding.byzz_rules or set()
         previous_rules = other.byzz_encoding.byzz_rules or set()
 
-        current = {
-            (seq, to_node, self._format_message_type(message_type)): method
-            for seq, to_node, message_type, method in current_rules
-        }
-        previous = {
-            (seq, to_node, self._format_message_type(message_type)): method
-            for seq, to_node, message_type, method in previous_rules
-        }
+        def normalize_byzz_rule(rule):
+            if len(rule) == 4:
+                seq, to_node, message_type, method = rule
+                if isinstance(to_node, tuple):
+                    to_node = tuple(int(node) for node in to_node)
+                key = (seq, to_node, self._format_message_type(message_type))
+            elif len(rule) == 5:
+                seq, pro_seq, to_node, message_type, method = rule
+                if isinstance(to_node, tuple):
+                    to_node = tuple(int(node) for node in to_node)
+                key = (
+                    seq,
+                    pro_seq,
+                    to_node,
+                    self._format_message_type(message_type),
+                )
+            else:
+                raise ValueError(f"Invalid byzz rule format: {rule}")
+            return key, method
+
+        current = dict(normalize_byzz_rule(rule) for rule in current_rules)
+        previous = dict(normalize_byzz_rule(rule) for rule in previous_rules)
 
         previous_keys = set(previous.keys())
         current_keys = set(current.keys())
@@ -1025,6 +1933,7 @@ class ComposeEncoding(BaseEncoding):
             byzz_min_seq=configs["byzz_min_seq"],
             byzz_max_seq=configs["byzz_max_seq"],
             init_num_rules=configs.get("byzz_init_num_rules", 5),
+            max_proposal_seq=configs.get("max_proposal_seq", 5),
         )
 
         delay_encoding = DelayEncoding(
@@ -1035,6 +1944,7 @@ class ComposeEncoding(BaseEncoding):
             byzz_min_seq=configs["byzz_min_seq"],
             byzz_max_seq=configs["byzz_max_seq"],
             init_num_rules=configs.get("delay_init_num_rules", 5),
+            max_proposal_seq=configs.get("max_proposal_seq", 5),
         )
 
         partition_encoding = PartitionEncoding(
@@ -1048,6 +1958,10 @@ class ComposeEncoding(BaseEncoding):
             byzz_min_seq=configs["byzz_min_seq"],
             byzz_max_seq=configs["byzz_max_seq"],
             max_partition_duration=configs.get("max_partition_duration", 1000),
+            max_partition_start_after_ms=configs.get(
+                "max_partition_start_after_ms",
+                configs.get("max_partition_duration", 1000),
+            ),
             start_partition=configs.get("start_partition", "open"),
             init_num_rules=configs.get("partition_init_num_rules", 1),
         )
