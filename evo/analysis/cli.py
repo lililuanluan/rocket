@@ -145,7 +145,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     
     # Backward compatibility: if first arg is not a known command, prepend "analyze"
     # Also handle the case where there are no args at all (default to analyze)
-    if not argv or (argv and argv[0] not in ("analyze", "clean", "debug")):
+    if not argv or (
+        argv
+        and argv[0]
+        not in (
+            "analyze",
+            "clean",
+            "debug",
+            "proposal-trace",
+            "bug5-trace",
+            "bug5-fixture",
+        )
+    ):
         argv = ["analyze"] + argv
     
     # Parse arguments
@@ -179,6 +190,60 @@ def main(argv: Optional[List[str]] = None) -> int:
     debug_parser.add_argument(
         "case_dir",
         help="Case directory to debug"
+    )
+
+    proposal_trace_parser = subparsers.add_parser(
+        "proposal-trace",
+        help="Trace proposal send/receive/local-state evolution for one case",
+    )
+    proposal_trace_parser.add_argument("case_dir", help="Case directory to analyze")
+    proposal_trace_parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Output directory. Defaults to <case_dir>/analysis/.",
+    )
+    proposal_trace_parser.add_argument(
+        "--nodes",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Optional node ids to keep.",
+    )
+    proposal_trace_parser.add_argument(
+        "--seqs",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Optional working ledger sequences to keep.",
+    )
+
+    bug5_trace_parser = subparsers.add_parser(
+        "bug5-trace",
+        help="Extract a bug5-style consensus trace for one case",
+    )
+    bug5_trace_parser.add_argument("case_dir", help="Case directory to analyze")
+    bug5_trace_parser.add_argument("--seq", type=int, default=9, help="Working ledger sequence")
+    bug5_trace_parser.add_argument("--tx", required=True, help="Disputed transaction hash")
+    bug5_trace_parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Output directory. Defaults to <case_dir>/analysis/.",
+    )
+
+    bug5_fixture_parser = subparsers.add_parser(
+        "bug5-fixture",
+        help="Generate a CSF replay fixture from a bug5 consensus trace JSON",
+    )
+    bug5_fixture_parser.add_argument("trace_json", help="bug5_consensus_trace.json")
+    bug5_fixture_parser.add_argument(
+        "--has-target-txset",
+        required=True,
+        help="TxSet hash that contains the target transaction in the binary replay model",
+    )
+    bug5_fixture_parser.add_argument(
+        "--out",
+        required=True,
+        help="Output C++ fixture header path",
     )
     
     args = parser.parse_args(argv)
@@ -230,6 +295,58 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             print("No analysis index found")
         
+        return 0
+
+    elif args.command == "proposal-trace":
+        from evo.analysis.proposal_trace import run_proposal_trace
+
+        case_dir = Path(args.case_dir)
+        if not case_dir.exists():
+            print(f"Error: Directory not found: {case_dir}", file=sys.stderr)
+            return 1
+
+        outputs = run_proposal_trace(
+            case_dir,
+            out_dir=None if args.out_dir is None else Path(args.out_dir),
+            nodes=args.nodes,
+            seqs=args.seqs,
+        )
+        for path in outputs:
+            print(path)
+        return 0
+
+    elif args.command == "bug5-trace":
+        from evo.analysis.bug5_trace import run_bug5_trace
+
+        case_dir = Path(args.case_dir)
+        if not case_dir.exists():
+            print(f"Error: Directory not found: {case_dir}", file=sys.stderr)
+            return 1
+
+        outputs = run_bug5_trace(
+            case_dir,
+            target_seq=args.seq,
+            target_tx=args.tx,
+            out_dir=None if args.out_dir is None else Path(args.out_dir),
+        )
+        for path in outputs:
+            print(path)
+        return 0
+
+    elif args.command == "bug5-fixture":
+        from evo.analysis.bug5_trace import write_csf_fixture
+
+        trace_json = Path(args.trace_json)
+        if not trace_json.exists():
+            print(f"Error: Trace JSON not found: {trace_json}", file=sys.stderr)
+            return 1
+
+        out_path = write_csf_fixture(
+            trace_json,
+            has_target_txset=args.has_target_txset,
+            out_path=Path(args.out),
+        )
+        print(out_path)
         return 0
     
     else:
