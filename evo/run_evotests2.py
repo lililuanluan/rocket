@@ -9,6 +9,7 @@ evaluations are submitted to one global ``ProcessPoolExecutor``.
 
 from __future__ import annotations
 
+import argparse
 import copy
 import csv
 import os
@@ -17,6 +18,7 @@ import random
 import re
 import signal
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -40,12 +42,14 @@ for path in (str(REPO_ROOT), str(EVO_DIR)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from evo import encoding
-from evologger import EvoLogger
-from run_rocket import INVALID_RUNTIME_FITNESS, run_rocket_and_evaluate
-from utils import (
+from evo import encoding  # noqa: E402
+from evo.analysis.clean import iter_cleanup_targets, process_cleanup_target  # noqa: E402
+from evologger import EvoLogger  # noqa: E402
+from run_rocket import INVALID_RUNTIME_FITNESS, run_rocket_and_evaluate  # noqa: E402
+from utils import (  # noqa: E402
     get_date_time_strf,
     get_dirs,
+    get_logs_root,
     get_strategy_name,
     make_cluster_id,
     setup_docker_images,
@@ -476,6 +480,185 @@ def print_config_summary(
     print()
 
 
+BYTES_PER_GIB = 1024**3
+BYTES_PER_MIB = 1024**2
+
+
+def format_bytes(byte_count: float | int | None) -> str:
+    if byte_count is None:
+        return "unknown"
+    value = float(byte_count)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if abs(value) < 1024.0 or unit == "TiB":
+            return f"{value:.1f} {unit}"
+        value /= 1024.0
+    return f"{value:.1f} TiB"
+
+
+def parse_quota_remaining_bytes(output: str) -> int | None:
+    """Return remaining bytes from POSIX quota output, when available.
+
+    ``quota -w`` reports disk blocks in KiB on normal Linux quota tools.  A
+    soft quota of zero means unlimited, so we fall back to the hard limit.
+    """
+
+    best_remaining: int | None = None
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("Disk quotas", "Filesystem")):
+            continue
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        try:
+            used_kib = int(fields[1].rstrip("*"))
+            soft_kib = int(fields[2].rstrip("*"))
+            hard_kib = int(fields[3].rstrip("*"))
+        except ValueError:
+            continue
+        limit_kib = soft_kib or hard_kib
+        if limit_kib <= 0:
+            continue
+        remaining = max(0, limit_kib - used_kib) * 1024
+        best_remaining = remaining if best_remaining is None else min(best_remaining, remaining)
+    return best_remaining
+
+
+def quota_remaining_bytes() -> tuple[int | None, str]:
+    quota_bin = shutil.which("quota")
+    if quota_bin is None:
+        return None, "quota command not available"
+    try:
+        result = subprocess.run(
+            [quota_bin, "-w"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"quota unavailable: {exc}"
+    remaining = parse_quota_remaining_bytes(result.stdout + "\n" + result.stderr)
+    if remaining is None:
+        return None, "quota output did not contain a finite disk quota"
+    return remaining, "quota"
+
+
+def log_root_space_info(log_root: Path) -> dict[str, Any]:
+    log_root.mkdir(parents=True, exist_ok=True)
+    stat = os.statvfs(log_root)
+    filesystem_available = stat.f_bavail * stat.f_frsize
+    filesystem_used = (stat.f_blocks - stat.f_bfree) * stat.f_frsize
+    quota_available, quota_source = quota_remaining_bytes()
+
+    if quota_available is None:
+        available = filesystem_available
+        source = f"filesystem available ({quota_source})"
+    else:
+        available = min(filesystem_available, quota_available)
+        source = "min(filesystem available, quota remaining)"
+
+    return {
+        "available": available,
+        "source": source,
+        "filesystem_available": filesystem_available,
+        "filesystem_used": filesystem_used,
+        "quota_available": quota_available,
+        "quota_source": quota_source,
+    }
+
+
+def planned_case_count(run_configs: list[dict[str, Any]]) -> int:
+    total = 0
+    for run_config in run_configs:
+        population_size = int(run_config.get("population_size", 10) or 10)
+        max_generation = int(run_config.get("max_generation", 0) or 0)
+        total += population_size * (max_generation + 1)
+    return total
+
+
+def enforce_log_space_preflight(
+    config: dict[str, Any],
+    dirs: dict[str, Path],
+    run_configs: list[dict[str, Any]],
+    root_log_dir: Path,
+) -> bool:
+    if os.environ.get("ROCKET_SKIP_LOG_SPACE_PREFLIGHT") == "1":
+        log_line("[log-space] Skipping preflight because ROCKET_SKIP_LOG_SPACE_PREFLIGHT=1.")
+        return True
+    if not bool(config.get("log_space_preflight", True)):
+        log_line("[log-space] Skipping preflight because log_space_preflight=false.")
+        return True
+
+    log_root = Path(dirs["logs_dir"])
+    clean_non_violation_cases = bool(config.get("clean_non_violation_cases", False))
+    case_estimate_key = (
+        "log_space_slimmed_case_mb"
+        if clean_non_violation_cases
+        else "log_space_case_mb"
+    )
+    fallback_case_mb = 1 if clean_non_violation_cases else 64
+    case_mb = float(config.get(case_estimate_key, fallback_case_mb) or fallback_case_mb)
+    case_bytes = case_mb * BYTES_PER_MIB
+    multiplier = float(config.get("log_space_estimate_multiplier", 1.25) or 1.0)
+    min_free_bytes = float(config.get("log_space_min_free_gb", 20) or 0) * BYTES_PER_GIB
+
+    planned_cases = planned_case_count(run_configs)
+    raw_estimate = case_bytes * planned_cases
+    estimated_need = raw_estimate * multiplier
+    space = log_root_space_info(log_root)
+    available = float(space["available"])
+    required = estimated_need + min_free_bytes
+    fit_cases = int(max(0.0, available - min_free_bytes) // max(1.0, case_bytes * multiplier))
+
+    log_line("")
+    log_line("=" * 70)
+    log_line("LOG SPACE PREFLIGHT")
+    log_line("=" * 70)
+    log_line(f"  Log root:                 {log_root}")
+    log_line(f"  New run root:             {root_log_dir}")
+    log_line(f"  Space source:             {space['source']}")
+    log_line(f"  Filesystem used:          {format_bytes(space['filesystem_used'])}")
+    log_line(f"  Filesystem available:     {format_bytes(space['filesystem_available'])}")
+    if space["quota_available"] is not None:
+        log_line(f"  Quota remaining:          {format_bytes(space['quota_available'])}")
+    else:
+        log_line(f"  Quota remaining:          unavailable ({space['quota_source']})")
+    log_line(
+        f"  Immediate clean:          "
+        f"{'enabled for non-violation cases' if clean_non_violation_cases else 'disabled'}"
+    )
+    log_line(f"  Case estimate source:     {case_estimate_key}")
+    log_line(f"  Fixed case estimate:      {format_bytes(case_bytes)}")
+    log_line(f"  Planned config runners:   {len(run_configs)}")
+    log_line(f"  Planned case dirs:        {planned_cases}")
+    log_line(f"  Estimation multiplier:    {multiplier:.2f}x")
+    log_line(f"  Estimated log need:       {format_bytes(estimated_need)}")
+    log_line(f"  Required free reserve:    {format_bytes(min_free_bytes)}")
+    log_line(f"  Estimated cases fitting:  {fit_cases}")
+    log_line("=" * 70)
+
+    if available < required:
+        shortage = required - available
+        log_line(
+            "[log-space] Refusing to start long run: estimated logs plus reserve "
+            f"need {format_bytes(required)}, but only {format_bytes(available)} is available "
+            f"(short by {format_bytes(shortage)})."
+        )
+        log_line(
+            "[log-space] Free space or lower total_num_tests/fitness_functions/strategies, "
+            "or set ROCKET_SKIP_LOG_SPACE_PREFLIGHT=1 to override deliberately."
+        )
+        return False
+
+    remaining_after_run = available - estimated_need
+    log_line(
+        "[log-space] OK to start: estimated remaining space after run is "
+        f"{format_bytes(remaining_after_run)}."
+    )
+    return True
+
+
 def setup_deap_types():
     with _deap_setup_lock:
         if not hasattr(creator, "FitnessSingle"):
@@ -610,6 +793,65 @@ def worker_warmup() -> int:
     return os.getpid()
 
 
+def int_result_field(data: dict[str, Any], key: str) -> int:
+    value = data.get(key, 0)
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def result_has_violation(eval_result: dict[str, Any]) -> bool:
+    return any(
+        int_result_field(eval_result, key) != 0
+        for key in (
+            "total_failures",
+            "failed_termination",
+            "failed_agreement",
+            "failed_final_agreement",
+        )
+    )
+
+
+def clean_case_logs_if_safe(
+    *,
+    log_dir: Path,
+    result: dict[str, Any],
+    enabled: bool,
+) -> None:
+    if not enabled:
+        return
+    if result.get("run_status") != "ok" or result.get("runtime_invalid", False):
+        return
+
+    eval_result = result.get("eval_result") or {}
+    if result_has_violation(eval_result):
+        return
+
+    targets = iter_cleanup_targets(log_dir, keep_action_log=False)
+    if not targets:
+        return
+
+    deleted = 0
+    for target in targets:
+        cleanup_result = process_cleanup_target(
+            target,
+            dry_run=False,
+            no_size=True,
+        )
+        if cleanup_result.affected:
+            deleted += 1
+
+    if deleted:
+        print(
+            f"[log-clean] Slimmed non-violation case {log_dir}; "
+            f"deleted {deleted} bulky path(s).",
+            flush=True,
+        )
+
+
 def evaluate_task_worker(task: EvaluationTask) -> dict[str, Any]:
     config = task.config
     ind_id = f"G{task.generation}T{task.individual_id}"
@@ -662,6 +904,15 @@ def evaluate_task_worker(task: EvaluationTask) -> dict[str, Any]:
                 print(f"[{cluster_id}] Archived failed attempt logs to {archived_dir}", flush=True)
 
     assert result is not None
+    try:
+        clean_case_logs_if_safe(
+            log_dir=full_log_dir,
+            result=result,
+            enabled=bool(config.get("clean_non_violation_cases", False)),
+        )
+    except Exception as exc:
+        print(f"[{cluster_id}] Warning: failed to slim case logs: {exc}", flush=True)
+
     fitness = result.get("fitness", 0.0)
     print(f"[{cluster_id}] Fitness: {fitness}", flush=True)
 
@@ -1209,7 +1460,17 @@ def run_config_threads(
 def main() -> int:
     global _force_exit_on_second_sigint
     dirs = get_dirs(__file__)
-    config_file = Path(dirs["cur_dir"]) / "run_evotests.yaml"
+    parser = argparse.ArgumentParser(
+        description="Run evolutionary tests from a self-contained YAML configuration."
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path(dirs["cur_dir"]) / "run_evotests.yaml",
+        help="experiment YAML to run (default: evo/run_evotests.yaml)",
+    )
+    args = parser.parse_args()
+    config_file = args.config.resolve()
 
     try:
         config = load_config(config_file)
@@ -1219,16 +1480,49 @@ def main() -> int:
         log_line(f"Expected config file at: {config_file}")
         return 1
 
+    # The experiment YAML may pin its own log root -- e.g. a node-local disk for
+    # benchmarks whose per-message CSV appends would otherwise serialise behind
+    # NFS latency. dirs["logs_dir"] was computed before the config was read, so
+    # re-resolve it here; every later use goes through dirs.
+    configured_log_root = config.get("log_root")
+    if configured_log_root:
+        resolved_log_root = get_logs_root(Path(dirs["rocket_dir"]), str(configured_log_root))
+        if resolved_log_root != Path(dirs["logs_dir"]):
+            log_line(
+                f"Log root overridden by config 'log_root': {resolved_log_root} "
+                f"(was {dirs['logs_dir']})"
+            )
+        dirs["logs_dir"] = resolved_log_root
+
+    # Network paths are relative to the experiment YAML, not to evo/. This
+    # keeps benchmark presets isolated from the mutable default configuration.
+    config["_config_file"] = str(config_file)
+    config["_config_dir"] = str(config_file.parent)
+    configured_network_yaml = Path(config.get("base_network_config_yaml", "network.yaml"))
+    network_yaml = (
+        configured_network_yaml
+        if configured_network_yaml.is_absolute()
+        else config_file.parent / configured_network_yaml
+    )
+    if not network_yaml.exists():
+        log_line(f"Configuration Error: network config not found: {network_yaml}")
+        return 1
+    config["network_yaml"] = network_yaml
+
     parallel_mode = get_parallel_mode(config)
     max_concurrent_tasks = get_max_concurrent_tasks(config)
     run_configs, root_log_dir = build_run_configs(config, dirs)
-    try:
-        config_snapshot_path = snapshot_run_config(config_file, root_log_dir)
-    except OSError as exc:
-        log_line(f"Failed to copy config snapshot into log root: {exc}")
-        return 1
     if not run_configs:
         log_line("No run configurations were generated.")
+        return 1
+
+    if not enforce_log_space_preflight(config, dirs, run_configs, root_log_dir):
+        return 1
+
+    try:
+        config_snapshot_path = snapshot_run_config(config_file, network_yaml, root_log_dir)
+    except OSError as exc:
+        log_line(f"Failed to copy config snapshot into log root: {exc}")
         return 1
 
     if parallel_mode == "serial":

@@ -17,8 +17,8 @@ action_log_columns = [
     "from_node_id",
     "to_node_id",
     "message_type",
-    "original_data",
-    "possibly_mutated_data",
+    # "original_data",
+    # "possibly_mutated_data",
     "packet_data",
     "possibly_mutated_packet_data",
 ]
@@ -155,8 +155,8 @@ class ActionLogger(CSVLogger):
         from_node_id: int,
         to_node_id: int,
         message_type: str,
-        original_data: str,
-        possibly_mutated_data: str,        
+        # original_data: str,
+        # possibly_mutated_data: str,
         packet_data: str,
         possibly_mutated_packet_data: str,
         custom_timestamp: int | None = None,
@@ -170,8 +170,8 @@ class ActionLogger(CSVLogger):
             from_node_id: ID of the node who sent the message.
             to_node_id: ID of the node who is supposed to receive the message.
             message_type: The message type as defined in the ripple.proto file.
-            original_data: The message's original data.
-            possibly_mutated_data: The message's possibly mutated data.
+            # original_data: The message's original data.
+            # possibly_mutated_data: The message's possibly mutated data.
             custom_timestamp: A custom timestamp to log if desired.
         """
         # Note: timestamp is milliseconds since epoch (January 1, 1970)
@@ -185,8 +185,8 @@ class ActionLogger(CSVLogger):
                 from_node_id,
                 to_node_id,
                 message_type,
-                original_data,
-                possibly_mutated_data,
+                # original_data,
+                # possibly_mutated_data,
                 packet_data,
                 possibly_mutated_packet_data,
             ]

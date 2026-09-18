@@ -68,10 +68,10 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             raise RuntimeError("Logger was not initialized")
 
         original_packet_decoded = PacketEncoderDecoder.decode_packet(request)
-        new_packet = Packet(
-            data=new_data, from_port=request.from_port, to_port=request.to_port
-        )
-        new_packet_decoded = PacketEncoderDecoder.decode_packet(new_packet)
+        # new_packet = Packet(
+        #     data=new_data, from_port=request.from_port, to_port=request.to_port
+        # )
+        # new_packet_decoded = PacketEncoderDecoder.decode_packet(new_packet)
 
         self.logger.log_action(
             action=action,
@@ -81,8 +81,8 @@ class PacketService(packet_pb2_grpc.PacketServiceServicer):
             message_type=PacketEncoderDecoder.message_type_map[
                 original_packet_decoded[1]
             ].__name__,
-            original_data=original_packet_decoded[0].__str__().replace("\n", "; "),
-            possibly_mutated_data=new_packet_decoded[0].__str__().replace("\n", "; "),
+            # original_data=original_packet_decoded[0].__str__().replace("\n", "; "),
+            # possibly_mutated_data=new_packet_decoded[0].__str__().replace("\n", "; "),
             custom_timestamp=timestamp,
             packet_data=request.data.hex(),
             possibly_mutated_packet_data=new_data.hex(),
