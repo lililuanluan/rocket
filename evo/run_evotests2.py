@@ -185,6 +185,10 @@ def safe_path_part(value: str) -> str:
     return value.replace(":", "_").replace("/", "_")
 
 
+def baseline_strategy_label(strategy_label: str) -> str:
+    return f"random-{strategy_label}"
+
+
 def load_config(config_file: Path) -> dict[str, Any]:
     if not config_file.exists():
         raise FileNotFoundError(f"Config file not found: {config_file}")
@@ -235,10 +239,31 @@ def validate_config(config: dict[str, Any]):
 
     if config.get("start_partition") not in (None, "open", "establish"):
         raise ValueError("Config key 'start_partition' must be one of: open, establish")
-
     seqcheck = config.get("seqcheck")
     if seqcheck is not None and str(seqcheck).lower() not in ("fullyval", "statuschange"):
         raise ValueError("Config key 'seqcheck' must be one of: fullyval, statuschange")
+    if "include_random_baseline" in config and not isinstance(
+        config["include_random_baseline"], bool
+    ):
+        raise ValueError("Config key 'include_random_baseline' must be boolean")
+
+    if (
+        "byzz_enabled_mutation_methods" in config
+        and config["byzz_enabled_mutation_methods"] is not None
+        and not isinstance(config["byzz_enabled_mutation_methods"], dict)
+    ):
+        raise ValueError("Config key 'byzz_enabled_mutation_methods' must be a mapping")
+    if (
+        "byzz_disabled_mutation_methods" in config
+        and config["byzz_disabled_mutation_methods"] is not None
+    ):
+        disabled_methods = config["byzz_disabled_mutation_methods"]
+        if not isinstance(disabled_methods, list) or not all(
+            isinstance(method, str) for method in disabled_methods
+        ):
+            raise ValueError(
+                "Config key 'byzz_disabled_mutation_methods' must be a list of strings"
+            )
 
     objective_mode = str(config.get("objective_mode", "single")).lower()
     if objective_mode not in ("single", "multi"):
@@ -278,6 +303,8 @@ def extend_run_config(
     strategy_combo: dict[str, str],
     fitness_function: str,
     logs_group_dir: Path,
+    search_mode: str = "ga",
+    strategy_label: str | None = None,
 ) -> dict[str, Any]:
     config = copy.deepcopy(DEFAULT_EVOTEST_CONFIG)
     config.update(copy.deepcopy(base_config))
@@ -292,10 +319,13 @@ def extend_run_config(
     config["fitness_function"] = fitness_function
     config["logs_group_dir"] = str(logs_group_dir)
     config["test_log_dir"] = logs_group_dir
+    config["search_mode"] = search_mode
+    config["strategy_label"] = strategy_label or format_strategy_combo(strategy_combo)
     config["output_screen"] = bool(config.get("output_screen", False))
 
-    network_yaml = Path(config["cur_dir"]) / config.get(
-        "base_network_config_yaml", "network.yaml"
+    network_yaml = Path(
+        config.get("network_yaml")
+        or Path(config["cur_dir"]) / config.get("base_network_config_yaml", "network.yaml")
     )
     with open(network_yaml, "r") as f:
         network_config = yaml.safe_load(f)
@@ -347,17 +377,28 @@ def build_run_configs(
         or config.get("logs_group_dir")
         or (Path(dirs["logs_dir"]) / get_date_time_strf())
     )
-    root_log_dir.mkdir(parents=True, exist_ok=True)
 
     run_configs: list[dict[str, Any]] = []
     idx = 0
+    include_random_baseline = bool(config.get("include_random_baseline", False))
     for strategy_combo in strategies:
         strategy_label = format_strategy_combo(strategy_combo)
-        for fitness in fitnesses_for_strategy_combo(strategy_combo, fitnesses):
-            for image in images:
-                image_label = safe_path_part(image)
-                experiment_id = f"E{idx:03d}_{image_label}__{strategy_label}__{fitness}"
-                logs_group_dir = root_log_dir / image_label / strategy_label / fitness
+        for image in images:
+            image_label = safe_path_part(image)
+            run_specs = [
+                ("ga", strategy_label, fitness)
+                for fitness in fitnesses_for_strategy_combo(strategy_combo, fitnesses)
+            ]
+            if include_random_baseline and not is_pure_random_strategy_combo(
+                strategy_combo
+            ):
+                run_specs.append(
+                    ("random_baseline", baseline_strategy_label(strategy_label), "no_fitness")
+                )
+
+            for search_mode, label, fitness in run_specs:
+                experiment_id = f"E{idx:03d}_{image_label}__{label}__{fitness}"
+                logs_group_dir = root_log_dir / image_label / label / fitness
                 run_configs.append(
                     extend_run_config(
                         config,
@@ -367,6 +408,8 @@ def build_run_configs(
                         strategy_combo=strategy_combo,
                         fitness_function=fitness,
                         logs_group_dir=logs_group_dir,
+                        search_mode=search_mode,
+                        strategy_label=label,
                     )
                 )
                 idx += 1
@@ -374,10 +417,15 @@ def build_run_configs(
     return run_configs, root_log_dir
 
 
-def snapshot_run_config(config_file: Path, root_log_dir: Path) -> Path:
+def snapshot_run_config(
+    config_file: Path,
+    network_yaml: Path,
+    root_log_dir: Path,
+) -> Path:
+    root_log_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = root_log_dir / config_file.name
     shutil.copy2(config_file, snapshot_path)
-    shutil.copy2(config_file.parent / "network.yaml", root_log_dir / "network.yaml")
+    shutil.copy2(network_yaml, root_log_dir / "network.yaml")
     return snapshot_path
 
 
@@ -398,7 +446,7 @@ def print_config_summary(
     print("=" * 70)
     print("RUN_EVOTESTS2 CONFIGURATION SUMMARY")
     print("=" * 70)
-    print(f"  Config file:              evo/run_evotests.yaml")
+    print(f"  Config file:              {config.get('_config_file')}")
     print(f"  Config snapshot:          {config_snapshot_path}")
     print(f"  Root log dir:             {root_log_dir}")
     print(f"  Ripple images ({len(images)}):        {', '.join(images)}")
@@ -408,6 +456,10 @@ def print_config_summary(
     print(f"  Objective seqs:           {get_objective_seqs(config)}")
     if any(is_pure_random_strategy_combo(combo) for combo in strategies):
         print("  Pure random combos:       use no_fitness placeholder")
+    print(
+        f"  Random baselines:         "
+        f"{'enabled' if config.get('include_random_baseline', False) else 'disabled'}"
+    )
     print(f"  Total config runners:     {len(run_configs)}")
     print(f"  Config runner threads:    {config_thread_limit}")
     print(f"  Max concurrent tasks:     {max_concurrent_tasks} (global)")
@@ -678,7 +730,7 @@ class ExperimentRunner:
         self.population_membership_path = Path(config["test_log_dir"]) / "population_membership.csv"
         self.label = (
             f"{config['ripple_image']} / "
-            f"{format_strategy_combo(config)} / "
+            f"{config.get('strategy_label') or format_strategy_combo(config)} / "
             f"{config['fitness_function']}"
         )
 
@@ -719,6 +771,17 @@ class ExperimentRunner:
         hof = tools.ParetoFront() if is_multi_objective(self.config) else tools.HallOfFame(1)
         logbook = tools.Logbook()
         logbook.header = ["gen", "nevals"] + stats.fields
+
+        if self.config.get("search_mode") == "random_baseline":
+            return self.run_random_baseline(
+                started_at=started_at,
+                lambda_=lambda_,
+                max_generation=max_generation,
+                toolbox=toolbox,
+                stats=stats,
+                hof=hof,
+                logbook=logbook,
+            )
 
         self.log("Initialization (Generation 0)")
         population = toolbox.population(n=lambda_)
@@ -794,6 +857,66 @@ class ExperimentRunner:
             self.log(f"Best log dir: {best_log_dir}")
             if hasattr(best_ind, "to_dict"):
                 self.log("Best encoding:\n" + yaml.safe_dump(best_ind.to_dict(), sort_keys=False).rstrip())
+
+        return self.summary("ok", started_at, evaluation_count, hof)
+
+    def run_random_baseline(
+        self,
+        *,
+        started_at: float,
+        lambda_: int,
+        max_generation: int,
+        toolbox: base.Toolbox,
+        stats: tools.Statistics,
+        hof: tools.HallOfFame,
+        logbook: tools.Logbook,
+    ) -> RunnerSummary:
+        self.log(
+            "Random baseline: resampling fresh individuals in the same encoding "
+            "space; no selection, crossover, or mutation"
+        )
+        evaluation_count = 0
+
+        for gen in range(0, max_generation + 1):
+            if self.stop_event.is_set():
+                self.log("Stop requested. Exiting random baseline loop.")
+                break
+
+            self.log(f"Random generation {gen}")
+            population = toolbox.population(n=lambda_)
+            results = self.evaluate_population(population, generation=gen)
+            if self.stop_event.is_set():
+                self.log("Stop requested during random baseline evaluation.")
+                break
+
+            evaluation_count += len(results)
+            self.apply_results(population, results, generation=gen)
+            self.write_population_membership(
+                generation=gen,
+                evaluated_individuals=population,
+                candidate_individuals=population,
+                selected_individuals=[],
+            )
+            hof.update(population)
+            record = stats.compile(population)
+            logbook.record(gen=gen, nevals=len(population), **record)
+            self.log(logbook.stream)
+
+        self.log("Random baseline complete")
+        if len(hof) > 0:
+            best_ind = hof[0]
+            best_fit = (
+                tuple(float(value) for value in best_ind.fitness.values)
+                if is_multi_objective(self.config)
+                else best_ind.fitness.values[0]
+            )
+            self.log(f"Best fitness: {best_fit}")
+            self.log(f"Best log dir: {getattr(best_ind, 'log_dir', None)}")
+            if hasattr(best_ind, "to_dict"):
+                self.log(
+                    "Best encoding:\n"
+                    + yaml.safe_dump(best_ind.to_dict(), sort_keys=False).rstrip()
+                )
 
         return self.summary("ok", started_at, evaluation_count, hof)
 

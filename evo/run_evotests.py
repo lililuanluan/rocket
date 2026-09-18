@@ -44,6 +44,18 @@ def format_strategy_combo(combo: dict) -> str:
     )
 
 
+def is_pure_random_strategy_combo(combo: dict) -> bool:
+    return (
+        combo.get("delay_mode") == "random"
+        and combo.get("partition_mode") == "random_bipart"
+        and combo.get("byzz_mode") == "random"
+    )
+
+
+def baseline_strategy_label(strategy_label: str) -> str:
+    return f"random-{strategy_label}"
+
+
 def load_config(config_file: Path) -> dict:
     """Load and return configuration from a YAML file."""
     if not config_file.exists():
@@ -108,10 +120,13 @@ def validate_config(config: dict):
 
     if config.get("start_partition") not in (None, "open", "establish"):
         raise ValueError("Config key 'start_partition' must be one of: open, establish")
-
     seqcheck = config.get("seqcheck")
     if seqcheck is not None and str(seqcheck).lower() not in ("fullyval", "statuschange"):
         raise ValueError("Config key 'seqcheck' must be one of: fullyval, statuschange")
+    if "include_random_baseline" in config and not isinstance(
+        config["include_random_baseline"], bool
+    ):
+        raise ValueError("Config key 'include_random_baseline' must be boolean")
 
 
 def get_parallel_mode(config: dict) -> str:
@@ -128,7 +143,17 @@ def print_config_summary(config: dict, parallel_mode: str):
     images = config["ripple_images"]
     strategies = [normalize_strategy_combo(entry) for entry in config["strategies"]]
     fitnesses = config["fitness_functions"]
-    total = len(images) * len(strategies) * len(fitnesses)
+    include_random_baseline = bool(config.get("include_random_baseline", False))
+    variants_per_strategy = [
+        1
+        + (
+            1
+            if include_random_baseline and not is_pure_random_strategy_combo(combo)
+            else 0
+        )
+        for combo in strategies
+    ]
+    total = len(images) * len(fitnesses) * sum(variants_per_strategy)
     strategy_labels = [format_strategy_combo(combo) for combo in strategies]
 
     print("\n" + "=" * 70)
@@ -147,12 +172,18 @@ def print_config_summary(config: dict, parallel_mode: str):
     print(f"  Total num tests:      {config.get('total_num_tests', 500)}")
     print(f"  Individual timeout:   {config.get('individual_timeout_sec', 180)}s")
     print(f"  Runtime retries:     {config.get('runtime_retries', 1)}")
+    print(
+        f"  Random baselines:    "
+        f"{'enabled' if config.get('include_random_baseline', False) else 'disabled'}"
+    )
     print(f"  Seq check:           {config.get('seqcheck', 'statuschange')}")
     print(
         f"  Delay bounds:         {config.get('min_delay_ms', 0)}-{config.get('max_delay_ms', 100)} ms"
     )
     print(
-        f"  Total runs:           {len(images)} × {len(strategies)} × {len(fitnesses)} = {total}"
+        f"  Total runs:           {len(images)} image(s) × "
+        f"{len(fitnesses)} fitness(es) × {sum(variants_per_strategy)} "
+        f"strategy variant(s) = {total}"
     )
     print("=" * 70 + "\n")
 
@@ -227,93 +258,105 @@ def main():
     log_dir.mkdir(parents=True, exist_ok=True)
 
     idx = 0
+    include_random_baseline = bool(config.get("include_random_baseline", False))
     for strategy_combo in strategies:
         strategy_label = format_strategy_combo(strategy_combo)
         for fitness in fitnesses:
             for img in images:
-                logs_group_dir = (
-                    f"{log_dir}/{img.replace(':','_').replace('/','_')}"
-                    f"/{strategy_label}/{fitness}"
-                )
-
-                cmd = [
-                    sys.executable,
-                    "-m",
-                    "evo.evotest_parallel",
-                    "--logs-group-dir",
-                    logs_group_dir,
-                    "--ripple-image",
-                    img,
-                    "--strategy",
-                    "ComposedStrategy",
-                    "--delay-mode",
-                    strategy_combo["delay_mode"],
-                    "--partition-mode",
-                    strategy_combo["partition_mode"],
-                    "--byzz-mode",
-                    strategy_combo["byzz_mode"],
-                    "--fitness-function",
-                    fitness,
-                    "--max-parallel-workers",
-                    str(max_parallel_workers),
-                    "--total-num-tests",
-                    str(total_num_tests),
-                    "--population-size",
-                    str(population_size),
-                    "--mu",
-                    str(mu),
-                    "--individual-timeout-sec",
-                    str(individual_timeout),
-                    "--runtime-retries",
-                    str(runtime_retries),
-                ]
-                if min_delay_ms is not None:
-                    cmd.extend(["--min-delay-ms", str(min_delay_ms)])
-                if max_delay_ms is not None:
-                    cmd.extend(["--max-delay-ms", str(max_delay_ms)])
-                if partition_seq is not None:
-                    cmd.extend(["--partition-seq", str(partition_seq)])
-                if partition_duration is not None:
-                    cmd.extend(["--partition-duration", str(partition_duration)])
-                if max_partition_duration is not None:
-                    cmd.extend(["--max-partition-duration", str(max_partition_duration)])
-                if max_partition_start_after_ms is not None:
-                    cmd.extend(
-                        [
-                            "--max-partition-start-after-ms",
-                            str(max_partition_start_after_ms),
-                        ]
+                variants = [("ga", strategy_label)]
+                if include_random_baseline and not is_pure_random_strategy_combo(
+                    strategy_combo
+                ):
+                    variants.append(
+                        ("random_baseline", baseline_strategy_label(strategy_label))
                     )
-                if max_proposal_seq is not None:
-                    cmd.extend(["--max-proposal-seq", str(max_proposal_seq)])
-                if start_partition is not None:
-                    cmd.extend(["--start-partition", str(start_partition)])
-                if seqcheck is not None:
-                    cmd.extend(["--seqcheck", str(seqcheck)])
 
-                # ensure both the repo root AND the evo/ dir are on PYTHONPATH.
-                # evo/evotest_parallel.py uses bare imports (e.g. `from evaluate
-                # import ...`) that resolve relative to the evo/ directory.
-                env = os.environ.copy()
-                root = Path(__file__).resolve().parent.parent   # /rocket
-                evo_dir = Path(__file__).resolve().parent        # /rocket/evo
-                existing = env.get("PYTHONPATH", "")
-                extra = f"{root}:{evo_dir}"
-                env["PYTHONPATH"] = extra + (":" + existing if existing else "")
+                for search_mode, label in variants:
+                    logs_group_dir = (
+                        f"{log_dir}/{img.replace(':','_').replace('/','_')}"
+                        f"/{label}/{fitness}"
+                    )
 
-                print(f"\nStarting [{idx}] {img} / {strategy_label} / {fitness}")
-                print("  ports: controller + docker host ports are auto-assigned")
+                    cmd = [
+                        sys.executable,
+                        "-m",
+                        "evo.evotest_parallel",
+                        "--logs-group-dir",
+                        logs_group_dir,
+                        "--ripple-image",
+                        img,
+                        "--strategy",
+                        "ComposedStrategy",
+                        "--delay-mode",
+                        strategy_combo["delay_mode"],
+                        "--partition-mode",
+                        strategy_combo["partition_mode"],
+                        "--byzz-mode",
+                        strategy_combo["byzz_mode"],
+                        "--fitness-function",
+                        fitness,
+                        "--search-mode",
+                        search_mode,
+                        "--max-parallel-workers",
+                        str(max_parallel_workers),
+                        "--total-num-tests",
+                        str(total_num_tests),
+                        "--population-size",
+                        str(population_size),
+                        "--mu",
+                        str(mu),
+                        "--individual-timeout-sec",
+                        str(individual_timeout),
+                        "--runtime-retries",
+                        str(runtime_retries),
+                    ]
+                    if min_delay_ms is not None:
+                        cmd.extend(["--min-delay-ms", str(min_delay_ms)])
+                    if max_delay_ms is not None:
+                        cmd.extend(["--max-delay-ms", str(max_delay_ms)])
+                    if partition_seq is not None:
+                        cmd.extend(["--partition-seq", str(partition_seq)])
+                    if partition_duration is not None:
+                        cmd.extend(["--partition-duration", str(partition_duration)])
+                    if max_partition_duration is not None:
+                        cmd.extend(["--max-partition-duration", str(max_partition_duration)])
+                    if max_partition_start_after_ms is not None:
+                        cmd.extend(
+                            [
+                                "--max-partition-start-after-ms",
+                                str(max_partition_start_after_ms),
+                            ]
+                        )
+                    if max_proposal_seq is not None:
+                        cmd.extend(["--max-proposal-seq", str(max_proposal_seq)])
+                    if start_partition is not None:
+                        cmd.extend(["--start-partition", str(start_partition)])
+                    if seqcheck is not None:
+                        cmd.extend(["--seqcheck", str(seqcheck)])
 
-                t0 = time.time()
-                proc = subprocess.Popen(cmd, env=env, start_new_session=True)
-                procs.append(proc)
-                idx += 1
+                    # ensure both the repo root AND the evo/ dir are on PYTHONPATH.
+                    # evo/evotest_parallel.py uses bare imports (e.g. `from evaluate
+                    # import ...`) that resolve relative to the evo/ directory.
+                    env = os.environ.copy()
+                    root = Path(__file__).resolve().parent.parent   # /rocket
+                    evo_dir = Path(__file__).resolve().parent        # /rocket/evo
+                    existing = env.get("PYTHONPATH", "")
+                    extra = f"{root}:{evo_dir}"
+                    env["PYTHONPATH"] = extra + (":" + existing if existing else "")
 
-                if parallel_mode == "serial":
-                    # ⚠️ wait before launching the next instance to avoid Docker
-                    # port-binding races (especially on WSL2).
-                    proc.wait()
-                    print(f"  → completed in {time.time() - t0:.1f}s")
+                    print(f"\nStarting [{idx}] {img} / {label} / {fitness}")
+                    print("  ports: controller + docker host ports are auto-assigned")
+
+                    t0 = time.time()
+                    proc = subprocess.Popen(cmd, env=env, start_new_session=True)
+                    procs.append(proc)
+                    idx += 1
+
+                    if parallel_mode == "serial":
+                        # ⚠️ wait before launching the next instance to avoid Docker
+                        # port-binding races (especially on WSL2).
+                        proc.wait()
+                        print(f"  → completed in {time.time() - t0:.1f}s")
 
     if parallel_mode == "parallel":
         print(f"\n[run_evotests] Waiting for all {len(procs)} instance(s) to finish...")

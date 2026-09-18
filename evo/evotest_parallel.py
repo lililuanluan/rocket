@@ -371,6 +371,57 @@ def main(configs: dict):
     logbook = tools.Logbook()
     logbook.header = ["gen", "nevals"] + stats.fields
 
+    if configs.get("search_mode", "ga") == "random_baseline":
+        print(
+            "=== Random Baseline: fresh samples from the same encoding space; "
+            "no selection, crossover, or mutation ==="
+        )
+        evaluation_cnt = 0
+        population = []
+        for gen in range(0, max_generation + 1):
+            if stop_event.is_set():
+                print("Stop requested. Exiting random baseline loop.")
+                break
+            print(f"\n=== Random Generation {gen} ===")
+            population = toolbox.population(n=lambda_)
+            results = parallel_evaluate_population(
+                population,
+                generation=gen,
+                config=configs,
+            )
+            if stop_event.is_set():
+                print("Stop requested during random baseline evaluation.")
+                break
+
+            evaluation_cnt += len(results)
+            for result in results:
+                ind_idx = result["individual_id"] - 1
+                population[ind_idx].fitness.values = (result["fitness"],)
+                population[ind_idx].log_dir = result["log_dir"]
+                population[ind_idx].evaluation_result = result["eval_result"]
+
+            hof.update(population)
+            record = stats.compile(population)
+            logbook.record(gen=gen, nevals=len(population), **record)
+            print(logbook.stream)
+
+        print("\n=== Random Baseline Complete ===")
+        print(f"Total evaluations: {evaluation_cnt}")
+        if len(hof) > 0:
+            best_ind = hof[0]
+            print(f"\nBest individual:")
+            print(f"  Fitness: {best_ind.fitness.values[0]}")
+            print(
+                f"  Log directory: "
+                f"{best_ind.log_dir if hasattr(best_ind, 'log_dir') else 'N/A'}"
+            )
+            if hasattr(best_ind, "to_dict"):
+                print("  Encoding:")
+                print(yaml.safe_dump(best_ind.to_dict(), sort_keys=False).rstrip())
+        print("\n=== Random Baseline Statistics ===")
+        print(logbook)
+        return population, logbook, hof
+
     print(f"=== Initialization (Generation 0) ===")
     # 初始化种群
     population = toolbox.population(n=lambda_)
