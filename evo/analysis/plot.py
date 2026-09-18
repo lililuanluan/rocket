@@ -798,7 +798,7 @@ def generate_single_csv_report(task) -> dict:
         else:
             write_metric_report(df, metrics, fitness_label, output_path)
             # emit("📌 未检测到多目标结果，仅生成单目标报告。", messages)
-            emit(f"✅ 成功！报告已保存至: {output_path.resolve()}", messages)
+            # emit(f"✅ 成功！报告已保存至: {output_path.resolve()}", messages)
             emit(f"输出 evolution_report 到 {output_path.resolve()}", messages)
 
     strategy_entry = None
