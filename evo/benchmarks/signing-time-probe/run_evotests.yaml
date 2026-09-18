@@ -1,0 +1,54 @@
+# 诊断探针：只开 increment_signing_time 这一个 mutation。
+#
+# 目的：搞清楚为什么这个 mutation 一开就 panic —— 是 interceptor 的问题，
+# 还是它命中了 rippled 自己的拜占庭检测器（见 images/rippled/src/xrpld/
+# consensus/Validations.h:669-676 的 ValStatus::conflicting 分支）。
+#
+# 前置条件：rocket_controller/strategies/utils.py 的 BYZZ_MUTATE_METHODS
+# 里 "increment_signing_time" 那行必须先取消注释 —— build_byzz_mutate_methods
+# 会在 utils.py:158 对表外的方法名直接 raise ValueError。
+#
+# 这是一个短探针，不是 benchmark：1 个并发、1 代、max_ledger_seq=5。
+ripple_images:
+  - xrpld:3.1.0-local
+base_network_config_yaml: network.yaml
+
+parallel_mode: parallel
+max_concurrent_tasks: 1
+
+strategies:
+  - [sparse_set_rules, open_late_part_groups, sparse_set_rules]
+# 探针不需要随机基线，省一半时间
+include_random_baseline: false
+
+objective_mode: single
+objective_seqs: [5]
+fitness_functions:
+  - mean_validation_time
+
+# 1 代 × 4 个体。规则初始数拉高，确保 TMValidation@seq5 至少被覆盖一次
+total_num_tests: 4
+population_size: 4
+mu: 2
+max_ledger_seq: 5
+byzz_init_num_rules: 20
+delay_init_num_rules: 1
+partition_init_num_rules: 1
+
+# 超时给足，别让它变成"框架超时"而不是真 panic
+individual_timeout_sec: 300
+# 不重试 —— 要看到第一次 panic 的原始现场
+runtime_retries: 0
+
+# 只在 seq 5 触发，缩短无关时间
+byzz_min_seq: 5
+byzz_max_seq: 5
+
+# 关键：把 TMValidation 的词汇表收缩到只剩这一个方法
+byzz_enabled_mutation_methods:
+  TMValidation:
+    - increment_signing_time
+
+seqcheck: statuschange
+# error 级日志必须留下 —— rippled 的拜占庭检测器就是走 error()
+rust_log_level: info

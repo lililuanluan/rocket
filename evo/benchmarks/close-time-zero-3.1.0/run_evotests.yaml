@@ -1,0 +1,96 @@
+# Seven-node rippled 3.1.0 benchmark with set_close_time_zero enabled.
+# Paths are resolved relative to this YAML file.
+ripple_images:
+  - xrpld:3.1.0-local
+base_network_config_yaml: network.yaml
+
+parallel_mode: parallel
+max_config_threads: 14
+# 2026-09-16 10:55 并发 5 -> 12。并发 5 时实测：128 核里 CPU 空闲 91.9%、
+# load 17、每容器 27 线程（旧笔记里"384 线程/容器"是过期数据，别再引用）、
+# 每容器 RSS ~100 MB。余量很大，所以提高到 12。
+# 注意：并发 5 时有效率是 100%（60/60，其中 57 正常 + 3 violation），
+# 提高后要重新确认有效率没有下降——若下降说明 NFS 挂载点增多成了新瓶颈。
+max_concurrent_tasks: 12
+
+# 日志根目录：放节点本地磁盘。2026-09-16 实测，同一段"持锁 + open/write/close"
+# 的小文件写入，NFS 中位数 84.5 ms、本地 ext4 仅 0.49 ms（172 倍）。而
+# packet_server.py:78 是同步写完 action 日志才返回转发指令，该延迟按 seq 串行化后
+# 会把 PING/PONG 往返从 0.077 s 拖到 50.9 s，超过 rippled ping 超时 → rippled 主动
+# 断连 → interceptor 读到 EOF → 评估作废。
+# 本地盘小，必须配合"定期同步到共享存储并删除源文件"。
+log_root: /tmp/rocket-logs-local
+
+# 日志空间预检。benchmark 配置不继承 evo/run_evotests.yaml，缺这几个键时走
+# run_evotests2.py 的内建缺省（log_space_case_mb=64 + clean_non_violation_cases=false），
+# 于是 3360 个 case x 64 MiB x 1.25 = 262.5 GiB，加 20 GiB 保留量超过 workspace
+# 可用空间，预检直接拒绝启动（2026-09-15 实测：差 47 MiB 被拒）。
+# 实测每 case：网络没起来约 1.4 MiB，带 violation 约 28 MiB（09-14 run 的 G2T1）。
+# flip-full-validation-3.3.0 用的是同一组值。
+log_space_preflight: true
+log_space_min_free_gb: 20
+log_space_estimate_multiplier: 1.25
+# 2026-09-16 改 40 -> 8：日志改放节点本地盘（/tmp，约 62 GiB），40 MiB/case 会估算成
+# 184 GiB 而被预检拒绝。8 MiB/case 是实测值：09-14 run 平均 4.2 MiB/case，
+# 网络没起来的约 1.4 MiB，带 violation 的最坏约 28 MiB。
+log_space_case_mb: 8
+
+# 2026-09-16 打开**逐 case 瘦身**。开之前的行为是：只有整个 repeat 跑完，
+# run_benchmark.sh 才调 clean.sh 瘦一次，所以一个 repeat 的完整日志会一直累积
+# （本机实测 7 小时就到 32G，跑完约 90G，而 /tmp 只有 79G）。
+# 打开后 run_evotests2.py:933 会在每个 case 评估完立刻调 clean_case_logs_if_safe()。
+#
+# **注意它只瘦"没有 violation"的 case**（violation 的保留完整证据，这是设计意图）。
+# 本 benchmark 的 violation 率约 11%，所以 89% 的 case 会被立刻瘦身——
+# 代价是那些非 violation case 的原始日志（action/validator/transaction）不再保留，
+# 事后无法分析"正常 case 的行为"。需要那样分析时请把这一行改回 false。
+#
+# 打开后预检估算的基数也换成 log_space_slimmed_case_mb：
+# 3360 × 1 MiB × 1.25 = 4.1 GiB，加 20 GiB 保留 = 24 GiB，/tmp 轻松装下。
+clean_non_violation_cases: true
+log_space_slimmed_case_mb: 1
+
+strategies:
+  - [sparse_set_rules, open_late_part_groups, sparse_set_rules]
+include_random_baseline: true
+
+objective_mode: single
+objective_seqs: [5, 6, 7, 8, 9, 10]
+fitness_functions:
+  - mean_validation_time
+  - validation_distribution_entropy
+  - validation_distribution_entropy_max
+  - message_entropy_integral
+  - message_entropy_integral_max_seq
+  - num_getledger_hashes
+  - num_getledger_hashes_max_seq
+
+total_num_tests: 400
+population_size: 20
+mu: 10
+max_ledger_seq: 15
+# 600s 对 serg4 太紧：实测平均单次评估 371s，长尾直接撞线，上一轮 repeat 1 因此
+# 丢掉整代（mean_validation_time 的 G0 全部 20 个超时作废）。提到 900s 留出余量。
+# 超时现在会走重试（见 evo/run_rocket.py 的 timed_out 分支），所以这里放宽 +
+# runtime_retries 一起构成双重保险。
+individual_timeout_sec: 900
+runtime_retries: 1
+
+min_delay_ms: 0
+max_delay_ms: 1000
+delay_init_num_rules: 5
+partition_init_num_rules: 2
+byzz_init_num_rules: 5
+
+partition_duration: 1000
+max_partition_duration: 1000
+max_partition_start_after_ms: 3000
+start_partition: open
+
+byzz_min_seq: 5
+byzz_max_seq: 10
+max_proposal_seq: 2
+byzz_disabled_mutation_methods: 
+- flip_flags
+seqcheck: statuschange
+rust_log_level: info

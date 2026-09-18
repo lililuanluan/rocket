@@ -1,0 +1,52 @@
+# 最小验证：只为确认 xrpld:3.3.0-local 能被 Rocket 跑通，不做任何攻击。
+# 关注点：
+#   1) key_generator 能否生成密钥（3.3.0 的默认配置路径变成了 /etc/xrpld/）
+#   2) interceptor 生成的 validator config 3.3.0 认不认
+#   3) 7 个节点能否启动并跑出账本
+# 规模：2 individuals × 3 generations × 1 fitness cell = 6 次评估，max_ledger_seq 只要 5。
+# Paths are resolved relative to this YAML file.
+ripple_images:
+  - xrpld:3.3.0-local
+base_network_config_yaml: network.yaml
+
+parallel_mode: parallel
+max_config_threads: 1
+max_concurrent_tasks: 4
+
+# 全 none：不注入 delay / partition / byzantine 任何故障。
+strategies:
+  - [none, none, none]
+include_random_baseline: false
+
+objective_mode: single
+objective_seqs: [5]
+fitness_functions:
+  - mean_validation_time
+
+total_num_tests: 4
+population_size: 4
+mu: 2
+max_ledger_seq: 5
+individual_timeout_sec: 300
+runtime_retries: 0
+
+min_delay_ms: 0
+max_delay_ms: 1000
+delay_init_num_rules: 0
+# 注意：partition_init_num_rules / partition_seq 属于「必须为正整数」的键（见
+# run_evotests2.validate_config），不能填 0。delay_/byzz_ 的 init 数不在该列表里。
+partition_init_num_rules: 1
+byzz_init_num_rules: 0
+partition_seq: 6
+
+partition_duration: 1000
+max_partition_duration: 1000
+max_partition_start_after_ms: 3000
+start_partition: open
+
+byzz_min_seq: 5
+byzz_max_seq: 10
+max_proposal_seq: 2
+byzz_disabled_mutation_methods: []
+seqcheck: statuschange
+rust_log_level: info

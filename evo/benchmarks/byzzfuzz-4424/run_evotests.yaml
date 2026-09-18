@@ -1,0 +1,50 @@
+# Seeded implementation bug corresponding to the ByzzFuzz Ripple finding
+# (rippled PR #4424). Paths are resolved relative to this YAML file.
+ripple_images:
+  - xrpld:2.6.0-byzz-bug-injected-local
+base_network_config_yaml: network.yaml
+
+parallel_mode: parallel
+max_config_threads: 14
+max_concurrent_tasks: 10
+
+strategies:
+  - [sparse_set_rules, open_late_part_groups, sparse_set_rules]
+include_random_baseline: true
+
+objective_mode: single
+objective_seqs: [5, 6, 7, 8, 9, 10]
+fitness_functions:
+  - mean_validation_time
+  - validation_distribution_entropy
+  - validation_distribution_entropy_max
+  - message_entropy_integral
+  - message_entropy_integral_max_seq
+  - num_getledger_hashes
+  - num_getledger_hashes_max_seq
+
+total_num_tests: 400
+population_size: 20
+mu: 10
+max_ledger_seq: 15
+individual_timeout_sec: 600
+runtime_retries: 1
+
+min_delay_ms: 0
+max_delay_ms: 1000
+delay_init_num_rules: 5
+partition_init_num_rules: 2
+byzz_init_num_rules: 5
+
+partition_duration: 1000
+max_partition_duration: 1000
+max_partition_start_after_ms: 3000
+start_partition: open
+
+byzz_min_seq: 5
+byzz_max_seq: 10
+max_proposal_seq: 2
+byzz_disabled_mutation_methods:
+  - set_close_time_zero
+seqcheck: statuschange
+rust_log_level: info

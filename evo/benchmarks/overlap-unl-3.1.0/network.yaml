@@ -1,0 +1,45 @@
+base_port_peer: 60000
+base_port_ws: 61000
+base_port_ws_admin: 62000
+base_port_rpc: 63000
+
+number_of_nodes: 7
+network_partition: []
+
+# Each row is [receiver, trusted peers...]; the receiver itself is implicitly
+# trusted by rippled. Thus every node has an effective UNL of five validators.
+unl_partition:
+  - [0, 1, 2, 3, 4]
+  - [1, 0, 2, 3, 4]
+  - [2, 0, 1, 3, 4]
+  # The paper does not prescribe p3's UNL. p3 is Byzantine, so this row does
+  # not affect any honest node's quorum; use the first group for completeness.
+  - [3, 0, 1, 2, 4]
+  - [4, 2, 3, 5, 6]
+  - [5, 2, 3, 4, 6]
+  - [6, 2, 3, 4, 5]
+
+byzz_nodes: [3]
+
+transactions:
+  genesis:
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account1"
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account2"
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account3"
+
+  regular:
+    - peer_id: 1
+      amount: 81000000000
+      sender_account: "Account1"
+      destination_account: "Account3"
+      time: 2
+      in_seq: [5]

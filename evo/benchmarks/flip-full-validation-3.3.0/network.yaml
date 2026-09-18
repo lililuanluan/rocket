@@ -1,0 +1,85 @@
+base_port_peer: 60000
+base_port_ws: 61000
+base_port_ws_admin: 62000
+base_port_rpc: 63000
+
+number_of_nodes: 7
+network_partition: []
+
+# Empty UNL partition means the controller creates the fully trusted network.
+unl_partition: []
+
+byzz_nodes: [3]
+
+transactions:
+  genesis:
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account1"
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account2"
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account3"
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account4"
+    - peer_id: 1
+      amount: 100001000000
+      sender_account: None
+      destination_account: "Account5"
+
+  regular:
+    - peer_id: 1
+      amount: 12000000000
+      sender_account: "Account1"
+      destination_account: "Account2"
+      time: 1
+      in_seq: [6, 8, 10, 12]
+    - peer_id: 5
+      amount: 9000000000
+      sender_account: "Account2"
+      destination_account: "Account3"
+      time: 2
+      in_seq: [6, 7, 9, 11]
+    - peer_id: 0
+      amount: 7000000000
+      sender_account: "Account3"
+      destination_account: "Account1"
+      time: 1
+      in_seq: [7, 10, 12]
+    - peer_id: 4
+      amount: 5000000000
+      sender_account: "Account4"
+      destination_account: "Account5"
+      time: 2
+      in_seq: [6, 9, 12]
+    - peer_id: 2
+      amount: 8000000000
+      sender_account: "Account5"
+      destination_account: "Account4"
+      time: 3
+      in_seq: [7, 8, 10]
+    - peer_id: 6
+      amount: 11000000000
+      sender_account: "Account1"
+      destination_account: "Account4"
+      time: 2
+      in_seq: [7, 11]
+    - peer_id: 1
+      amount: 6000000000
+      sender_account: "Account2"
+      destination_account: "Account5"
+      time: 1
+      in_seq: [8, 12]
+    - peer_id: 5
+      amount: 10000000000
+      sender_account: "Account4"
+      destination_account: "Account3"
+      time: 2
+      in_seq: [10, 12]

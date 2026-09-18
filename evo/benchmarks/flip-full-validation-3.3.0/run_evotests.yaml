@@ -1,0 +1,150 @@
+# Seven-node rippled 3.3.0 benchmark for the original random flip_flags mutation.
+#
+# 与 close-time-zero-3.1.0 的区别：
+#   - 被测镜像换成 rippled 3.3.0（从源码构建，见 images/Dockerfile.rippled-3.3.0）
+#   - byzz_disabled_mutation_methods 只保留 flip_flags，用小搜索空间复现 notes/bug11.md
+#
+# flip_flags 使用旧实现：随机翻转 Flags 的 32 个 bit 之一。这个配置用于复现
+# 2026_09_14_15h00m_20s 中发现的 bug11，而不是固定翻 bit0 的版本。
+#
+# 本条 mutation 的因果链（源码 + action-1.csv + validator 日志三方验证）：
+#   bit0 被翻 → STValidation::isFull() 为 false
+#     → 不计入 numTrustedForLedger() → RCLConsensus::Adaptor::proposersValidated
+#     → 该 ledger 凑不够 fully-validated quorum
+#     → 但仍会进 updateTrie()/acquiring_（那里只断言 trusted()，不查 full()）
+#     → 污染 getPreferred() → getPrevLedger() 的 preferred ledger
+#   即"计数时排除、选 preferred 时包含"的不一致，最终把 honest nodes 的 full
+#   validation 拆成 5:2，任何一边都到不了 quorum（实测 seq13：4AA4→{0,1,2,3,4}，
+#   9E28→{5,6}，quorum=6）。
+#
+# Paths are resolved relative to this YAML file.
+ripple_images:
+  - xrpld:3.3.0-local
+base_network_config_yaml: network.yaml
+
+# 日志根目录。2026-09-16 起 run_evotests2 支持这个键，优先级高于
+# ROCKET_LOG_ROOT 环境变量（run.sh 会无条件导出后者，环境变量若优先则此键无效）。
+#
+# 为什么放本地磁盘：csv_logger 每条消息都持锁 + 重新打开/写入/关闭 CSV
+# （csv_logger.py:93），而 packet_server.py:78 是同步写完 action 日志才返回转发
+# 指令。实测单次小文件写入 NFS 中位数 84.5 ms，本地 ext4 仅 0.49 ms（172 倍）。
+# 该延迟按 seq 串行化后把 PING/PONG 往返从 0.077 s 拖到 50.9 s，超过 rippled 的
+# ping 超时 → rippled 主动断连 → interceptor 读到 EOF → 评估作废。
+#
+# 本地盘容量小（/tmp 约 63 GiB），必须配合"定期同步到共享存储并删除源文件"，
+# 否则会被写满。同步脚本见 notes/handoff-rippled-closes-connection.md。
+log_root: /tmp/rocket-logs-local
+
+parallel_mode: parallel
+max_config_threads: 14
+# 并发 20（2026-09-17 晚，serg5）。
+#
+# 之前在 serg4 上用 5，理由写在旧注释里：「invalid 主要受孤儿 validator 容器占端口
+# 影响」。那个根因是对的，但它是**清理问题**，不是并发问题 —— 孤儿容器会一直占着
+# 端口，无论并发开几都会毒害后续 case。serg5 起跑前已确认 0 个孤儿容器（65 个在跑的
+# 全部属于当时的 closetime run），所以这里用 20。
+#
+# serg5 资源余量很大（实测）：128 核、CPU 空闲 83%、内存 251G 用 92G、
+# load 51 但 26615 个线程里只有 28 个可运行 —— 高 load 来自等 NFS I/O 的 D 状态
+# 进程，不是算力不足。并发 20 对这台机器是很轻的负载。
+#
+# 同一配置、日志走本地盘时的实测吞吐（serg4）：
+#   并发  5 → 109 评估/小时，100% 有效
+#   并发 12 → 168 评估/小时，100% 有效
+#   并发 20 → 221 评估/小时，100% 有效
+# 收益递减但仍是正收益。2026-09-18 从 20 调回 **12**：serg5 那轮用 20 时
+# controller 报成功却写不出 node_info/action 日志，最后查明是**本地盘被塞满**
+# （56G 未同步数据），与并发数无直接关系；但 Codex 的注释记录过"invalid 主要受
+# 孤儿容器占端口影响"，而并发越高、容器 churn 越大、越容易留孤儿。
+# 取 12 是速度与稳定性的折中。
+#
+# 不要引用"每容器 384 线程"那个数字：2026-09-16 实测是 **27**（旧观测已过期）。
+# 并发是运维参数，不改变实验语义（变异集、fitness、seed、UNL 全不变）。
+max_concurrent_tasks: 12
+
+# 日志空间预检。benchmark 配置不继承 evo/run_evotests.yaml，缺这几个键时会走
+# run_evotests2.py 的内建缺省：log_space_case_mb=64、clean_non_violation_cases=false。
+# 本 benchmark 的 planned_case_count = population_size × (max_generation+1) × 8 个
+# config = 20 × 21 × 8 = 3360，于是估算 3360 × 64 MiB × 1.25 = 262.5 GiB，
+# 加上 20 GiB 保留量超过 workspace 的可用空间，预检直接拒绝启动
+# （2026-09-15 22:27 实测：差 47 MiB 而拒绝）。
+#
+# 64 MiB/case 对本项目偏高。实测：网络没起来的 case 约 1.4 MiB，
+# 带 violation 的 case 约 28 MiB（2026_09_14_15h00m_20s 的 G2T1，已瘦身仍 28 MiB）。
+# 实际取值见下面的 log_space_case_mb，预检仍然生效，不是关掉它。
+log_space_preflight: true
+log_space_min_free_gb: 20
+log_space_estimate_multiplier: 1.25
+# 2026-09-17 改 8 -> 1：本轮 100 generation 预期会快速触发 violation 并手动停止，
+# 因此预检按 clean_non_violation_cases=true 后的瘦身 case 估算。
+# 2026-09-16 改 40 -> 8：为了把日志放到本地磁盘（/tmp，63 GiB）跑 A/B，
+# 预检必须能通过。8 MiB/case 不是"为了过检而调小"，而是实测中位数：
+# 09-14 run 平均 4.2 MiB/case；网络没起来的 case ~1.4 MiB；带 violation 的最坏 ~28 MiB。
+# 注意：若 3360 个 case 全部是 violation（最坏 94 GiB），本地盘仍可能不够——
+# 所以本地日志必须配合"同步后删除"持续腾空间，不能只靠预检。
+log_space_case_mb: 1
+clean_non_violation_cases: true
+log_space_slimmed_case_mb: 1
+
+strategies:
+  - [sparse_set_rules, open_late_part_groups, sparse_set_rules]
+include_random_baseline: true
+
+objective_mode: single
+objective_seqs: [5, 6, 7, 8, 9, 10]
+fitness_functions:
+  - mean_validation_time
+  - validation_distribution_entropy
+  - validation_distribution_entropy_max
+  - message_entropy_integral
+  - message_entropy_integral_max_seq
+  - num_getledger_hashes
+  - num_getledger_hashes_max_seq
+
+# 2000 tests / 20 individuals = 100 generations.
+total_num_tests: 2000
+population_size: 20
+mu: 10
+max_ledger_seq: 15
+# 与产出 G0T13 那个 violation 的 run（2026_09_14_15h00m_20s）保持一致，它用的是 1000。
+# ctzero preset 写 900 是为 serg4 上的 3.1.0 调的（那边平均 371s、长尾撞 600s），但这里
+# 的目标是复现 violation —— 超时太紧会直接杀掉长尾评估，而 ctzero 的注释里已经记过一次
+# 「长尾撞线导致整代作废」。缺省值是 300，千万别省这一行。
+individual_timeout_sec: 1000
+runtime_retries: 1
+
+min_delay_ms: 0
+max_delay_ms: 1000
+delay_init_num_rules: 5
+partition_init_num_rules: 2
+byzz_init_num_rules: 5
+
+partition_duration: 1000
+max_partition_duration: 1000
+max_partition_start_after_ms: 3000
+start_partition: open
+
+byzz_min_seq: 5
+byzz_max_seq: 10
+max_proposal_seq: 2
+
+# 完整变异集合：不禁用任何方法（2026-09-18 恢复）。
+#
+# 2026-09-17 Codex 曾把它收窄成"只留 TMValidation/flip_flags"（禁用下面那 18 个），
+# 目的是做 notes/bug11.md 第 11 节提出的 **ablation ①**：验证 flip_flags 单独
+# 是否足以复现 bug11。那是**一次性验证实验**，不是正式 benchmark 的配置。
+#
+# 正式跑必须用完整变异集，理由是区分度：09-14 那批实测（1058 个 case）里，
+#   · 63 个 violation —— 100% 含 flip_flags
+#   · 941 个正常 case —— 只有 5.6% 含 flip_flags
+# 这个 18 倍的对比才是"flip_flags 与 violation 相关"的证据。如果强制每个 case
+# 都带 flip_flags，就会变成"每个 case 都是 violation"，benchmark 失去区分度，
+# 结论也不再有任何统计意义。
+#
+# 另外，09-14 那个复现成功的 G0T13 个体，5 条规则里有 3 条**不是** flip_flags
+# （TMGetLedger/replace_ledger_sequence_with_high、TMProposeSet/
+# increment_close_time_bucket_x2、TMLedgerData/drop）。收窄搜索空间会把这些
+# 潜在共因一起删掉。
+byzz_disabled_mutation_methods: []
+seqcheck: statuschange
+rust_log_level: info

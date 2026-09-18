@@ -1,0 +1,55 @@
+# 轻量探针：沿用 benchmark3（close-time-zero-3.1.0）的配置，但把
+# set_close_time_zero 从搜索空间里去掉，验证在没有这个 mutation 的情况下
+# 其余 mutation（含新增的 increment/decrement_close_time_bucket_x2）能否触发 violation。
+# Paths are resolved relative to this YAML file.
+ripple_images:
+  - xrpld:3.1.0-local
+base_network_config_yaml: network.yaml
+
+parallel_mode: parallel
+max_config_threads: 14
+max_concurrent_tasks: 10
+
+strategies:
+  - [sparse_set_rules, open_late_part_groups, sparse_set_rules]
+include_random_baseline: true
+
+objective_mode: single
+objective_seqs: [5, 6, 7, 8, 9, 10]
+fitness_functions:
+  - mean_validation_time
+  - validation_distribution_entropy
+  - validation_distribution_entropy_max
+  - message_entropy_integral
+  - message_entropy_integral_max_seq
+  - num_getledger_hashes
+  - num_getledger_hashes_max_seq
+
+# 轻量：400 → 40，即 max_generation = 40/20 = 2（共 3 代）。
+# 需要看更多代就把这个数调大（每 +20 = 多一代）。
+total_num_tests: 40
+population_size: 20
+mu: 10
+max_ledger_seq: 15
+individual_timeout_sec: 600
+runtime_retries: 1
+
+min_delay_ms: 0
+max_delay_ms: 1000
+delay_init_num_rules: 5
+partition_init_num_rules: 2
+byzz_init_num_rules: 5
+
+partition_duration: 1000
+max_partition_duration: 1000
+max_partition_start_after_ms: 3000
+start_partition: open
+
+byzz_min_seq: 5
+byzz_max_seq: 10
+max_proposal_seq: 2
+# 与 benchmark3 的唯一差异：禁用 set_close_time_zero，其余全部保留。
+byzz_disabled_mutation_methods:
+  - set_close_time_zero
+seqcheck: statuschange
+rust_log_level: info

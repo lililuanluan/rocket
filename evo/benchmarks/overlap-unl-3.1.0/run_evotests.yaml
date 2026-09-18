@@ -1,0 +1,67 @@
+# Seven-node rippled 3.1.0 benchmark with two overlapping five-validator UNLs.
+# Paths are resolved relative to this YAML file.
+ripple_images:
+  - xrpld:3.1.0-local
+base_network_config_yaml: network.yaml
+
+parallel_mode: parallel
+max_config_threads: 14
+max_concurrent_tasks: 10
+
+# 日志根目录：放节点本地磁盘，避免每条消息的 CSV 追加排队在 NFS 延迟上。
+# 依据（2026-09-16 实测）：同一段"持锁 + open/write/close"小文件写入，
+# NFS 中位数 84.5 ms，本地 ext4 仅 0.49 ms（172 倍）。packet_server.py:78 是
+# 同步写完 action 日志才返回转发指令，该延迟按 seq 串行化后会把 PING/PONG
+# 往返从 0.077 s 拖到 50.9 s，超过 rippled ping 超时 → 主动断连 → 评估作废。
+# 本地盘小（/tmp 约 62 GiB），必须配合"定期同步到共享存储并删除源文件"。
+log_root: /tmp/rocket-logs-local
+
+# 日志空间预检。benchmark 配置不继承 evo/run_evotests.yaml，缺键时走内建缺省
+# （log_space_case_mb=64），3360 个 case 会估算成 262.5 GiB 而拒绝启动。
+# 8 MiB/case 的依据：09-14 run 平均 4.2 MiB/case，网络没起来的约 1.4 MiB，
+# 带 violation 的最坏约 28 MiB。
+log_space_preflight: true
+log_space_min_free_gb: 20
+log_space_estimate_multiplier: 1.25
+log_space_case_mb: 8
+
+strategies:
+  - [sparse_set_rules, open_late_part_groups, sparse_set_rules]
+include_random_baseline: true
+
+objective_mode: single
+objective_seqs: [5, 6, 7, 8, 9, 10]
+fitness_functions:
+  - mean_validation_time
+  - validation_distribution_entropy
+  - validation_distribution_entropy_max
+  - message_entropy_integral
+  - message_entropy_integral_max_seq
+  - num_getledger_hashes
+  - num_getledger_hashes_max_seq
+
+total_num_tests: 400
+population_size: 20
+mu: 10
+max_ledger_seq: 15
+individual_timeout_sec: 600
+runtime_retries: 1
+
+min_delay_ms: 0
+max_delay_ms: 1000
+delay_init_num_rules: 5
+partition_init_num_rules: 2
+byzz_init_num_rules: 5
+
+partition_duration: 1000
+max_partition_duration: 1000
+max_partition_start_after_ms: 3000
+start_partition: open
+
+byzz_min_seq: 5
+byzz_max_seq: 10
+max_proposal_seq: 2
+byzz_disabled_mutation_methods:
+  - set_close_time_zero
+seqcheck: statuschange
+rust_log_level: info
