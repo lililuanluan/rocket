@@ -154,6 +154,12 @@ def evaluate_individual_worker(args):
             fitness_function=fitness_function,
             seqcheck=config.get("seqcheck", "statuschange"),
             individual_timeout_sec=config.get("individual_timeout_sec", 300),
+            byzz_enabled_mutation_methods=config.get(
+                "byzz_enabled_mutation_methods"
+            ),
+            byzz_disabled_mutation_methods=config.get(
+                "byzz_disabled_mutation_methods"
+            ),
         )
         if not result.get("runtime_invalid", False):
             break

@@ -12,8 +12,25 @@ def get_date_time_strf():
     return datetime.now().strftime("%Y_%m_%d_%Hh%Mm_%Ss")
 
 
-def get_logs_root(rocket_dir: Path) -> Path:
-    """Return the configured logs root, defaulting to <rocket_dir>/logs."""
+def get_logs_root(rocket_dir: Path, configured: str | None = None) -> Path:
+    """Return the logs root.
+
+    Precedence, highest first:
+
+    1. ``configured`` -- the ``log_root`` key of the experiment YAML. This is the
+       one to use when a single benchmark should log somewhere other than the
+       shared default (e.g. a node-local disk, to keep the per-message CSV
+       appends off NFS).
+    2. ``ROCKET_LOG_ROOT`` -- set by ``docker/run.sh`` from the host, which
+       always defaults it to ``<workspace>/logs``.
+    3. ``<rocket_dir>/logs``.
+
+    The YAML deliberately outranks the environment variable: run.sh exports
+    ``ROCKET_LOG_ROOT`` unconditionally, so an environment-first precedence
+    would make the config key impossible to use.
+    """
+    if configured:
+        return Path(configured).expanduser()
     log_root_env = os.environ.get("ROCKET_LOG_ROOT")
     return Path(log_root_env) if log_root_env else (rocket_dir / "logs")
 

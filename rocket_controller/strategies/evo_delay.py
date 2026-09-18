@@ -29,7 +29,7 @@ TMP_ERROR_FILE = Path(__file__).parent / "../../evo/out/error.log" # TODO add th
 
 from rocket_controller.strategies.utils import (
     normalize_pubhex,
-    BYZZ_MUTATE_METHODS,
+    build_byzz_mutate_methods,
     get_node_private_key,
     pubkey_to_node_id,
     increment_propose_seq,
@@ -75,7 +75,10 @@ class EvoDelayStrategy(Strategy):
         
         self.old_get_ledger = []
 
-        self.byzz_mutate_methods = BYZZ_MUTATE_METHODS
+        self.byzz_mutate_methods = build_byzz_mutate_methods(
+            enabled_methods=self.params.get("byzz_enabled_mutation_methods"),
+            disabled_methods=self.params.get("byzz_disabled_mutation_methods"),
+        )
         self.byzz_mutator = ByzzMutator(self)
 
 

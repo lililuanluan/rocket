@@ -14,6 +14,7 @@ from rocket_controller.strategies.utils import pubkey_to_node_id
 SPARSE_SET_RULES = "sparse_set_rules"
 SPARSE_SEQ_PROPOSAL_RULES = "sparse_seq_proposal_rules"
 SPARSE_SEQ_PROPOSAL_SET_RULES = "sparse_seq_proposal_set_rules"
+OPEN_LATE_PART_GROUPS = "open_late_part_groups"
 OPEN_PROPOSAL_SEQ = -1
 
 
@@ -83,6 +84,7 @@ class ComposedStrategy(EvoDelayStrategy):
             "bi_part_groups",
             "flex_bi_part_groups",
             "flex_msg_part_groups",
+            OPEN_LATE_PART_GROUPS,
         ]:
             partition = self.partition_cfg.get("partition")
             if partition is None:

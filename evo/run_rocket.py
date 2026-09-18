@@ -33,6 +33,17 @@ RUNTIME_INVALID_LOG_MARKERS = (
     "address already in use",
     "failed to bind host port",
     "Could not bind controller gRPC",
+    # iteration_type.validate_transactions() 在 _validator_nodes 从未被设置时
+    # （interceptor 起容器失败 → update_network 从未被调用）打出这一行。
+    # 必须在这里登记：否则那次评估不再有任何 runtime-invalid 标记，会被当成
+    # 有效样本收下，而它的网络根本没起来、日志是空的。
+    "validator nodes were never set",
+    # connection_handler.rs::write_loop 退出时打的那一条。它以前是靠
+    # `panicked at `（每条在飞的消息 panic 一次，单次评估可达百万条，把 tokio
+    # runtime 打爆并让吞吐崩塌）来传递同一个信号的；现在只打一条。
+    # 判定语义不变：write_loop 死了 = 这个节点再也投不出消息 = 网络是坏的，
+    # 这次评估必须丢弃重试，绝不能在坏网络上打分。
+    "can no longer deliver messages",
 )
 
 
@@ -106,6 +117,8 @@ def run_rocket_and_evaluate(
     individual_timeout_sec: int = 300,
     objective_mode: str = "single",
     objective_seqs: list[int] | tuple[int, ...] | None = None,
+    byzz_enabled_mutation_methods: dict | None = None,
+    byzz_disabled_mutation_methods: list[str] | tuple[str, ...] | None = None,
 ):
     cur_dir = os.getcwd()
     proc: subprocess.Popen | None = None
@@ -138,20 +151,27 @@ def run_rocket_and_evaluate(
 
         # 写入strategy.yaml的配置
         strategy_yaml = log_dir / "strategy_input.yaml"
-        with open(strategy_yaml, "w") as f:
-            yaml.dump(
-                {
-                    "seed": seed,
-                    "encoding": encoding,
-                    "byzz_min_seq": byzz_min_seq,
-                    "byzz_max_seq": byzz_max_seq,
-                    "min_delay_ms": min_delay_ms,
-                    "max_delay_ms": max_delay_ms,
-                    "timeout_sec_per_seq": timeout_sec_per_seq,
-                    "seqcheck": seqcheck,
-                },
-                f,
+        strategy_input = {
+            "seed": seed,
+            "encoding": encoding,
+            "byzz_min_seq": byzz_min_seq,
+            "byzz_max_seq": byzz_max_seq,
+            "min_delay_ms": min_delay_ms,
+            "max_delay_ms": max_delay_ms,
+            "timeout_sec_per_seq": timeout_sec_per_seq,
+            "seqcheck": seqcheck,
+        }
+        if byzz_enabled_mutation_methods:
+            strategy_input["byzz_enabled_mutation_methods"] = (
+                byzz_enabled_mutation_methods
             )
+        if byzz_disabled_mutation_methods:
+            strategy_input["byzz_disabled_mutation_methods"] = list(
+                byzz_disabled_mutation_methods
+            )
+
+        with open(strategy_yaml, "w") as f:
+            yaml.dump(strategy_input, f)
 
         cmd = [
             py,
@@ -259,6 +279,12 @@ def run_rocket_and_evaluate(
                     else (INVALID_RUNTIME_FITNESS,)
                 ),
             )
+        # 超时同样标记为 runtime_invalid，否则会被当成一次有效评估直接收下：
+        # run_evotests2 的重试门槛是 `if not runtime_invalid: break`，所以
+        # runtime_invalid=False 意味着这次超时既不重试、又带着哨兵 fitness
+        # （这些指标里 0.0 就是最差值）进入遗传算法的选择。整代评估会因为
+        # 一次宿主机抖动而被抹成"最差个体"，与被测个体的基因无关。
+        # 标记成 runtime_invalid 之后超时与 panic 一样走重试。
         return {
             "eval_result": {"timed_out": True},
             "fitness": 0.0,
@@ -268,8 +294,8 @@ def run_rocket_and_evaluate(
                 else (0.0,)
             ),
             "run_status": "timed_out",
-            "runtime_invalid": False,
-            "runtime_invalid_reason": None,
+            "runtime_invalid": True,
+            "runtime_invalid_reason": "timed_out",
             "retcode": retcode,
         }
 

@@ -288,7 +288,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="MAX_PARTITION_START_AFTER_MS",
         help=(
-            "upper bound in milliseconds for flex_msg_part_groups start_after_ms "
+            "upper bound in milliseconds for start_after_ms in "
+            "flex_msg_part_groups/open_late_part_groups "
             "(default: max-partition-duration)"
         ),
     )
@@ -332,6 +333,7 @@ def parse_args() -> argparse.Namespace:
             "bi_part_groups",
             "flex_bi_part_groups",
             "flex_msg_part_groups",
+            "open_late_part_groups",
         ],
     )
 
@@ -365,6 +367,19 @@ def parse_args() -> argparse.Namespace:
         "--force-exit-on-second-sigint",
         action="store_true",
         help="if set, pressing Ctrl+C twice will force evotest_parallel to exit immediately",
+    )
+
+    parser.add_argument(
+        "--search-mode",
+        type=str,
+        default="ga",
+        choices=["ga", "random_baseline"],
+        metavar="SEARCH_MODE",
+        help=(
+            "ga runs the normal evolutionary loop; random_baseline resamples "
+            "fresh individuals from the same encoding space each generation "
+            "without selection, crossover, or mutation (default: ga)"
+        ),
     )
 
     return parser.parse_args()

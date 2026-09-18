@@ -8,7 +8,10 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from rocket_controller.strategies.utils import BYZZ_MUTATE_METHODS
+from rocket_controller.strategies.utils import (
+    BYZZ_MUTATE_METHODS,
+    build_byzz_mutate_methods,
+)
 from protos import packet_pb2, ripple_pb2
 
 MESSAGE_TYPE_MAP = {
@@ -25,6 +28,7 @@ SPARSE_SET_RULES = "sparse_set_rules"
 SPARSE_SEQ_PROPOSAL_RULES = "sparse_seq_proposal_rules"
 SPARSE_SEQ_PROPOSAL_SET_RULES = "sparse_seq_proposal_set_rules"
 OPEN_PROPOSAL_SEQ = -1
+OPEN_LATE_PART_GROUPS = "open_late_part_groups"
 
 
 class BaseEncoding:
@@ -76,6 +80,8 @@ class ByzzEncoding:
         byzz_max_seq,
         init_num_rules=5,
         max_proposal_seq=5,
+        byzz_enabled_mutation_methods=None,
+        byzz_disabled_mutation_methods=None,
     ):
         if mode not in self.byzz_modes:
             raise ValueError(f"Invalid byzz mode: {mode}")
@@ -84,6 +90,10 @@ class ByzzEncoding:
         self.byzz_nodes = byzz_nodes or []
         self.byzz_min_seq = byzz_min_seq
         self.byzz_max_seq = byzz_max_seq
+        self.byzz_mutate_methods = build_byzz_mutate_methods(
+            enabled_methods=byzz_enabled_mutation_methods,
+            disabled_methods=byzz_disabled_mutation_methods,
+        )
         self.max_proposal_seq = int(max_proposal_seq)
         if self.max_proposal_seq < 0:
             raise ValueError("max_proposal_seq must be non-negative")
@@ -92,12 +102,20 @@ class ByzzEncoding:
         self._sample_byzz_rules()
 
     def _random_byzz_method(self, message_type, exclude=None, include_noop=False):
-        methods = BYZZ_MUTATE_METHODS[message_type]
+        methods = self.byzz_mutate_methods[message_type]
         if not include_noop:
             methods = [m for m in methods if m != "do_nothing"]
         if exclude is not None and len(methods) > 1:
             methods = [m for m in methods if m != exclude]
         return random.choice(methods)
+
+    def _supported_byzz_message_types(self):
+        return [
+            msg_type
+            for msg_type in self._message_types.values()
+            if msg_type in self.byzz_mutate_methods
+            and any(m != "do_nothing" for m in self.byzz_mutate_methods[msg_type])
+        ]
 
     def _honest_nodes(self):
         return [node for node in range(self.num_nodes) if node not in self.byzz_nodes]
@@ -131,11 +149,7 @@ class ByzzEncoding:
         return self._repair_receiver_set(receiver_set)
 
     def _random_byzz_key(self):
-        supported_message_types = [
-            msg_type
-            for msg_type in self._message_types.values()
-            if msg_type in BYZZ_MUTATE_METHODS
-        ]
+        supported_message_types = self._supported_byzz_message_types()
         if not supported_message_types:
             return None
 
@@ -176,11 +190,7 @@ class ByzzEncoding:
         if self.byzz_rules is None:
             self.byzz_rules = set()
 
-        supported_message_types = [
-            msg_type
-            for msg_type in self._message_types.values()
-            if msg_type in BYZZ_MUTATE_METHODS
-        ]
+        supported_message_types = self._supported_byzz_message_types()
         if self.mode == "sparse_rules":
             existing_keys = {
                 (seq, to_node, message_type)
@@ -273,7 +283,8 @@ class ByzzEncoding:
             candidates = [
                 msg_type
                 for msg_type in self._message_types.values()
-                if msg_type in BYZZ_MUTATE_METHODS and msg_type != message_type
+                if msg_type in self.byzz_mutate_methods and msg_type != message_type
+                and any(m != "do_nothing" for m in self.byzz_mutate_methods[msg_type])
             ]
             if candidates:
                 message_type = random.choice(candidates)
@@ -287,7 +298,7 @@ class ByzzEncoding:
         to_nodes = self._repair_receiver_set(to_nodes)
         if not to_nodes:
             return None
-        if method not in BYZZ_MUTATE_METHODS[message_type]:
+        if method not in self.byzz_mutate_methods[message_type]:
             method = self._random_byzz_method(message_type, include_noop=False)
         return (seq, pro_seq, to_nodes, message_type, method)
 
@@ -311,7 +322,8 @@ class ByzzEncoding:
             candidates = [
                 msg_type
                 for msg_type in self._message_types.values()
-                if msg_type in BYZZ_MUTATE_METHODS and msg_type != message_type
+                if msg_type in self.byzz_mutate_methods and msg_type != message_type
+                and any(m != "do_nothing" for m in self.byzz_mutate_methods[msg_type])
             ]
             if candidates:
                 message_type = random.choice(candidates)
@@ -325,7 +337,7 @@ class ByzzEncoding:
         to_nodes = self._repair_receiver_set(to_nodes)
         if not to_nodes:
             return None
-        if method not in BYZZ_MUTATE_METHODS[message_type]:
+        if method not in self.byzz_mutate_methods[message_type]:
             method = self._random_byzz_method(message_type, include_noop=False)
         return (seq, to_nodes, message_type, method)
 
@@ -431,9 +443,9 @@ class ByzzEncoding:
             allowed_nodes=self._honest_nodes(),
         )
 
-        if left_method not in BYZZ_MUTATE_METHODS[left_msg]:
+        if left_method not in self.byzz_mutate_methods[left_msg]:
             left_method = self._random_byzz_method(left_msg, include_noop=False)
-        if right_method not in BYZZ_MUTATE_METHODS[right_msg]:
+        if right_method not in self.byzz_mutate_methods[right_msg]:
             right_method = self._random_byzz_method(right_msg, include_noop=False)
 
         left_to = self._repair_receiver_set(left_to)
@@ -459,9 +471,9 @@ class ByzzEncoding:
             allowed_nodes=self._honest_nodes(),
         )
 
-        if left_method not in BYZZ_MUTATE_METHODS[left_msg]:
+        if left_method not in self.byzz_mutate_methods[left_msg]:
             left_method = self._random_byzz_method(left_msg, include_noop=False)
-        if right_method not in BYZZ_MUTATE_METHODS[right_msg]:
+        if right_method not in self.byzz_mutate_methods[right_msg]:
             right_method = self._random_byzz_method(right_msg, include_noop=False)
 
         left_to = self._repair_receiver_set(left_to)
@@ -564,6 +576,8 @@ class PartitionEncoding:
         "flex_bi_part_groups",  # two groups with evolvable seq and duration
         # two groups with evolvable seq/start offset/message type; duration is fixed
         "flex_msg_part_groups",
+        # two groups with evolvable seq/start offset; fixed duration, no msg filter
+        OPEN_LATE_PART_GROUPS,
     ]
     _message_types = MESSAGE_TYPE_MAP
 
@@ -708,7 +722,7 @@ class PartitionEncoding:
         rule["partition_seq"] = int(
             max(self.byzz_min_seq, min(self.byzz_max_seq, rule["partition_seq"]))
         )
-        if self.mode == "flex_msg_part_groups":
+        if self.mode in ["flex_msg_part_groups", OPEN_LATE_PART_GROUPS]:
             rule["start_after_ms"] = int(
                 max(
                     0,
@@ -718,13 +732,18 @@ class PartitionEncoding:
                     ),
                 )
             )
-            message_types = {
-                msg_type.__name__ for msg_type in self._message_types.values()
-            }
-            if "message_type" not in rule:
-                rule["message_type"] = self._random_partition_message_type()
-            if rule["message_type"] not in message_types:
-                raise ValueError(f"Invalid partition message_type: {rule['message_type']}")
+            if self.mode == "flex_msg_part_groups":
+                message_types = {
+                    msg_type.__name__ for msg_type in self._message_types.values()
+                }
+                if "message_type" not in rule:
+                    rule["message_type"] = self._random_partition_message_type()
+                if rule["message_type"] not in message_types:
+                    raise ValueError(
+                        f"Invalid partition message_type: {rule['message_type']}"
+                    )
+            else:
+                rule.pop("message_type", None)
             rule.pop("partition_duration", None)
         else:
             rule["partition_duration"] = int(
@@ -743,7 +762,7 @@ class PartitionEncoding:
             return
 
         if (
-            self.mode in ["flex_bi_part_groups", "flex_msg_part_groups"]
+            self.mode in ["flex_bi_part_groups", "flex_msg_part_groups", OPEN_LATE_PART_GROUPS]
             and self.init_num_rules > self._max_partition_rule_choices()
         ):
             raise ValueError(
@@ -791,6 +810,21 @@ class PartitionEncoding:
                         message_type=message_type,
                     )
                 )
+        elif self.mode == OPEN_LATE_PART_GROUPS:
+            selected_seqs = random.sample(
+                range(self.byzz_min_seq, self.byzz_max_seq + 1),
+                self.init_num_rules,
+            )
+            for seq in selected_seqs:
+                self.partition_rules.append(
+                    self._build_partition_rule(
+                        partition=self._sample_partition_groups(),
+                        partition_seq=seq,
+                        start_after_ms=random.randint(
+                            0, self.max_partition_start_after_ms
+                        ),
+                    )
+                )
         else:
             raise ValueError(f"Invalid partition mode: {self.mode}")
 
@@ -809,7 +843,12 @@ class PartitionEncoding:
         rule["partition"][flip_idx] = 1 - rule["partition"][flip_idx]
 
     def mutate_self(self, force=False):
-        if self.mode not in ["bi_part_groups", "flex_bi_part_groups", "flex_msg_part_groups"]:
+        if self.mode not in [
+            "bi_part_groups",
+            "flex_bi_part_groups",
+            "flex_msg_part_groups",
+            OPEN_LATE_PART_GROUPS,
+        ]:
             return
         if not self.partition_rules:
             return
@@ -826,9 +865,10 @@ class PartitionEncoding:
             ops.append("seq")
         if self.mode == "flex_bi_part_groups" and self.max_partition_duration > 1:
             ops.append("duration")
-        if self.mode == "flex_msg_part_groups":
+        if self.mode in ["flex_msg_part_groups", OPEN_LATE_PART_GROUPS]:
             if self.max_partition_start_after_ms > 0:
                 ops.append("start_after")
+        if self.mode == "flex_msg_part_groups":
             if len(self._message_types) > 1:
                 ops.append("message_type")
 
@@ -865,7 +905,12 @@ class PartitionEncoding:
             raise ValueError(
                 f"PartitionEncoding mode mismatch: self={self.mode}, other={other.mode}"
             )
-        if self.mode not in ["bi_part_groups", "flex_bi_part_groups", "flex_msg_part_groups"]:
+        if self.mode not in [
+            "bi_part_groups",
+            "flex_bi_part_groups",
+            "flex_msg_part_groups",
+            OPEN_LATE_PART_GROUPS,
+        ]:
             return
         if not self.partition_rules or not other.partition_rules:
             return
@@ -885,22 +930,23 @@ class PartitionEncoding:
             if random.random() < 0.5:
                 left_seq, right_seq = right_seq, left_seq
 
-            if self.mode == "flex_msg_part_groups":
+            if self.mode in ["flex_msg_part_groups", OPEN_LATE_PART_GROUPS]:
                 left_start_after = int(left_rule.get("start_after_ms", 0))
                 right_start_after = int(right_rule.get("start_after_ms", 0))
-                left_message_type = left_rule.get("message_type")
-                right_message_type = right_rule.get("message_type")
                 if random.random() < 0.5:
                     left_start_after, right_start_after = (
                         right_start_after,
                         left_start_after,
                     )
+            if self.mode == "flex_msg_part_groups":
+                left_message_type = left_rule.get("message_type")
+                right_message_type = right_rule.get("message_type")
                 if random.random() < 0.5:
                     left_message_type, right_message_type = (
                         right_message_type,
                         left_message_type,
                     )
-            else:
+            elif self.mode in ["bi_part_groups", "flex_bi_part_groups"]:
                 left_duration = int(left_rule["partition_duration"])
                 right_duration = int(right_rule["partition_duration"])
                 if random.random() < 0.5:
@@ -929,6 +975,17 @@ class PartitionEncoding:
                     partition_seq=right_seq,
                     start_after_ms=right_start_after,
                     message_type=right_message_type,
+                )
+            elif self.mode == OPEN_LATE_PART_GROUPS:
+                child_rule_left = self._build_partition_rule(
+                    partition=child_partition_left,
+                    partition_seq=left_seq,
+                    start_after_ms=left_start_after,
+                )
+                child_rule_right = self._build_partition_rule(
+                    partition=child_partition_right,
+                    partition_seq=right_seq,
+                    start_after_ms=right_start_after,
                 )
             else:
                 child_rule_left = self._build_partition_rule(
@@ -960,7 +1017,7 @@ class PartitionEncoding:
         }
         if self.mode == "flex_bi_part_groups":
             res["max_partition_duration"] = self.max_partition_duration
-        if self.mode == "flex_msg_part_groups":
+        if self.mode in ["flex_msg_part_groups", OPEN_LATE_PART_GROUPS]:
             res["max_partition_start_after_ms"] = self.max_partition_start_after_ms
         if self.partition_rules:
             rules = []
@@ -972,6 +1029,8 @@ class PartitionEncoding:
                 if self.mode == "flex_msg_part_groups":
                     rule_dict["start_after_ms"] = int(rule["start_after_ms"])
                     rule_dict["message_type"] = str(rule["message_type"])
+                elif self.mode == OPEN_LATE_PART_GROUPS:
+                    rule_dict["start_after_ms"] = int(rule["start_after_ms"])
                 else:
                     rule_dict["partition_duration"] = int(rule["partition_duration"])
                 rules.append(rule_dict)
@@ -1934,6 +1993,12 @@ class ComposeEncoding(BaseEncoding):
             byzz_max_seq=configs["byzz_max_seq"],
             init_num_rules=configs.get("byzz_init_num_rules", 5),
             max_proposal_seq=configs.get("max_proposal_seq", 5),
+            byzz_enabled_mutation_methods=configs.get(
+                "byzz_enabled_mutation_methods"
+            ),
+            byzz_disabled_mutation_methods=configs.get(
+                "byzz_disabled_mutation_methods"
+            ),
         )
 
         delay_encoding = DelayEncoding(

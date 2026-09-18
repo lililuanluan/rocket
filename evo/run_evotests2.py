@@ -89,6 +89,16 @@ DEFAULT_EVOTEST_CONFIG: dict[str, Any] = {
     "force_exit_on_second_sigint": False,
     "objective_mode": "single",
     "objective_seqs": [5, 6, 7, 8, 9, 10],
+    "search_mode": "ga",
+    "include_random_baseline": False,
+    "byzz_enabled_mutation_methods": None,
+    "byzz_disabled_mutation_methods": [],
+    "log_space_preflight": True,
+    "log_space_min_free_gb": 20,
+    "log_space_estimate_multiplier": 1.25,
+    "log_space_case_mb": 64,
+    "log_space_slimmed_case_mb": 1,
+    "clean_non_violation_cases": False,
 }
 
 
@@ -473,9 +483,18 @@ def print_config_summary(
     print(f"  Start partition:          {config.get('start_partition', 'open')}")
     print(f"  Partition init rules:     {config.get('partition_init_num_rules', 1)}")
     print(f"  Seq check:                {config.get('seqcheck', 'statuschange')}")
+    disabled_byzz_methods = config.get("byzz_disabled_mutation_methods") or []
+    print(
+        "  Disabled byzz mutations: "
+        f"{', '.join(disabled_byzz_methods) if disabled_byzz_methods else 'none'}"
+    )
     print(f"  Max partition duration:   {config.get('max_partition_duration', 'default')}ms")
     print(f"  Individual timeout:       {config.get('individual_timeout_sec')}s")
     print(f"  Runtime retries:          {config.get('runtime_retries', 1)}")
+    print(
+        f"  Clean non-violations:     "
+        f"{'enabled' if config.get('clean_non_violation_cases', False) else 'disabled'}"
+    )
     print("=" * 70)
     print()
 
@@ -888,6 +907,12 @@ def evaluate_task_worker(task: EvaluationTask) -> dict[str, Any]:
             individual_timeout_sec=config.get("individual_timeout_sec", 300),
             objective_mode=config.get("objective_mode", "single"),
             objective_seqs=config.get("objective_seqs"),
+            byzz_enabled_mutation_methods=config.get(
+                "byzz_enabled_mutation_methods"
+            ),
+            byzz_disabled_mutation_methods=config.get(
+                "byzz_disabled_mutation_methods"
+            ),
         )
         if not result.get("runtime_invalid", False):
             break
