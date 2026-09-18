@@ -1,0 +1,11 @@
+ARG BASE_IMAGE=xrpld:2.6.0-byzz-bug-injected-local
+FROM ${BASE_IMAGE}
+
+LABEL org.rocket.byzzfuzz_database_path_wrapper="1"
+
+# Preserve the existing image entrypoint and put a tiny compatibility wrapper
+# in front of it. The wrapper only patches Rocket-generated 2.6.0 configs that
+# do not include [database_path].
+RUN cp /entrypoint.sh /entrypoint.base.sh
+COPY entrypoint_2.6.0.sh /entrypoint.sh
+RUN chmod +x /entrypoint.base.sh /entrypoint.sh

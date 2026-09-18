@@ -32,19 +32,13 @@ RUN apt-get update && apt-get install -y \
 # 安装 Conan 2
 RUN pip3 install conan
 
-# 复制 rippled 源码
+# The build command supplies a clean worktree at
+# ``--build-context rippled-src=...``. Keeping it as a named context avoids
+# depending on images/.dockerignore, which deliberately excludes rippled.
 WORKDIR /opt
-COPY rippled ./rippled
+COPY --from=rippled-src . ./rippled
 
 WORKDIR /opt/rippled
-
-# 检出 2.6.0 版本作为基础
-RUN git checkout 2.6.0
-
-# 检出含有bug的分支
-# byzz-fuzz-bug-reproduce 分支是通过反向应用PR #4424的修复而创建的
-# 这样可以在2.6.0的基础上复现1.7.2中的bug
-RUN git checkout byzz-fuzz-bug-reproduce
 
 # 配置 Conan profile
 RUN conan profile detect \
@@ -73,6 +67,7 @@ RUN cd .build \
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+LABEL org.rocket.byzzfuzz_database_path_wrapper="1"
 
 # 安装运行时依赖
 RUN apt-get update && apt-get install -y \
@@ -88,9 +83,11 @@ RUN mkdir -p /opt/ripple/etc
 COPY rippled_default_2.6.0.cfg /opt/ripple/etc/rippled.cfg
 COPY validators_default_2.6.0.txt /opt/ripple/etc/validators.txt
 
-# 复制 entrypoint
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /usr/local/bin/rippled /entrypoint.sh
+# 复制 entrypoint。2.6.0 需要一个小 wrapper 来兼容 Rocket 运行时
+# 生成的精简 rippled.cfg。
+COPY entrypoint.sh /entrypoint.base.sh
+COPY entrypoint_2.6.0.sh /entrypoint.sh
+RUN chmod +x /usr/local/bin/rippled /entrypoint.base.sh /entrypoint.sh
 
 # 创建持久化目录
 RUN mkdir -p /config/db /var/lib/rippled/db /var/log/rippled

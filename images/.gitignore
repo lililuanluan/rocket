@@ -3,3 +3,5 @@
 rippled
 boost_1_70_0
 Dockerfile.rippled-2.6.0-bug*-injected
+ripple-csf/
+ripple-violation-report/

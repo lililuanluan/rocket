@@ -1,0 +1,120 @@
+# rippled 3.3.0 from local source tree, built into a local image
+# Uses our own entrypoint so validator configs keep working under host uid/gid.
+#
+# 3.3.0 与 3.1.0 的构建差异：
+#   - C++23（3.1.0 是 C++20），所以工具链从 ubuntu:22.04 + gcc-12 换成
+#     ubuntu:24.04 + gcc-14（官方 3.3.0 镜像的 base 也是 24.04）
+#   - conan remote 从 conan.ripplex.io 换成 conan.xrplf.org
+#   - 仓库自带 conan profile，直接 conan config install，不再手工 sed
+#   - 构建产物叫 xrpld（3.1.0 叫 rippled），下面用 find 定位后按本项目的
+#     约定安装为 /usr/local/bin/rippled，entrypoint.sh 无需改动
+
+FROM ubuntu:24.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# archive.ubuntu.com 从这台机器上几乎不可达（curl 直接超时，apt 会一直在重试），
+# 实测 nl.archive 8 MB/s、mirror.tudelft.nl 10 MB/s。不换源的话 apt 阶段要跑几十分钟。
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu|http://nl.archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|http://nl.archive.ubuntu.com/ubuntu|g' \
+        /etc/apt/sources.list.d/ubuntu.sources
+
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    ninja-build \
+    pkg-config \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    software-properties-common \
+    && rm -rf /var/lib/apt/lists/*
+
+# 必须用 GCC 15。3.3.0 自带的 json 迭代器（include/xrpl/json/json_value.h 的
+# ValueConstIterator）只定义了 difference_type/reference/pointer，缺 value_type
+# 和 iterator_category；libstdc++-14 的 __iterator_traits SFINAE 因此判定它不是
+# 迭代器，RPCCall.cpp 的 std::all_of 找不到重载而编译失败。官方 BUILD.md 标注的
+# 测试版本正是 GCC 15.2，而 ubuntu:24.04 官方源最高只有 gcc-14，故走 toolchain PPA。
+RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test \
+    && apt-get update \
+    && apt-get install -y gcc-15 g++-15 \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-15 100 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-15 100
+
+# Ubuntu 24.04 把系统 Python 标记为 externally managed，需要显式放行。
+RUN pip3 install --break-system-packages conan
+
+WORKDIR /opt
+
+# Use a clean upstream checkout so the image build does not depend on the local
+# worktree state or on shipping a large .git dir in the Docker build context.
+RUN git clone --branch 3.3.0 --depth 1 https://github.com/XRPLF/rippled.git ./rippled
+
+WORKDIR /opt/rippled
+
+# 3.3.0 仓库自带 conan profile（compiler.cppstd=23），直接安装。
+RUN conan config install conan/profiles/ -tf "$(conan config home)/profiles/" \
+    && cp "$(conan config home)/profiles/default" "$(conan config home)/profiles/build" \
+    && sed -i '/tools.info.package_id:confs/d;/user.package:cppstd_version/d' "$(conan config home)/profiles/build" \
+    && printf '\n[tool_requires]\n!cmake/*: cmake/[>=3 <4]\n' >> "$(conan config home)/profiles/default" \
+    && printf '\n[tool_requires]\n!cmake/*: cmake/[>=3 <4]\n' >> "$(conan config home)/profiles/build" \
+    && conan remote add --index 0 --force xrplf "https://conan.xrplf.org/repository/conan/"
+
+RUN mkdir -p .build && cd .build \
+    && conan install .. --lockfile="" --profile:host default --profile:build build \
+       --output-folder . --build missing --settings:host build_type=Release \
+       -c tools.build:jobs=$(nproc)
+
+RUN cd .build \
+    && cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=build/generators/conan_toolchain.cmake \
+             -DCMAKE_BUILD_TYPE=Release \
+             -Dxrpld=ON \
+             -Dtests=OFF \
+             -G Ninja \
+             .. \
+    && cmake --build . --parallel
+
+# 构建产物路径在不同版本间变过（released/ 子目录、xrpld vs rippled），
+# 这里统一 find 出来放到固定位置，供下面的 COPY --from 使用。
+RUN set -eux; \
+    bin="$(find /opt/rippled/.build -maxdepth 3 -type f \( -name xrpld -o -name rippled \) -perm -u+x | head -1)"; \
+    test -n "${bin}"; \
+    install -m 0755 "${bin}" /opt/rippled-server
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 同 builder 阶段：换成本地镜像，理由见上。
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu|http://nl.archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|http://nl.archive.ubuntu.com/ubuntu|g' \
+        /etc/apt/sources.list.d/ubuntu.sources
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/rippled-server /usr/local/bin/rippled
+
+# These defaults are only a fallback for keygen / empty-config startup.
+COPY rippled_default_2.6.0.cfg /opt/ripple/etc/rippled.cfg
+COPY validators_default_2.6.0.txt /opt/ripple/etc/validators.txt
+
+# 保留原有 entrypoint，在其前面加一层兼容 wrapper：3.3.0 需要 [database_path]，
+# 而 Rocket 生成的紧凑配置不带这一段。见 entrypoint_3.3.0.sh 的注释。
+COPY entrypoint.sh /entrypoint.base.sh
+COPY entrypoint_3.3.0.sh /entrypoint.sh
+RUN chmod +x /usr/local/bin/rippled /entrypoint.base.sh /entrypoint.sh
+
+RUN mkdir -p /config/db /var/lib/rippled/db /var/log/rippled
+
+WORKDIR /config
+
+VOLUME ["/config/db", "/var/lib/rippled/db", "/var/log/rippled"]
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD []
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+  CMD curl -f http://localhost:5005 || exit 1 || true
