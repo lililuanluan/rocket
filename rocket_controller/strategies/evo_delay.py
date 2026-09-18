@@ -246,11 +246,88 @@ class EvoDelayStrategy(Strategy):
             return current_ledger
         return self._get_fully_validated_ledger(sender_node_id)
 
+    def _proposal_ledger_from_previous_hash(
+        self, previous_ledger: bytes
+    ) -> int | None:
+        """Resolve a proposal's target sequence from its previous-ledger hash.
+
+        A proposal names the ledger it is proposing indirectly: its
+        ``previousledger`` is the hash of sequence ``N - 1``.  The controller
+        may have observed that hash in a status-change, ledger-data, or
+        validation message before the proposal arrives.  Only return a value
+        when all observations agree; otherwise the caller must use its normal
+        fallback sequence source.
+        """
+        if not previous_ledger:
+            return None
+
+        candidates: set[int] = set()
+
+        # A status message's ledgerHash identifies N, so it is the parent of
+        # proposal sequence N + 1.
+        for sequence, hashes in self.old_status_ledger_hashes.items():
+            if sequence >= 0 and previous_ledger in hashes:
+                candidates.add(int(sequence) + 1)
+
+        # A status message's ledgerHashPrevious identifies N - 1, so it is
+        # the parent of proposal sequence N.
+        for sequence, hashes in self.old_status_prev_ledger_hashes.items():
+            if sequence >= 0 and previous_ledger in hashes:
+                candidates.add(int(sequence))
+
+        # Ledger-data messages identify the ledger represented by the data.
+        for sequence, hashes in self.old_ledger_data_hashes.items():
+            if sequence >= 0 and previous_ledger in hashes:
+                candidates.add(int(sequence) + 1)
+
+        # Validation dictionaries store hashes as hexadecimal strings.
+        previous_hex = previous_ledger.hex().lower()
+        for sequence, hashes in self.old_validation_hashes.items():
+            if sequence >= 0 and previous_hex in {
+                str(ledger_hash).lower() for ledger_hash in hashes
+            }:
+                candidates.add(int(sequence) + 1)
+
+        if len(candidates) == 1:
+            return candidates.pop()
+        return None
+
+    def _get_message_ledger(
+        self, message: Message
+    ) -> int | None:
+        """Return a ledger sequence encoded or inferable from ``message``.
+
+        This intentionally does not infer a sequence from timing or from the
+        receiver's local state.  If the message itself cannot be resolved,
+        ``None`` tells the caller to use the configured fallback source.
+        """
+        if isinstance(message, ripple_pb2.TMStatusChange):
+            return int(message.ledgerSeq)
+
+        if isinstance(message, ripple_pb2.TMValidation):
+            parsed = PacketEncoderDecoder.decode_validation(message)
+            sequence = parsed.get("LedgerSequence")
+            if isinstance(sequence, int) and sequence >= 0:
+                return sequence
+            return None
+
+        if isinstance(message, ripple_pb2.TMProposeSet):
+            return self._proposal_ledger_from_previous_hash(
+                bytes(message.previousledger)
+            )
+
+        return None
+
     def _get_current_ledger(
         self,
         sender_node_id: int,
         message: Message | None = None,
     ) -> int:
+        if message is not None:
+            message_ledger = self._get_message_ledger(message)
+            if message_ledger is not None:
+                return message_ledger
+
         if self.seqcheck == "fullyval":
             return self._get_fully_validated_ledger(sender_node_id)
         return self._get_status_change_ledger(sender_node_id, message)

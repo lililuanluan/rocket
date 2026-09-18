@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Mapping, Sequence, Tuple
 import re
 from protos import packet_pb2, ripple_pb2
 from rocket_controller.encoder_decoder import (
@@ -37,6 +37,14 @@ def normalize_pubhex(val: Any) -> str:
         s_sanitized = re.sub(r"[^0-9A-Fa-f]", "", s)
         return s_sanitized.lower()
     return str(val).lower()
+
+
+# rippled bins a proposal's close time into buckets of the ledger's
+# closeTimeResolution before it enters close-time voting (asCloseTime calls
+# roundCloseTime). Shifting by whole bucket widths is therefore what actually
+# moves a value across a bucket boundary and perturbs the close-time vote; a
+# one-second nudge usually stays inside the same bucket.
+CLOSE_TIME_BUCKET_SECONDS = 10
 
 
 BYZZ_MUTATE_METHODS = {
@@ -79,11 +87,18 @@ BYZZ_MUTATE_METHODS = {
         "replace_cookie_with_prev",
     ],
     ripple_pb2.TMProposeSet: [
-        "do_nothing",
+        "do_nothing", 
         "replace_tx_hash",
-        "increment_close_time_bucket",
-        "decrement_close_time_bucket",
-        "replace_close_time_with_old",
+        # "replace_tx_hash_with_current_round_observed_other", 
+        # "replace_close_time_with_current_round_observed_other",
+        "set_close_time_zero", # 这个几乎能立即命中
+        # "increment_close_time_bucket",
+        # "decrement_close_time_bucket",
+        # 跨两个桶的版本：单桶平移只能把值挪到相邻桶，两个桶可以拉开更远的
+        # 距离，配合按接收者分发的规则把 close time 投票摊到更多桶里。
+        "increment_close_time_bucket_x2",
+        "decrement_close_time_bucket_x2",
+        # "replace_close_time_with_old",
         "replace_prev_lgr_hash",
         "increment_propose_seq",
         # "repeat_5",
@@ -94,8 +109,8 @@ BYZZ_MUTATE_METHODS = {
         "replace_ledger_hash",
         "replace_ledger_hash_with_dummy",
         "increment_ledger_sequence",
-        # "increment_signing_time", # TODO bug
-        # "flip_flags",
+        # "increment_signing_time", # 这个现在不抽风了
+        "flip_flags",
         # "repeat_5",
         # TODO closing time
         "drop",
@@ -113,12 +128,66 @@ BYZZ_MUTATE_METHODS = {
 }
 
 
+def build_byzz_mutate_methods(
+    *,
+    enabled_methods: Mapping[str, Sequence[str]] | None = None,
+    disabled_methods: Sequence[str] | None = None,
+) -> dict[type, list[str]]:
+    """Return the mutation-method table selected by strategy config.
+
+    ``enabled_methods`` can override methods for selected protobuf message type
+    names, while ``disabled_methods`` removes named methods globally.  The
+    default with both unset is exactly ``BYZZ_MUTATE_METHODS``.
+    """
+    message_types_by_name = {cls.__name__: cls for cls in BYZZ_MUTATE_METHODS}
+    methods = {cls: list(values) for cls, values in BYZZ_MUTATE_METHODS.items()}
+
+    if enabled_methods:
+        for msg_name, selected_methods in enabled_methods.items():
+            cls = message_types_by_name.get(str(msg_name))
+            if cls is None:
+                raise ValueError(f"Unknown byzz mutation message type: {msg_name}")
+
+            known = set(BYZZ_MUTATE_METHODS[cls])
+            selected = []
+            for method in selected_methods:
+                method = str(method)
+                if method not in known:
+                    raise ValueError(
+                        f"Unsupported byzz mutation method for {msg_name}: {method}"
+                    )
+                if method not in selected:
+                    selected.append(method)
+
+            if "do_nothing" in known and "do_nothing" not in selected:
+                selected.insert(0, "do_nothing")
+            methods[cls] = selected
+
+    disabled = {str(method) for method in (disabled_methods or [])}
+    if disabled:
+        for cls, selected_methods in list(methods.items()):
+            filtered = [
+                method
+                for method in selected_methods
+                if method == "do_nothing" or method not in disabled
+            ]
+            if "do_nothing" in selected_methods and "do_nothing" not in filtered:
+                filtered.insert(0, "do_nothing")
+            methods[cls] = filtered
+
+    return methods
+
+
 class ByzzMutator:
     def __init__(
         self, strategy: Strategy
     ):  # use EvodealyStrategy would cause circular import
         self.strategy = strategy
-        self.byzz_mutate_methods = BYZZ_MUTATE_METHODS
+        self.byzz_mutate_methods = getattr(
+            strategy,
+            "byzz_mutate_methods",
+            BYZZ_MUTATE_METHODS,
+        )
         self.lock = Lock()
         # TODO 确保strategy对象有一些属性，比如old_proposals, dummy_proposal等
 
@@ -194,14 +263,44 @@ class ByzzMutator:
                 )
             signed_message = sign_message(new_msg)
             return signed_message, None, None
+        elif method == "replace_tx_hash_with_current_round_observed_other":
+            self.debug(
+                "Mutate TMProposeSet: "
+                "replace_tx_hash_with_current_round_observed_other"
+            )
+            with self.lock:
+                new_msg = replace_tx_hash_with_current_round_observed_other(
+                    msg_copy,
+                    self.strategy.old_proposals,
+                )
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
         elif method == "increment_close_time_bucket":
             self.debug("Mutate TMProposeSet: increment_close_time_bucket")
-            new_msg = shift_proposal_close_time_bucket(msg_copy, 10)
+            new_msg = shift_proposal_close_time_bucket(
+                msg_copy, CLOSE_TIME_BUCKET_SECONDS
+            )
             signed_message = sign_message(new_msg)
             return signed_message, None, None
         elif method == "decrement_close_time_bucket":
             self.debug("Mutate TMProposeSet: decrement_close_time_bucket")
-            new_msg = shift_proposal_close_time_bucket(msg_copy, -10)
+            new_msg = shift_proposal_close_time_bucket(
+                msg_copy, -CLOSE_TIME_BUCKET_SECONDS
+            )
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
+        elif method == "increment_close_time_bucket_x2":
+            self.debug("Mutate TMProposeSet: increment_close_time_bucket_x2")
+            new_msg = shift_proposal_close_time_bucket(
+                msg_copy, 2 * CLOSE_TIME_BUCKET_SECONDS
+            )
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
+        elif method == "decrement_close_time_bucket_x2":
+            self.debug("Mutate TMProposeSet: decrement_close_time_bucket_x2")
+            new_msg = shift_proposal_close_time_bucket(
+                msg_copy, -2 * CLOSE_TIME_BUCKET_SECONDS
+            )
             signed_message = sign_message(new_msg)
             return signed_message, None, None
         elif method == "replace_close_time_with_old":
@@ -211,6 +310,23 @@ class ByzzMutator:
                     msg_copy,
                     self.strategy.old_proposal_close_times,
                 )
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
+        elif method == "replace_close_time_with_current_round_observed_other":
+            self.debug(
+                "Mutate TMProposeSet: "
+                "replace_close_time_with_current_round_observed_other"
+            )
+            with self.lock:
+                new_msg = replace_close_time_with_current_round_observed_other(
+                    msg_copy,
+                    self.strategy.old_proposal_close_times,
+                )
+            signed_message = sign_message(new_msg)
+            return signed_message, None, None
+        elif method == "set_close_time_zero":
+            self.debug("Mutate TMProposeSet: set_close_time_zero")
+            new_msg = set_proposal_close_time_zero(msg_copy)
             signed_message = sign_message(new_msg)
             return signed_message, None, None
         elif method == "replace_prev_lgr_hash":
@@ -279,10 +395,8 @@ class ByzzMutator:
             return sign_message(parsed), None, None
         elif method == "flip_flags":
             self.debug("Mutate TMValidation: flip_flags")
-            # flip a bit of parsed["Flags"]
             flags = int(parsed.get("Flags", 0))
-            bit_to_flip = 1 << random.randint(0, 31)
-            parsed["Flags"] = flags ^ bit_to_flip
+            parsed["Flags"] = flags ^ (1 << random.randint(0, 31))
             return sign_message(parsed), None, None
         elif method == "repeat_5":
             self.debug("Mutate TMValidation: repeat_5")
@@ -459,6 +573,9 @@ class ByzzMutator:
         if method is None:
             method = self.get_random_mutation_method(type(message))
 
+        if method not in self.byzz_mutate_methods.get(type(message), []):
+            return None, None, None
+
         if isinstance(message, ripple_pb2.TMProposeSet):
             return self.mutate_propose_set(message, method)
         elif isinstance(message, ripple_pb2.TMValidation):
@@ -528,6 +645,14 @@ def shift_proposal_close_time_bucket(
     m = copy.deepcopy(message)
     shifted = int(m.closeTime) + int(delta_seconds)
     m.closeTime = max(0, shifted)
+    return m
+
+
+def set_proposal_close_time_zero(
+    message: ripple_pb2.TMProposeSet,
+) -> ripple_pb2.TMProposeSet:
+    m = copy.deepcopy(message)
+    m.closeTime = 0
     return m
 
 
@@ -632,6 +757,27 @@ def replace_txs_with_old_propose(
     return m
 
 
+def replace_tx_hash_with_current_round_observed_other(
+    message: ripple_pb2.TMProposeSet,
+    observed_proposals: dict[int, set[bytes]],
+) -> ripple_pb2.TMProposeSet:
+    """Replace currentTxHash with another observed hash at the same proposeSeq.
+
+    Unlike replace_txs_with_old_propose, this never falls back to dummy hashes.
+    If no alternative side has been observed for the same proposal sequence,
+    the message is left unchanged.
+    """
+    m = copy.deepcopy(message)
+    current_hash = bytes(m.currentTxHash)
+    candidate_hashes = _hash_candidates_excluding(
+        current_hash,
+        observed_proposals.get(m.proposeSeq, set()),
+    )
+    if candidate_hashes:
+        m.currentTxHash = random.choice(candidate_hashes)
+    return m
+
+
 def replace_close_time_with_old_propose(
     message: ripple_pb2.TMProposeSet,
     old_close_times: dict[int, set[int]],
@@ -658,6 +804,23 @@ def replace_close_time_with_old_propose(
             if int(ct) != current_close_time
         ]
 
+    if candidate_close_times:
+        m.closeTime = int(random.choice(candidate_close_times))
+    return m
+
+
+def replace_close_time_with_current_round_observed_other(
+    message: ripple_pb2.TMProposeSet,
+    observed_close_times: dict[int, set[int]],
+) -> ripple_pb2.TMProposeSet:
+    """Replace closeTime with another observed closeTime at the same proposeSeq."""
+    m = copy.deepcopy(message)
+    current_close_time = int(m.closeTime)
+    candidate_close_times = [
+        int(ct)
+        for ct in observed_close_times.get(m.proposeSeq, set())
+        if int(ct) != current_close_time
+    ]
     if candidate_close_times:
         m.closeTime = int(random.choice(candidate_close_times))
     return m

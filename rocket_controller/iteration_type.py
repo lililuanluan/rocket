@@ -192,6 +192,25 @@ class TimeBasedIteration:
         self._record_tx_to_be_validated(sender_alias, destination_alias, amount, tx_hash, tx_sequence)
 
     def validate_transactions(self):
+        if not self._validator_nodes:
+            # set_validator_nodes() 由 Strategy.update_network() 在网络就绪时调用。
+            # 如果 interceptor 起容器失败（docker_manager.rs 会直接 panic），
+            # update_network 永远不会被调用，_validator_nodes 就一直保持 __init__
+            # 里的 None。超时线程可能在这个窗口里触发，这里必须能安全返回 ——
+            # 抛出会让 _timeout_reached 的后半段（add_iteration）不执行，
+            # 整个评估就只能等 run_rocket.py 的 individual_timeout_sec 强杀。
+            #
+            # 这条 message 的措辞是有意的：它以 "validator nodes were never set" 出现在
+            # rocket_stderr.log 里，被 evo/run_rocket.py 的 RUNTIME_INVALID_LOG_MARKERS
+            # 匹配，从而把这次评估判为 runtime-invalid —— 也就是【丢弃并重试】。
+            # 没有这个标记的话，网络从没起来的评估会被当成有效样本收下（fitness 在空
+            # 日志上算出来），比原来的卡死更危险。
+            logger.error(
+                "validator nodes were never set: the interceptor failed to start the "
+                "network, so no transaction can be validated. Marking this evaluation "
+                "runtime-invalid instead of scoring it."
+            )
+            return
         logger.info("Only showing transactions for Node 0. For all nodes see the transaction log.")
         for node in self._validator_nodes:
             # ask every node if each transaction is executed
@@ -242,9 +261,29 @@ class TimeBasedIteration:
         self._timer.start()
 
     def _timeout_reached(self):
-        """Function that is called when the timeout is reached."""
+        """Function that is called when the timeout is reached.
+
+        这个函数跑在 threading.Timer 的线程里。它【必须】走到 add_iteration() ——
+        那才是真正推进/结束一次评估的动作。异常逃出去会让看门狗线程死掉，
+        评估就再也无法自己结束，只能等外层 individual_timeout_sec 强杀。
+
+        实测（serg5 长测，24 个 case 同时出现 interceptor 的 docker_manager
+        panic 与本函数的 NoneType 崩溃，100% 重合）：
+          看门狗死掉 → 评估撑到外层 1000s 才被杀
+          看门狗活着 → 内层 450s 超时即正常结束  (max_ledger_seq 15 × timeout_per_seq 30)
+        即约 2.2 倍的槽位占用缩减，不是"瞬间结束"。
+
+        注意这里只包住 validate_transactions()：add_iteration() 仍有自己的失败路径
+        （spec_check 的 FileNotFoundError、interceptor_manager 的 SystemExit 等），
+        那些不在本修复范围内，仍然只能靠外层超时兜底。
+        """
         logger.info("Timeout reached.")
-        self.validate_transactions()
+        try:
+            self.validate_transactions()
+        except Exception:
+            logger.exception(
+                "validate_transactions() raised at timeout; continuing to add_iteration()."
+            )
         self.add_iteration()
 
     def set_server(self, server: Server):
